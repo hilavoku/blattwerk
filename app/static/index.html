@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<link rel="icon" type="image/png" href="/favicon.ico">
+<title>PDF-Werkstatt</title>
+<style>
+  :root {
+    --bg: #17191d; --chrome: #1f232a; --chrome2: #242933; --hover: #2e3541;
+    --border: #2c313a; --text: #e6e9ee; --muted: #97a0af; --accent: #4cc2ff;
+    --accent-dim: #2b5f7d; --danger: #e5534b; --ok: #4cc97e;
+    --icon: "Segoe MDL2 Assets";
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin:0; font-family:"Segoe UI Variable Text","Segoe UI",sans-serif; background:var(--bg); color:var(--text);
+         display:flex; flex-direction:column; overflow:hidden; font-size:13px; }
+
+  /* ---------- Toolbar ---------- */
+  header { display:flex; gap:4px; align-items:center; padding:6px 10px; background:var(--chrome);
+           border-bottom:1px solid var(--border); flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
+  header.wrap { flex-wrap:wrap; overflow-x:visible; row-gap:5px; }
+  header.compact .tbtn .lbl { display:none; }
+  header.compact .tbtn { padding:6px 8px; }
+  header.compact .searchwrap input { width:88px; }
+  header.slim .brand b { display:none; }
+  header.slim .tbtn { padding:5px 6px; }
+  header.slim .fmtbar select { max-width:110px; }
+  .tbtn .lbl { white-space:nowrap; }
+  header::-webkit-scrollbar { height:0; }
+  .brand { display:flex; align-items:center; gap:8px; margin-right:8px; user-select:none; }
+  .brand .logo { width:26px; height:26px; border-radius:6px; overflow:hidden; flex:none; }
+  .brand .logo img { width:100%; height:100%; display:block; }
+  .brand b { font-size:13.5px; font-weight:600; white-space:nowrap; }
+  .tbtn { display:inline-flex; align-items:center; gap:6px; background:transparent; color:var(--text);
+          border:1px solid transparent; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:12.5px; white-space:nowrap; }
+  .tbtn:hover { background:var(--hover); }
+  .tbtn:disabled { opacity:.4; cursor:default; }
+  .tbtn:disabled:hover { background:transparent; }
+  .tbtn .i { font-family:var(--icon); font-size:14px; line-height:1; }
+  .tbtn.active { background:var(--accent-dim); color:#fff; border-color:var(--accent); }
+  .tbtn.save.dirty { color:var(--accent); border-color:var(--accent-dim); }
+  .sep { width:1px; height:22px; background:var(--border); margin:0 6px; flex:none; }
+  select.tsel { background:var(--chrome2); color:var(--text); border:1px solid var(--border); border-radius:6px;
+                padding:5px 8px; font-size:12.5px; max-width:190px; }
+  #sigPreview { max-height:30px; max-width:100px; background:white; border-radius:4px; padding:2px; }
+  #sigPreview:empty { display:none; }
+  #sigBtn img { max-height:22px; max-width:70px; background:white; border-radius:3px; padding:1px; vertical-align:middle; }
+  #sigBtn img:empty { display:none; }
+  #sigPanel { position:fixed; z-index:300; background:var(--chrome); border:1px solid var(--border); border-radius:10px;
+              box-shadow:0 12px 40px rgba(0,0,0,.65); padding:10px; display:none; width:340px; max-height:70vh; overflow:auto; }
+  .sigitem { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
+  .sigitem:hover { background:var(--hover); }
+  .sigitem.sel { border-color:var(--accent); background:var(--accent-dim); }
+  .sigitem img { width:72px; height:36px; object-fit:contain; background:white; border-radius:5px; padding:2px; flex:none; }
+  .sigitem .nm { flex:1; font-size:12.5px; word-break:break-all; }
+  .sigitem .act { display:flex; gap:2px; }
+  .sigitem .act button { background:transparent; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon);
+                         font-size:14px; padding:4px; border-radius:5px; }
+  .sigitem .act button:hover { background:var(--chrome2); color:var(--text); }
+  .sigitem .act button.del:hover { color:var(--danger); }
+  .sigadd { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:8px; padding:8px;
+            border:1px dashed var(--border); border-radius:8px; color:var(--muted); cursor:pointer; font-size:12.5px; }
+  .sigadd:hover { color:var(--accent); border-color:var(--accent-dim); }
+  #renameBox { position:fixed; z-index:400; background:var(--chrome); border:1px solid var(--accent); border-radius:10px;
+               padding:12px; display:none; width:280px; box-shadow:0 12px 40px rgba(0,0,0,.65); }
+  #renameBox input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;
+                     padding:7px 9px; font-size:13px; outline:none; }
+  #renameBox input:focus { border-color:var(--accent-dim); }
+  #renameBox .row { display:flex; gap:8px; margin-top:10px; }
+  #renameBox button { flex:1; padding:6px 0; border-radius:6px; border:1px solid var(--border); background:var(--chrome2);
+                      color:var(--text); cursor:pointer; font-size:12.5px; }
+  #renameBox button:hover { background:var(--hover); }
+  #renameBox #rnOk { background:var(--accent); color:#0b1620; border-color:var(--accent); font-weight:600; }
+  .searchwrap { display:flex; align-items:center; background:var(--chrome2); border:1px solid var(--border);
+                border-radius:6px; padding:2px 8px; gap:6px; }
+  .searchwrap .i { font-family:var(--icon); font-size:13px; color:var(--muted); }
+  .searchwrap input { background:transparent; border:none; outline:none; color:var(--text); width:150px; font-size:12.5px; }
+  .searchwrap .hits { color:var(--muted); font-size:11.5px; min-width:44px; text-align:center; }
+  .searchwrap .nav { background:none; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon); font-size:12px; padding:2px; }
+  .searchwrap .nav:hover { color:var(--text); }
+  .spacer { flex:1; }
+
+  /* ---------- Hauptbereich ---------- */
+  main { flex:1; display:flex; min-height:0; }
+  #viewer { flex:1; overflow:auto; background:var(--bg); padding:20px 12px 40px; position:relative; }
+  #viewer.dragover::after { content:"PDF hier ablegen"; position:sticky; top:40%; left:0; display:block; text-align:center;
+        font-size:22px; color:var(--accent); pointer-events:none; }
+  .pagewrap { margin:0 auto 22px; position:relative; background:white; box-shadow:0 1px 4px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+              width:fit-content; }
+  .pagewrap img { display:block; }
+  .pagewrap.mode-sign img, .pagewrap.mode-text img { cursor:crosshair; }
+  .pagewrap .lbl { position:absolute; top:-18px; left:0; font-size:11px; color:var(--muted); }
+  .line { position:absolute; cursor:text; border-radius:2px; z-index:2; }
+  .line:hover { background:rgba(76,194,255,.25); outline:1px solid rgba(76,194,255,.6); }
+  .line.copied { background:rgba(76,201,126,.45) !important; }
+  .line.marked { background:rgba(229,83,75,.4) !important; outline:1px solid var(--danger); }
+  .mode-sign .line, .mode-text .line, .mode-delete .winput, .mode-delete .annot { pointer-events:none; }
+  .hit { position:absolute; z-index:2; background:rgba(255,213,0,.35); outline:1px solid rgba(255,213,0,.8); border-radius:2px; pointer-events:none; }
+  .hit.active { background:rgba(255,150,0,.5); outline:2px solid #ff9600; }
+  .annot { position:absolute; z-index:5; cursor:move; }
+  .annot.sel { outline:2px dashed var(--accent); }
+  .annot .rz { position:absolute; right:-5px; bottom:-5px; width:11px; height:11px; background:var(--accent);
+               border:1px solid #123; border-radius:2px; cursor:nwse-resize; display:none; }
+  .annot.sel .rz { display:block; }
+  .annot.imgobj { background-size:100% 100%; background-repeat:no-repeat; }
+  .annot.txtobj { overflow:hidden; padding:1px 2px; background:rgba(255,255,255,.01); }
+  .winput { position:absolute; z-index:3; }
+  .winput input { width:100%; height:100%; border:1px solid #2a6fd6; background:rgba(255,255,244,.93);
+                  font-size:inherit; padding:1px 3px; border-radius:1px; }
+  .winput input:focus { outline:2px solid var(--accent); background:white; }
+
+  /* ---------- Sidebar ---------- */
+  aside { width:292px; background:var(--chrome); border-left:1px solid var(--border); overflow:auto; padding:14px; flex:none;
+          transition:width .18s ease, padding .18s ease; }
+  main.side-left { flex-direction:row-reverse; }
+  main.side-left aside { border-left:none; border-right:1px solid var(--border); }
+  main.sb-collapsed aside { width:0; padding:0; border-width:0; }
+  .sbtools { display:flex; justify-content:flex-end; gap:2px; margin:-4px -8px 6px; }
+  .sbtools button { background:transparent; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon);
+                    font-size:13px; padding:3px 7px; border-radius:5px; }
+  .sbtools button:hover { background:var(--hover); color:var(--text); }
+  .sbHandle { width:18px; flex:none; align-self:flex-start; margin:26px 3px 0; padding:10px 2px;
+              background:var(--chrome); border:1px solid var(--border); border-radius:7px;
+              color:var(--muted); cursor:pointer; font-family:var(--icon); font-size:12px; line-height:1; }
+  .sbHandle:hover { color:var(--text); background:var(--hover); border-color:var(--accent-dim); }
+  aside h3 { font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:16px 0 8px; font-weight:600; }
+  .toc a { display:block; padding:4px 8px; color:var(--text); text-decoration:none; border-radius:5px; font-size:12.5px; cursor:pointer;
+           line-height:1.35; }
+  .toc a:hover { background:var(--hover); }
+  .toc a.l2 { padding-left:22px; } .toc a.l3 { padding-left:36px; }
+  .toc a .pg { color:var(--muted); font-size:11px; }
+  .field { margin-bottom:7px; font-size:12px; color:#c3cad6; word-break:break-all; line-height:1.4; }
+  .field b { color:var(--ok); font-weight:600; }
+  .muted { color:var(--muted); }
+  aside p { font-size:12px; line-height:1.55; }
+  aside p b { color:var(--text); }
+
+  /* ---------- Statusleiste ---------- */
+  footer { display:flex; align-items:center; gap:4px; padding:4px 10px; background:var(--chrome);
+           border-top:1px solid var(--border); font-size:12px; color:var(--muted); }
+  .sbtn { background:transparent; border:1px solid transparent; color:var(--text); border-radius:5px;
+          padding:3px 8px; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:5px; }
+  .sbtn:hover { background:var(--hover); }
+  .sbtn .i { font-family:var(--icon); font-size:13px; }
+  .sbtn:disabled { opacity:.35; cursor:default; }
+  #pgInput { width:38px; text-align:center; background:var(--chrome2); color:var(--text); border:1px solid var(--border);
+             border-radius:5px; padding:3px 2px; font-size:12px; }
+  #zoomLabel { min-width:46px; text-align:center; color:var(--text); }
+  #statusMain { margin-left:auto; color:var(--muted); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52%; }
+  #statusMain.ok { color:var(--ok); }
+  #dirtyDot { width:8px; height:8px; border-radius:50%; background:var(--accent); display:none; margin-left:6px; }
+
+  /* ---------- Text-Formatleiste (oben) + Inline-Eingabe ---------- */
+  .fmtbar { display:flex; align-items:center; gap:4px; }
+  .fmtbar select, .fmtbar input { background:var(--chrome2); color:var(--text); border:1px solid var(--border); border-radius:6px;
+                                   font-size:12px; padding:4px 5px; }
+  .fmtbar input[type=number] { width:50px; }
+  .fmtbar input[type=color] { width:30px; height:26px; padding:1px; }
+  .propsbar { display:flex; align-items:center; gap:5px; }
+  .propsbar input { width:60px; background:var(--chrome2); color:var(--text); border:1px solid var(--border);
+                    border-radius:6px; padding:4px 6px; font-size:12px; }
+  .propsbar .lbl { color:var(--muted); font-size:11px; }
+  .propsbar .typ { color:var(--accent); font-size:11.5px; font-weight:600; margin-right:2px; }
+  .seldrag { position:absolute; background:rgba(76,194,255,.16); border:1px solid rgba(76,194,255,.55); z-index:4; pointer-events:none; }
+  .line.linesel { background:rgba(76,140,255,.32) !important; outline:1px solid rgba(76,140,255,.7); }
+  .copyChip { position:fixed; z-index:210; background:var(--accent); color:#0b1620; border:none; border-radius:6px;
+              padding:6px 12px; cursor:pointer; font-size:12.5px; font-weight:600; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+  #thumbrail { width:174px; overflow:auto; background:var(--chrome); border-right:1px solid var(--border); padding:10px 8px; flex:none; }
+  main.thumbs-off #thumbrail { display:none; }
+  .thumb { margin-bottom:10px; cursor:pointer; text-align:center; }
+  .thumb img { width:100%; background:white; border:1px solid var(--border); border-radius:3px; display:block; }
+  .thumb.cur img { outline:2px solid var(--accent); }
+  .thumb .tn { font-size:11px; color:var(--muted); margin-top:3px; }
+  .inlineEdit { position:absolute; z-index:50; background:rgba(255,255,255,.97); border:1px dashed var(--accent);
+                outline:none; padding:2px 4px; margin:0; overflow:hidden; white-space:pre-wrap;
+                min-height:1.2em; border-radius:2px; font-family:Helvetica,Arial,sans-serif; }
+  .inlineEdit:focus { border-style:solid; box-shadow:0 0 0 2px rgba(76,194,255,.35); }
+  .inlineDel { position:absolute; z-index:51; background:var(--danger); color:white; border:none; border-radius:5px;
+               cursor:pointer; font-family:var(--icon); font-size:12px; padding:3px 7px; display:none; }
+  .inlineDel:hover { filter:brightness(1.15); }
+  body.light { --bg:#eef1f5; --chrome:#ffffff; --chrome2:#f5f7fa; --hover:#e8ecf2; --border:#d5dae2;
+               --text:#1a1f27; --muted:#626c7a; --accent:#0b6ec9; --accent-dim:#cfe6f8; --danger:#d13438; --ok:#0e8a4c; }
+  body.light .pagewrap { box-shadow:0 1px 4px rgba(30,40,60,.25), 0 0 0 1px rgba(0,0,0,.06); }
+  body.light ::-webkit-scrollbar-thumb { background:#c4cbd6; border-color:var(--bg); }
+
+  ::-webkit-scrollbar { width:11px; height:11px; }
+  ::-webkit-scrollbar-thumb { background:#39414e; border-radius:6px; border:3px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background:#4a5361; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand"><div class="logo"><img src="/favicon.ico" alt=""></div><b>PDF-Werkstatt</b></div>
+  <input type="file" id="file" accept=".pdf" style="display:none">
+  <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
+  <button class="tbtn save" id="saveBtn" onclick="saveDoc()" title="Speichern (Strg+S)" disabled><span class="i">&#xE74E;</span><span class="lbl">Speichern</span></button>
+  <button class="tbtn" onclick="downloadDoc()" title="Kopie herunterladen" disabled><span class="i">&#xE896;</span></button>
+  <button class="tbtn" onclick="printDoc()" title="Drucken (mit Signaturen, Texten und Formulareinträgen)" disabled><span class="i">&#xE749;</span></button>
+  <div class="sep"></div>
+  <button class="tbtn" id="sigBtn" onclick="toggleSigPanel(event)" title="Signatur wählen / verwalten">
+    <img id="sigCurImg" alt=""><span id="sigCurName">Signatur…</span><span class="i">&#xE70D;</span>
+  </button>
+  <div id="sigPanel"></div>
+  <input type="file" id="sigFile" accept=".png,.jpg,.jpeg" style="display:none">
+  <button class="tbtn" id="btnSign" onclick="setMode('sign')" title="Signatur wählen, dann aufs Papier klicken"><span class="i">&#xE70F;</span><span class="lbl">Signatur</span></button>
+  <button class="tbtn" id="btnText" onclick="setMode('text')" title="Aufs Papier klicken und direkt tippen"><span style="font-weight:600">T</span><span class="lbl">Text</span></button>
+  <button class="tbtn" id="btnDel" onclick="setMode('delete')" title="Original-Text entfernen"><span class="i">&#xE74D;</span><span class="lbl">Löschen</span></button>
+  <button class="tbtn" id="undoBtn" onclick="undoLast()" title="Rückgängig (Strg+Z)" disabled><span class="i">&#xE7A7;</span><span class="lbl">Rückgängig</span></button>
+  <div class="sep"></div>
+  <div class="fmtbar" id="fmtBar" title="Schrift für neue und bearbeitete Texte">
+    <select id="teFam">
+      <option value="helv">Helvetica</option>
+      <option value="tiro">Times</option>
+      <option value="cour">Courier</option>
+    </select>
+    <select id="teStil">
+      <option value="">normal</option>
+      <option value="b">fett</option>
+      <option value="i">kursiv</option>
+      <option value="bi">fett+kursiv</option>
+    </select>
+    <input type="number" id="teSize" value="11" min="6" max="72" title="Schriftgröße">
+    <input type="color" id="teColor" value="#000000" title="Textfarbe">
+  </div>
+  <div class="sep"></div>
+  <div class="propsbar" id="propsBar" style="display:none">
+    <span class="typ" id="prTyp">Objekt</span>
+    <span class="lbl">X</span><input type="number" id="prX" step="1">
+    <span class="lbl">Y</span><input type="number" id="prY" step="1">
+    <span class="lbl">Breite</span><input type="number" id="prW" step="1" min="10">
+    <span class="lbl">Höhe</span><input type="number" id="prH" step="1" min="10">
+    <span class="lbl">pt</span>
+  </div>
+  <div class="sep"></div>
+  <div class="searchwrap">
+    <span class="i">&#xE721;</span>
+    <input id="searchBox" placeholder="Suchen…">
+    <span class="hits" id="hitInfo"></span>
+    <button class="nav" onclick="hitNav(-1)" title="Vorheriger Treffer">&#xE76B;</button>
+    <button class="nav" onclick="hitNav(1)" title="Nächster Treffer">&#xE76C;</button>
+  </div>
+  <div class="spacer"></div>
+  <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
+</header>
+
+<main>
+  <div id="thumbrail"></div>
+  <div id="viewer"></div>
+  <button class="sbHandle" id="sbHandle" onclick="toggleSb()" title="Seitenleiste ein-/ausklappen">&#xE76C;</button>
+  <aside>
+    <div class="sbtools">
+      <button onclick="toggleSide()" id="sbSideBtn" title="Seitenleiste auf die andere Seite verschieben">&#xE76B;</button>
+    </div>
+    <h3>Lesezeichen</h3>
+    <div id="toc" class="muted">Kein Dokument geöffnet.</div>
+    <h3>Formularfelder</h3>
+    <div id="fields" class="muted">&ndash;</div>
+    <h3>Kurzhilfe</h3>
+    <p class="muted">
+      <b>Kopieren:</b> Textzeile anklicken (Strg+Klick hängt an).<br>
+      <b>Signatur:</b> oben wählen, aufs Papier klicken, danach greifen &amp; ziehen – Anker unten rechts verändert die Größe.<br>
+      <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe).<br>
+      <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
+      <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
+      Alles wird erst mit <b>Speichern</b> dauerhaft.
+    </p>
+  </aside>
+</main>
+
+<footer>
+  <button class="sbtn" onclick="toggleThumbs()" title="Miniaturen ein-/ausblenden"><span class="i">&#xE8A9;</span> Seiten</button>
+  <div class="sep"></div>
+  <button class="sbtn" onclick="pageNav(-1)" title="Seite zurück"><span class="i">&#xE76B;</span></button>
+  <input id="pgInput" value="0" disabled> <span id="pgTotal">/ 0</span>
+  <button class="sbtn" onclick="pageNav(1)" title="Seite vor"><span class="i">&#xE76C;</span></button>
+  <div class="sep"></div>
+  <button class="sbtn" onclick="zoomStep(-1)" title="Verkleinern (Strg+Mausrad)"><span class="i">&#xE71F;</span></button>
+  <span id="zoomLabel">100 %</span>
+  <button class="sbtn" onclick="zoomStep(1)" title="Vergrößern"><span class="i">&#xE8A3;</span></button>
+  <button class="sbtn" onclick="fitWidth()" title="Seitenbreite einpassen">Passend</button>
+  <div class="sep"></div>
+  <button class="sbtn" onclick="rotatePage()" title="Seite 90° drehen" disabled><span class="i">&#xE72C;</span> Drehen</button>
+  <button class="sbtn" onclick="removePage()" title="Diese Seite löschen" disabled><span class="i">&#xE74D;</span> Seite</button>
+  <span id="dirtyDot" title="Ungespeicherte Änderungen"></span>
+  <span id="statusMain"></span>
+</footer>
+
+<div id="renameBox">
+  <div class="muted" style="margin-bottom:7px">Signatur umbenennen</div>
+  <input id="rnInput" placeholder="Neuer Name">
+  <div class="row">
+    <button id="rnOk">Übernehmen</button>
+    <button id="rnCancel">Abbrechen</button>
+  </div>
+</div>
+
+<script>
+let cur = null;
+let mode = 'normal';
+let marked = [], selAnnot = null, drag = null;
+let zoom = 1.0;
+const BASE_DPI = 96;
+let rerenderTimer = null;
+let hits = [], hitIdx = -1;
+let currentPage = 0;
+
+const FAM_PREFIX = {helv:['Helvetica,Arial,sans-serif','normal','normal'], hebo:['Helvetica,Arial,sans-serif','bold','normal'],
+                    heit:['Helvetica,Arial,sans-serif','normal','italic'], hebi:['Helvetica,Arial,sans-serif','bold','italic'],
+                    tiro:["'Times New Roman',serif",'normal','normal'], tibo:["'Times New Roman',serif",'bold','normal'],
+                    tiit:["'Times New Roman',serif",'normal','italic'], tibi:["'Times New Roman',serif",'bold','italic'],
+                    cour:['Courier,monospace','normal','normal'], cobo:['Courier,monospace','bold','normal'],
+                    coit:['Courier,monospace','normal','italic'], cobi:['Courier,monospace','bold','italic']};
+
+function stat(msg, ok) { const s = document.getElementById('statusMain'); s.textContent = msg; s.className = ok ? 'ok' : ''; }
+function setDirty(v) {
+  document.getElementById('saveBtn').classList.toggle('dirty', v);
+  document.getElementById('dirtyDot').style.display = v ? 'inline-block' : 'none';
+  try { window.chrome?.webview?.postMessage(v ? 'dirty:1' : 'dirty:0'); } catch (e) {}
+}
+
+/* ---------- Modi ---------- */
+function setMode(m) {
+  if (m === 'sign' && !sigSelected) { stat('Bitte zuerst eine Signatur auswählen (Knopf oben).'); return; }
+  mode = (mode === m) ? 'normal' : m;
+  ['btnSign','btnText','btnDel'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('btnDelGo')?.remove();
+  if (mode !== 'normal') document.getElementById('btn' + {sign:'Sign',text:'Text',delete:'Del'}[mode]).classList.add('active');
+  marked = []; commitInline(); selectAnnot(null); clearFreeSel(); updateMarked();
+  document.querySelectorAll('.pagewrap').forEach(w => {
+    w.classList.remove('mode-sign','mode-text','mode-delete');
+    if (mode !== 'normal') w.classList.add('mode-' + mode);
+  });
+  const tip = {normal:'', sign:'Klicke auf die Stelle, wo die Signatur hin soll.',
+               text:'Klicke aufs Papier und tippe direkt dort.',
+               delete:'Klicke die zu löschenden Zeilen an (rot), dann unten "Löschen ausführen".'}[mode];
+  // Delete-Ausfuehren-Knopf dynamisch in Statusleiste
+  document.getElementById('delGoWrap')?.remove();
+  if (mode === 'delete') {
+    const b = document.createElement('button');
+    b.className = 'sbtn'; b.id = 'delGoWrap'; b.style.color = 'var(--danger)';
+    b.innerHTML = '<span class="i">&#xE74D;</span> Löschen ausführen (<span id="markCount">0</span>)';
+    b.onclick = deleteMarked;
+    document.querySelector('footer').insertBefore(b, document.getElementById('statusMain'));
+  }
+  if (tip) stat(tip, true);
+}
+function updateMarked() { const c = document.getElementById('markCount'); if (c) c.textContent = marked.length; }
+
+/* ---------- Dokument ---------- */
+function openDoc(info) {
+  cur = info;
+  hits = []; hitIdx = -1; document.getElementById('hitInfo').textContent = '';
+  document.getElementById('saveBtn').disabled = false;
+  document.querySelectorAll('footer .sbtn').forEach(b => b.disabled = false);
+  stat('Geöffnet: ' + info.name + ' (' + info.pages + ' Seiten)', true);
+  const toc = document.getElementById('toc');
+  if (!info.toc.length) { toc.textContent = 'Dieses Dokument hat keine Lesezeichen.'; toc.className='muted'; }
+  else {
+    toc.className = 'toc';
+    for (const [lvl, title, page] of info.toc) {
+      const a = document.createElement('a');
+      a.innerHTML = title + ' <span class="pg">S. ' + page + '</span>';
+      a.className = 'l' + Math.min(lvl,3);
+      a.onclick = () => jumpTo(page - 1);
+      toc.appendChild(a);
+    }
+  }
+  loadFieldSummary();
+  const v = document.getElementById('viewer');
+  v.innerHTML = '';
+  for (let n = 0; n < info.pages; n++) v.appendChild(makePageEl(n));
+  buildThumbs();
+  document.getElementById('undoBtn').disabled = false;
+  updatePageIndicator();
+}
+function makePageEl(n) {
+  const wrap = document.createElement('div');
+  wrap.className = 'pagewrap'; wrap.id = 'page' + n; wrap.dataset.page = n;
+  if (mode !== 'normal') wrap.classList.add('mode-' + mode);
+  const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = 'Seite ' + (n+1);
+  const img = document.createElement('img');
+  img.dataset.page = n; img.loading = 'lazy';
+  img.dataset.renderedDpi = Math.round(BASE_DPI * zoom);
+  img.src = pageUrl(n);
+  img.onload = () => buildPage(img);
+  img.onclick = (ev) => pageClick(ev, img, n);
+  img.addEventListener('mousedown', (ev) => {
+    if (mode !== 'normal' || ev.button !== 0) return;
+    clearFreeSel();
+    selDrag = {n, img, startX: ev.clientX, startY: ev.clientY, active: false, div: null};
+  });
+  wrap.appendChild(lbl); wrap.appendChild(img);
+  return wrap;
+}
+function pageUrl(n) { return `/api/page/${cur.id}/${n}?dpi=${Math.round(BASE_DPI*zoom)}&t=${Date.now()}`; }
+function buildPage(img) { addLines(img); addAnnots(img); addWidgets(img); }
+function refreshPage(n) {
+  const img = document.querySelector('#page' + n + ' img');
+  if (!img) return;
+  img.parentElement.querySelectorAll('.line,.annot,.winput,.hit').forEach(e => e.remove());
+  img.onload = () => buildPage(img);
+  img.dataset.renderedDpi = Math.round(BASE_DPI * zoom);
+  img.src = pageUrl(n);
+  const th = document.querySelector('#thumbrail .thumb[data-page="' + n + '"] img');
+  if (th) th.src = `/api/page/${cur.id}/${n}?dpi=22&t=${Date.now()}`;
+}
+function topVisiblePage() {
+  const vt = document.getElementById('viewer').getBoundingClientRect().top + 60;
+  let best = 0;
+  document.querySelectorAll('.pagewrap').forEach(w => {
+    if (w.getBoundingClientRect().top <= vt) best = parseInt(w.dataset.page);
+  });
+  return best;
+}
+function jumpTo(n) { const el = document.getElementById('page' + n); if (el) el.scrollIntoView({behavior:'auto', block:'start'}); }
+function updatePageIndicator() {
+  currentPage = topVisiblePage();
+  document.getElementById('pgInput').value = currentPage + 1;
+  document.getElementById('pgTotal').textContent = '/ ' + (cur ? cur.pages : 0);
+  document.querySelectorAll('.thumb').forEach(t => t.classList.toggle('cur', parseInt(t.dataset.page) === currentPage));
+}
+document.getElementById('viewer').addEventListener('scroll', () => requestAnimationFrame(() => { updatePageIndicator(); ensureFresh(); }));
+function pageNav(d) { jumpTo(Math.max(0, Math.min(cur.pages - 1, currentPage + d))); }
+document.getElementById('pgInput').addEventListener('change', (ev) => {
+  const n = parseInt(ev.target.value);
+  if (!isNaN(n) && cur) jumpTo(Math.max(1, Math.min(cur.pages, n)) - 1);
+});
+
+/* ---------- Zoom (fluid): vorhandenes Bild sofort skalieren, Scharfstellung im Hintergrund ---------- */
+function kOfZoom() { return BASE_DPI * zoom / 72; }
+
+function reposition(el, k) {
+  if (el._pdfRect) positionRect(el, el._pdfRect, k);
+  if (el._fs != null) el.style.fontSize = (el.classList.contains('winput') ? Math.max(9, el._fs * k / 1.1) : el._fs * k) + 'px';
+}
+
+function resizeWrap(w) {
+  const img = w.querySelector('img');
+  if (!img || !img.dataset.pageW) return;
+  const k = kOfZoom();
+  img.style.width = (parseFloat(img.dataset.pageW) * k) + 'px';   // altes Raster bleibt sichtbar, wird gestretcht
+  img.dataset.k = k;
+  w.querySelectorAll('.line,.annot,.winput,.hit').forEach(el => reposition(el, k));
+}
+
+function applyZoom(z) {
+  zoom = Math.max(0.3, Math.min(4, z));
+  document.getElementById('zoomLabel').textContent = Math.round(zoom * 100) + ' %';
+  if (!cur) return;
+  const viewer = document.getElementById('viewer');
+  const anchor = topVisiblePage();
+  const anchorEl = document.getElementById('page' + anchor);
+  const anchorTopView = anchorEl ? anchorEl.getBoundingClientRect().top : 0;
+  document.querySelectorAll('.pagewrap').forEach(resizeWrap);
+  updatePageIndicator();
+  scheduleRerender();
+  requestAnimationFrame(() => {
+    const el2 = document.getElementById('page' + anchor);
+    if (el2) viewer.scrollTop += el2.getBoundingClientRect().top - anchorTopView;
+  });
+}
+
+function zoomStep(d) { applyZoom(zoom * (d > 0 ? 1.15 : 1 / 1.15)); }
+
+function fitWidth() {
+  if (!cur) return;
+  const img = document.querySelector('.pagewrap img');
+  const avail = document.getElementById('viewer').clientWidth - 44;
+  let pageWpt = 595;
+  if (img && img.dataset.pageW) pageWpt = parseFloat(img.dataset.pageW);
+  else if (img) pageWpt = img.naturalWidth / (BASE_DPI * zoom) * 72;
+  applyZoom(avail * 72 / (pageWpt * BASE_DPI));
+}
+
+function scheduleRerender() {
+  clearTimeout(rerenderTimer);
+  rerenderTimer = setTimeout(renderFresh, 280);
+}
+
+function isNearViewport(w) {
+  const vr = document.getElementById('viewer').getBoundingClientRect();
+  const r = w.getBoundingClientRect();
+  return r.bottom > vr.top - vr.height && r.top < vr.bottom + vr.height;
+}
+
+function renderFresh() {
+  rerenderTimer = null;
+  const wantDpi = Math.round(BASE_DPI * zoom);
+  document.querySelectorAll('.pagewrap').forEach(w => {
+    if (!isNearViewport(w)) return;
+    loadFresh(parseInt(w.dataset.page), w.querySelector('img'), wantDpi);
+  });
+}
+
+function ensureFresh() {
+  if (rerenderTimer) return;   // Zoomvorgang laeuft noch
+  const wantDpi = Math.round(BASE_DPI * zoom);
+  document.querySelectorAll('.pagewrap').forEach(w => {
+    if (!isNearViewport(w)) return;
+    loadFresh(parseInt(w.dataset.page), w.querySelector('img'), wantDpi);
+  });
+}
+
+function loadFresh(n, img, dpi) {
+  if (!img || img.dataset.renderedDpi == dpi) return;
+  const src = `/api/page/${cur.id}/${n}?dpi=${dpi}&t=${Date.now()}`;
+  const pre = new Image();
+  pre.onload = () => { img.src = src; img.dataset.renderedDpi = dpi; };  // stiller Tausch, kein Leeren
+  pre.src = src;
+}
+
+document.getElementById('viewer').addEventListener('wheel', (ev) => {
+  if (ev.ctrlKey) { ev.preventDefault(); zoomStep(ev.deltaY < 0 ? 1 : -1); }
+}, {passive:false});
+
+/* ---------- Textzeilen ---------- */
+async function addLines(img) {
+  const n = img.dataset.page;
+  const r = await fetch('/api/text/' + cur.id + '/' + n);
+  if (!r.ok) return;
+  const data = await r.json();
+  const k = img.clientWidth / data.page_w;
+  img.dataset.k = k; img.dataset.pageW = data.page_w;
+  const wrap = img.parentElement;
+  for (const ln of data.lines) {
+    const d = document.createElement('div');
+    d.className = 'line';
+    d._pdfRect = [ln.x0, ln.y0, ln.x1, ln.y1];
+    d._text = ln.t;
+    d.dataset.rect = [ln.x0, ln.y0, ln.x1, ln.y1].join(',');
+    positionRect(d, [ln.x0, ln.y0, ln.x1, ln.y1], k);
+    d.title = ln.t;
+    d.onclick = async (ev) => {
+      ev.stopPropagation();
+      if (lastWasDrag) return;   // Drag-Ende, kein Klick
+      if (mode === 'delete') {
+        d.classList.toggle('marked');
+        if (d.classList.contains('marked')) marked.push({page: n, rect: d.dataset.rect.split(',').map(Number)});
+        else marked = marked.filter(m => !(m.page === n && m.rect.join(',') === d.dataset.rect));
+        updateMarked(); return;
+      }
+      clearFreeSel();
+      let base = '';
+      if (ev.ctrlKey) { try { base = await clipboardRead() + '\n'; } catch (e) {} }
+      if (clipboardWrite(base + ln.t)) {
+        d.classList.add('copied'); stat('Kopiert: ' + ln.t.slice(0,60), true);
+        setTimeout(() => d.classList.remove('copied'), 900);
+      }
+    };
+    wrap.appendChild(d);
+  }
+}
+function positionRect(d, rect, k) {
+  d.style.left = (rect[0]*k)+'px'; d.style.top = (rect[1]*k)+'px';
+  d.style.width = ((rect[2]-rect[0])*k)+'px'; d.style.height = ((rect[3]-rect[1])*k)+'px';
+}
+async function deleteMarked() {
+  if (!marked.length) return;
+  const byPage = {};
+  for (const m of marked) (byPage[m.page] = byPage[m.page] || []).push(m.rect);
+  for (const [pg, rects] of Object.entries(byPage)) {
+    const fd = new FormData();
+    fd.append('page', pg); fd.append('rects', JSON.stringify(rects));
+    const r = await fetch('/api/delete/' + cur.id, {method:'POST', body: fd});
+    if (!r.ok) { stat('Löschen fehlgeschlagen (Seite ' + (+pg+1) + ')'); return; }
+  }
+  setDirty(true);
+  stat('Bereiche entfernt – mit Speichern dauerhaft.', true);
+  const pages = Object.keys(byPage);
+  marked = [];
+  pages.forEach(pg => refreshPage(pg));
+  setMode('normal');
+}
+
+/* ---------- Annotationen ---------- */
+async function addAnnots(img) {
+  const n = img.dataset.page;
+  const r = await fetch('/api/annots/' + cur.id + '/' + n);
+  if (!r.ok) return;
+  const list = await r.json();
+  const k = parseFloat(img.dataset.k);
+  const wrap = img.parentElement;
+  for (const a of list) {
+    const d = document.createElement('div');
+    d.className = 'annot ' + (a.type === 'sign' ? 'imgobj' : 'txtobj');
+    d.dataset.xref = a.xref; d.dataset.page = n;
+    d._pdfRect = a.rect; d._annot = a;
+    if (a.type === 'sign') {
+      d.style.backgroundImage = a.file ? `url(/api/signature/file/${encodeURIComponent(a.file)})` : '';
+      if (!a.file) { d.style.background = 'rgba(200,200,200,.5)'; d.textContent = '✍'; }
+    } else {
+      const [ff, fw, fs] = FAM_PREFIX[a.font] || FAM_PREFIX.helv;
+      d.style.fontFamily = ff; d.style.fontWeight = fw; d.style.fontStyle = fs;
+      d._fs = a.size;
+      d.style.fontSize = (a.size * k) + 'px';
+      d.style.color = `rgb(${(a.color||[0,0,0]).map(c=>Math.round(c*255)).join(',')})`;
+      d.textContent = a.text || '';
+    }
+    positionRect(d, a.rect, k);
+    const rz = document.createElement('div'); rz.className = 'rz'; d.appendChild(rz);
+    d.addEventListener('mousedown', (ev) => startDrag(ev, d, a, n, k, 'move'));
+    rz.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startDrag(ev, d, a, n, k, 'resize'); });
+    d.addEventListener('dblclick', (ev) => { ev.stopPropagation(); if (a.type === 'text') startInlineEdit(n, null, null, a); });
+    d.addEventListener('click', (ev) => { ev.stopPropagation(); selectAnnot({div: d}); });
+    wrap.appendChild(d);
+  }
+}
+function selectAnnot(sel) {
+  if (selAnnot && selAnnot.div) selAnnot.div.classList.remove('sel');
+  selAnnot = sel;
+  const bar = document.getElementById('propsBar');
+  if (sel && sel.div && sel.div._annot) {
+    sel.div.classList.add('sel');
+    const r = sel.div._annot.rect;
+    document.getElementById('prTyp').textContent = sel.div._annot.type === 'sign' ? 'Signatur' : 'Text';
+    document.getElementById('prX').value = Math.round(r[0]);
+    document.getElementById('prY').value = Math.round(r[1]);
+    document.getElementById('prW').value = Math.round(r[2] - r[0]);
+    document.getElementById('prH').value = Math.round(r[3] - r[1]);
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+function syncProps() {
+  if (selAnnot && selAnnot.div && selAnnot.div._annot) {
+    const r = selAnnot.div._annot.rect;
+    document.getElementById('prX').value = Math.round(r[0]);
+    document.getElementById('prY').value = Math.round(r[1]);
+    document.getElementById('prW').value = Math.round(r[2] - r[0]);
+    document.getElementById('prH').value = Math.round(r[3] - r[1]);
+  }
+}
+async function applyProps() {
+  if (!selAnnot || !selAnnot.div || !selAnnot.div._annot) return;
+  const a = selAnnot.div._annot;
+  const img = document.querySelector('#page' + selAnnot.page + ' img');
+  const k = img ? parseFloat(img.dataset.k) : 1;
+  const x = parseFloat(document.getElementById('prX').value);
+  const y = parseFloat(document.getElementById('prY').value);
+  const w = Math.max(10, parseFloat(document.getElementById('prW').value) || 20);
+  const h = Math.max(10, parseFloat(document.getElementById('prH').value) || 20);
+  if ([x, y].some(v => isNaN(v))) return;
+  const rect = [x, y, x + w, y + h];
+  const fd = new FormData();
+  fd.append('page', selAnnot.page); fd.append('xref', a.xref);
+  fd.append('rect', JSON.stringify(rect.map(v => Math.round(v * 10) / 10)));
+  const r = await fetch('/api/annot/move/' + cur.id, {method: 'POST', body: fd});
+  if (r.ok) {
+    a.rect = rect; selAnnot.div._pdfRect = rect;
+    positionRect(selAnnot.div, rect, k);
+    setDirty(true); stat('Position/Größe gesetzt – Speichern macht es dauerhaft.', true);
+  } else stat('Fehler beim Setzen');
+}
+['prX','prY','prW','prH'].forEach(id => document.getElementById(id).addEventListener('change', applyProps));
+
+function startDrag(ev, div, a, pageN, k, kind) {
+  if (mode !== 'normal') return;
+  ev.preventDefault(); ev.stopPropagation();
+  selectAnnot({div});
+  drag = {xref:a.xref, page:pageN, k, div, a, rect:a.rect.slice(), kind,
+          startX:ev.clientX, startY:ev.clientY, aspect:(a.rect[3]-a.rect[1])/(a.rect[2]-a.rect[0])};
+}
+document.addEventListener('mousemove', (ev) => {
+  if (!drag) return;
+  const dx = (ev.clientX - drag.startX) / drag.k;
+  const dy = (ev.clientY - drag.startY) / drag.k;
+  const r = drag.rect.slice();
+  if (drag.kind === 'move') { r[0]+=dx; r[1]+=dy; r[2]+=dx; r[3]+=dy; }
+  else {
+    const nw = Math.max(20, (r[2]-r[0]) + dx);
+    r[2] = r[0] + nw; r[3] = r[1] + nw * drag.aspect;
+  }
+  drag.newRect = r;
+  positionRect(drag.div, r, drag.k);
+});
+document.addEventListener('mouseup', async () => {
+  if (!drag || !drag.newRect) { drag = null; return; }
+  const fd = new FormData();
+  fd.append('page', drag.page); fd.append('xref', drag.xref);
+  fd.append('rect', JSON.stringify(drag.newRect.map(v => Math.round(v*10)/10)));
+  const r = await fetch('/api/annot/move/' + cur.id, {method:'POST', body: fd});
+  if (r.ok) {
+    if (drag.a) drag.a.rect = drag.newRect;          // Objektdaten aktuell halten (Fix: Sprung zur Alt-Position)
+    drag.div._pdfRect = drag.newRect;
+    setDirty(true); stat('Geändert – Speichern macht es dauerhaft.', true);
+    syncProps();
+  }
+  drag = null;
+});
+
+/* ---------- Text-Inline-Eingabe: direkt auf dem Papier ---------- */
+let inline = null;   // {xref, page, ta, delBtn, rect}
+
+function currentFontAlias() { return document.getElementById('teFam').value + document.getElementById('teStil').value; }
+
+function applyFormatTo(ta, sizePt) {
+  const k = parseFloat(ta.dataset.k) || 1;
+  const [ff, fw, fs] = FAM_PREFIX[currentFontAlias()] || FAM_PREFIX.helv;
+  ta.style.fontFamily = ff; ta.style.fontWeight = fw; ta.style.fontStyle = fs;
+  ta.style.fontSize = (sizePt * k) + 'px';
+  const hex = document.getElementById('teColor').value;
+  ta.style.color = hex;
+}
+
+function startInlineEdit(pageN, pdfX, pdfY, existing) {
+  commitInline();
+  const img = document.querySelector('#page' + pageN + ' img');
+  if (!img || !img.dataset.k) return;
+  const k = parseFloat(img.dataset.k);
+  const wrap = img.parentElement;
+  const rect = existing ? existing.rect.slice()
+                        : [pdfX, pdfY, pdfX + Math.min(260, 30 * 8), pdfY + 26];
+  const ta = document.createElement('textarea');
+  ta.className = 'inlineEdit';
+  ta.dataset.k = k;
+  ta.value = existing ? (existing.text || '') : '';
+  ta.spellcheck = false;
+  // Toolbar auf vorhandene Eigenschaften stellen
+  if (existing) {
+    document.getElementById('teFam').value = (existing.font || 'helv').slice(0, 4);
+    document.getElementById('teStil').value = (existing.font || 'helv').slice(4) || '';
+    document.getElementById('teSize').value = Math.round(existing.size || 11);
+    const c = existing.color || [0, 0, 0];
+    document.getElementById('teColor').value = '#' + c.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+  }
+  applyFormatTo(ta, existing ? (existing.size || 11) : (parseFloat(document.getElementById('teSize').value) || 11));
+  positionRect(ta, rect, k);
+  const autoGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(26, ta.scrollHeight) + 'px'; };
+  ta.addEventListener('input', autoGrow);
+  // Beim Verlassen committen - ausser der Fokus geht in die Formatleiste
+  ta.addEventListener('blur', (ev) => {
+    const to = ev.relatedTarget;
+    if (to && ['teFam', 'teStil', 'teSize', 'teColor'].includes(to.id)) return;
+    commitInline();
+  });
+  ta.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') { ev.stopPropagation(); cancelInline(); }
+    else if (ev.key === 'Enter' && ev.ctrlKey) { ev.preventDefault(); commitInline(); }
+  });
+  // Live-Aenderung aus der Formatleiste
+  const live = () => { if (inline && inline.ta === ta) applyFormatTo(ta, parseFloat(document.getElementById('teSize').value) || 11); };
+  ['teFam', 'teStil', 'teSize', 'teColor'].forEach(id => {
+    document.getElementById(id).addEventListener('input', live);
+    document.getElementById(id).addEventListener('change', live);
+  });
+  let delBtn = null;
+  if (existing) {
+    delBtn = document.createElement('button');
+    delBtn.className = 'inlineDel'; delBtn.innerHTML = '&#xE74D;'; delBtn.title = 'Text löschen';
+    delBtn.style.left = (rect[0] * k) + 'px';
+    delBtn.style.top = (rect[1] * k - 24) + 'px';
+    delBtn.addEventListener('mousedown', (ev) => ev.preventDefault());
+    delBtn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const fd = new FormData();
+      fd.append('page', pageN); fd.append('xref', existing.xref);
+      await fetch('/api/annot/delete/' + cur.id, {method: 'POST', body: fd});
+      teardownInline();
+      setDirty(true); reloadAnnots(pageN); stat('Text gelöscht.', true);
+    });
+    wrap.appendChild(delBtn);
+  }
+  wrap.appendChild(ta);
+  inline = {xref: existing ? existing.xref : 0, page: pageN, ta, delBtn, rect};
+  ta.focus();
+  if (existing) ta.select();
+  autoGrow();
+}
+function teardownInline() {
+  if (!inline) return;
+  inline.ta.remove();
+  if (inline.delBtn) inline.delBtn.remove();
+  inline = null;
+}
+function cancelInline() { teardownInline(); }
+async function commitInline() {
+  if (!inline) return;
+  const st = inline;
+  const text = st.ta.value;
+  teardownInline();
+  if (!text.trim()) return;
+  const size = parseFloat(document.getElementById('teSize').value) || 11;
+  const font = currentFontAlias();
+  const hex = document.getElementById('teColor').value;
+  const color = [1, 3, 5].map(i => parseInt(hex.substr(i, 2), 16) / 255).join(',');
+  let rect;
+  if (st.xref) rect = st.rect;
+  else {
+    const x = st.rect[0], y = st.rect[1];
+    const lines = text.split('\n').length;
+    const maxLen = Math.max(...text.split('\n').map(l => l.length));
+    rect = [x, y, x + Math.max(140, maxLen * size * 0.55), y + Math.max(26, lines * size * 1.5)];
+  }
+  const fd = new FormData();
+  fd.append('page', st.page); fd.append('rect', JSON.stringify(rect.map(v => Math.round(v * 10) / 10)));
+  fd.append('text', text); fd.append('size', size); fd.append('font', font); fd.append('color', color);
+  fd.append('xref', st.xref);
+  const r = await fetch('/api/annot/text/' + cur.id, {method: 'POST', body: fd});
+  if (r.ok) { setDirty(true); stat('Text gesetzt – Speichern macht ihn dauerhaft.', true); await reloadAnnots(st.page); }
+  else stat('Text fehlgeschlagen');
+}
+async function reloadAnnots(n) {
+  const img = document.querySelector('#page' + n + ' img');
+  if (!img || !img.dataset.k) return;   // Seite noch nicht gerendert -> Overlays kommen beim Laden
+  img.parentElement.querySelectorAll('.annot').forEach(e => e.remove());
+  selectAnnot(null);
+  await addAnnots(img);
+}
+
+/* ---------- Klick aufs Papier ---------- */
+async function pageClick(ev, img, n) {
+  if (mode !== 'sign' && mode !== 'text') return;
+  const k = parseFloat(img.dataset.k);
+  const x = ev.offsetX / k, y = ev.offsetY / k;
+  if (mode === 'sign') {
+    const fd = new FormData();
+    fd.append('page', n); fd.append('x', x.toFixed(1)); fd.append('y', y.toFixed(1));
+    fd.append('width', 140); fd.append('fname', sigSelected);
+    const resp = await fetch('/api/stamp/' + cur.id, {method:'POST', body: fd});
+    if (resp.ok) {
+      setDirty(true);
+      const placed = await resp.json();
+      await reloadAnnots(n);
+      setMode('normal');   // direkt weiterarbeiten: greifen/ziehen ohne Moduswechsel
+      const nd = document.querySelector('#page' + n + ' .annot[data-xref="' + placed.xref + '"]');
+      if (nd) selectAnnot({div: nd});
+      stat('Signatur gesetzt – ziehen oder Werte oben ändern.', true);
+    }
+    else stat('Signatur fehlgeschlagen');
+  } else {
+    startInlineEdit(n, x, y, null);
+  }
+}
+
+/* ---------- Formularfelder ---------- */
+let fieldCache = [];
+async function loadFieldSummary() {
+  const box = document.getElementById('fields');
+  const r = await fetch('/api/fields/' + cur.id);
+  fieldCache = await r.json();
+  if (!fieldCache.length) { box.textContent = 'Dieses Dokument hat keine Formularfelder.'; box.className='muted'; return; }
+  box.className = ''; box.innerHTML = '';
+  for (const f of fieldCache) {
+    const div = document.createElement('div'); div.className = 'field';
+    div.innerHTML = f.name + ' <b>' + (f.value || '(leer)') + '</b> <span class="muted">(S.' + (f.page+1) + ')</span>';
+    box.appendChild(div);
+  }
+}
+async function addWidgets(img) {
+  const n = parseInt(img.dataset.page);
+  const fields = fieldCache.filter(f => f.page === n);
+  if (!fields.length) return;
+  const k = parseFloat(img.dataset.k);
+  const wrap = img.parentElement;
+  for (const f of fields) {
+    const d = document.createElement('div');
+    d.className = 'winput';
+    d._pdfRect = f.rect; d._fs = 11;
+    positionRect(d, f.rect, k);
+    d.style.fontSize = Math.max(9, 11 * k / 1.1) + 'px';
+    const inp = document.createElement('input');
+    if (f.type === 'CheckBox') {
+      inp.type = 'checkbox';
+      inp.checked = ['true','1','yes','an','x'].includes((f.value||'').toLowerCase());
+      inp.addEventListener('change', () => saveWidget(f, inp.checked ? 'True' : 'False'));
+    } else {
+      inp.type = 'text'; inp.value = f.value || '';
+      inp.addEventListener('change', () => saveWidget(f, inp.value));
+    }
+    inp.title = f.name;
+    d.appendChild(inp); wrap.appendChild(d);
+  }
+}
+async function saveWidget(f, value) {
+  const fd = new FormData();
+  fd.append('page', f.page); fd.append('name', f.name); fd.append('value', value);
+  const r = await fetch('/api/field/' + cur.id, {method:'POST', body: fd});
+  if (r.ok) { f.value = value; setDirty(true); stat('[' + f.name + '] = ' + value, true); loadFieldSummary(); }
+  else stat('Fehler bei Feld ' + f.name);
+}
+
+/* ---------- Suche ---------- */
+let searchTimer = null;
+document.getElementById('searchBox').addEventListener('input', (ev) => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch(ev.target.value), 350);
+});
+async function runSearch(q) {
+  document.querySelectorAll('.hit').forEach(e => e.remove());
+  hits = []; hitIdx = -1;
+  if (!q || !cur) { document.getElementById('hitInfo').textContent = ''; return; }
+  const r = await fetch('/api/search/' + cur.id + '?q=' + encodeURIComponent(q));
+  const data = await r.json();
+  hits = data.hits;
+  document.getElementById('hitInfo').textContent = hits.length ? '0/' + hits.length : '0';
+  const byPage = {};
+  for (const h of hits) (byPage[h.page] = byPage[h.page] || []).push(h.rect);
+  for (const [pg, rects] of Object.entries(byPage)) {
+    const img = document.querySelector('#page' + pg + ' img');
+    if (!img || !img.dataset.k) continue;
+    const k = parseFloat(img.dataset.k);
+    const wrap = img.parentElement;
+    for (const rect of rects) {
+      const d = document.createElement('div');
+      d.className = 'hit';
+      d._pdfRect = rect.slice();
+      positionRect(d, rect, k);
+      d.dataset.page = pg; d.dataset.rect = rect.join(',');
+      wrap.appendChild(d);
+    }
+  }
+  if (hits.length) hitNav(1);
+}
+function hitNav(d) {
+  if (!hits.length) return;
+  document.querySelectorAll('.hit.active').forEach(e => e.classList.remove('active'));
+  hitIdx = (hitIdx + d + hits.length) % hits.length;
+  const h = hits[hitIdx];
+  document.getElementById('hitInfo').textContent = (hitIdx+1) + '/' + hits.length;
+  const sel = document.querySelector(`#page${h.page} .hit[data-rect="${h.rect.join(',')}"]`);
+  if (sel) { sel.classList.add('active'); sel.scrollIntoView({behavior:'smooth', block:'center'}); }
+}
+
+/* ---------- Seite: Drehen / Loeschen ---------- */
+async function rotatePage() {
+  if (!cur) return;
+  const fd = new FormData(); fd.append('page', currentPage); fd.append('delta', 90);
+  const r = await fetch('/api/rotate/' + cur.id, {method:'POST', body: fd});
+  if (r.ok) { setDirty(true); refreshPage(currentPage); stat('Seite gedreht.', true); }
+}
+async function removePage() {
+  if (!cur) return;
+  if (!confirm('Seite ' + (currentPage+1) + ' wirklich löschen?')) return;
+  const fd = new FormData(); fd.append('page', currentPage);
+  const r = await fetch('/api/deletepage/' + cur.id, {method:'POST', body: fd});
+  if (!r.ok) { stat('Letzte Seite kann nicht gelöscht werden.'); return; }
+  setDirty(true);
+  const idx = currentPage;
+  const again = await fetch('/api/current');
+  openDoc(await again.json());
+  jumpTo(Math.min(idx, cur.pages - 1));
+  stat('Seite gelöscht.', true);
+}
+
+/* ---------- Drucken ---------- */
+async function printDoc() {
+  if (!cur) return;
+  stat('Druckansicht wird erzeugt…');
+  try {
+    const html = await (await fetch('/api/print/' + cur.id)).text();
+    const fr = document.createElement('iframe');
+    fr.style.position = 'fixed'; fr.style.right = '0'; fr.style.bottom = '0';
+    fr.style.width = '0'; fr.style.height = '0'; fr.style.border = '0';
+    document.body.appendChild(fr);
+    fr.srcdoc = html;
+    fr.onload = () => { setTimeout(() => { fr.contentWindow.print(); stat('Druckdialog geöffnet.', true); }, 400); };
+  } catch (e) { stat('Drucken fehlgeschlagen'); }
+}
+
+/* ---------- Speichern / Laden / Demo ---------- */
+async function saveDoc() {
+  if (!cur) return;
+  const r = await fetch('/api/save/' + cur.id, {method:'POST'});
+  if (r.ok) { setDirty(false); stat('Gespeichert: ' + (await r.json()).path, true); }
+  else stat('Speichern fehlgeschlagen');
+}
+function downloadDoc() { if (cur) location.href = '/api/download/' + cur.id; }
+function openDemo() { fetch('/api/demo').then(r => r.json()).then(openDoc); }
+
+/* ---------- Signaturen: Galerie mit Vorschau, Umbenennen, Loeschen ---------- */
+let sigSelected = '';
+let sigList = [];
+
+async function loadSignatures(keepPanel) {
+  sigList = await (await fetch('/api/signatures')).json();
+  if (sigSelected && !sigList.some(s => s.file === sigSelected)) sigSelected = '';
+  if (!sigSelected && sigList.length) sigSelected = sigList[0].file;
+  updateSigButton();
+  if (keepPanel && document.getElementById('sigPanel').style.display === 'block') buildSigPanel();
+}
+function prettySig(name) {
+  let pretty = name.replace(/^SignatureWrite/i, '').replace(/^Signature/i, '').replace(/\.png$/i, '');
+  if (/^\d{8}\d{6}$/.test(pretty)) pretty = pretty.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/, '$1-$2-$3 $4:$5');
+  return pretty || name;
+}
+function updateSigButton() {
+  const img = document.getElementById('sigCurImg');
+  const lbl = document.getElementById('sigCurName');
+  if (sigSelected) {
+    img.style.display = '';
+    img.src = '/api/signature/file/' + encodeURIComponent(sigSelected);
+    lbl.textContent = prettySig(sigSelected);
+  } else {
+    img.style.display = 'none'; img.removeAttribute('src');
+    lbl.textContent = 'Signatur…';
+  }
+}
+function toggleSigPanel(ev) {
+  ev.stopPropagation();
+  const p = document.getElementById('sigPanel');
+  if (p.style.display === 'block') { p.style.display = 'none'; return; }
+  buildSigPanel();
+  p.style.display = 'block';
+  const r = document.getElementById('sigBtn').getBoundingClientRect();
+  p.style.left = Math.min(window.innerWidth - 352, r.left) + 'px';
+  p.style.top = (r.bottom + 6) + 'px';
+}
+function buildSigPanel() {
+  const p = document.getElementById('sigPanel');
+  p.innerHTML = '';
+  if (!sigList.length) {
+    const e = document.createElement('div'); e.className = 'muted'; e.style.padding = '6px';
+    e.textContent = 'Noch keine Signaturen vorhanden.';
+    p.appendChild(e);
+  }
+  for (const s of sigList) {
+    const item = document.createElement('div');
+    item.className = 'sigitem' + (s.file === sigSelected ? ' sel' : '');
+    const img = document.createElement('img');
+    img.src = '/api/signature/file/' + encodeURIComponent(s.file);
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = prettySig(s.file);
+    const act = document.createElement('div'); act.className = 'act';
+    const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = 'Umbenennen';
+    ren.onclick = (ev) => { ev.stopPropagation(); openRename(s.file); };
+    const del = document.createElement('button'); del.className = 'del'; del.innerHTML = '&#xE74D;'; del.title = 'Löschen';
+    del.onclick = async (ev) => {
+      ev.stopPropagation();
+      if (!confirm('Signatur "' + prettySig(s.file) + '" wirklich löschen?\n\nBereits gesetzte Signaturen in PDFs bleiben beim Speichern erhalten.')) return;
+      const fd = new FormData(); fd.append('fname', s.file);
+      await fetch('/api/signature/delete', {method:'POST', body: fd});
+      await loadSignatures(true);
+      await reloadAllAnnotOverlays();
+      stat('Signatur gelöscht.', true);
+    };
+    act.appendChild(ren); act.appendChild(del);
+    item.appendChild(img); item.appendChild(nm); item.appendChild(act);
+    item.onclick = () => {
+      sigSelected = s.file; updateSigButton();
+      p.style.display = 'none';
+      stat('Signatur gewählt: ' + prettySig(s.file), true);
+    };
+    p.appendChild(item);
+  }
+  const add = document.createElement('div');
+  add.className = 'sigadd';
+  add.innerHTML = '<span class="i" style="font-family:var(--icon)">&#xE710;</span> Neue Signatur hochladen (Hintergrund wird transparent)';
+  add.onclick = () => document.getElementById('sigFile').click();
+  p.appendChild(add);
+}
+document.addEventListener('click', (ev) => {
+  const p = document.getElementById('sigPanel');
+  if (p.style.display === 'block' && !p.contains(ev.target) && ev.target.id !== 'sigBtn' && !document.getElementById('sigBtn').contains(ev.target)) {
+    p.style.display = 'none';
+  }
+});
+
+/* Umbenennen */
+let renameTarget = '';
+function openRename(file) {
+  renameTarget = file;
+  const box = document.getElementById('renameBox');
+  document.getElementById('rnInput').value = prettySig(file);
+  box.style.display = 'block';
+  const btn = document.getElementById('sigBtn').getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 300, btn.left)) + 'px';
+  box.style.top = Math.min(window.innerHeight - 200, btn.bottom + 6) + 'px';
+  document.getElementById('rnInput').focus();
+  document.getElementById('rnInput').select();
+}
+document.getElementById('rnCancel').addEventListener('click', () => document.getElementById('renameBox').style.display = 'none');
+document.getElementById('rnOk').addEventListener('click', async () => {
+  const newName = document.getElementById('rnInput').value.trim();
+  if (!newName || !renameTarget) { document.getElementById('renameBox').style.display = 'none'; return; }
+  const fd = new FormData(); fd.append('old', renameTarget); fd.append('new', newName);
+  const r = await fetch('/api/signature/rename', {method:'POST', body: fd});
+  if (!r.ok) { stat((await r.json().catch(() => ({}))).detail || 'Umbenennen fehlgeschlagen'); return; }
+  const renamed = (await r.json()).file;
+  if (sigSelected === renameTarget) sigSelected = renamed;
+  renameTarget = '';
+  document.getElementById('renameBox').style.display = 'none';
+  await loadSignatures(true);
+  await reloadAllAnnotOverlays();
+  setDirty(true);
+  stat('Signatur umbenannt – auch in geöffneten Dokumenten.', true);
+});
+document.getElementById('rnInput').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') document.getElementById('rnOk').click(); });
+async function reloadAllAnnotOverlays() {
+  if (!cur) return;
+  for (let n = 0; n < cur.pages; n++) await reloadAnnots(n);
+}
+document.getElementById('sigFile').addEventListener('change', async (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append('file', f); fd.append('remove_bg', '1');
+  stat('Signatur wird verarbeitet …');
+  const r = await fetch('/api/signature/upload', {method:'POST', body: fd});
+  if (r.ok) { await loadSignatures(); stat('Signatur hinzugefügt.', true); }
+  else stat('Upload fehlgeschlagen');
+  ev.target.value = '';
+});
+
+/* ---------- Drag&Drop / Clipboard / Tasten ---------- */
+const viewer = document.getElementById('viewer');
+viewer.addEventListener('dragover', (ev) => { ev.preventDefault(); viewer.classList.add('dragover'); });
+viewer.addEventListener('dragleave', () => viewer.classList.remove('dragover'));
+viewer.addEventListener('drop', async (ev) => {
+  ev.preventDefault(); viewer.classList.remove('dragover');
+  const f = ev.dataTransfer.files[0];
+  if (!f || !f.name.toLowerCase().endsWith('.pdf')) return;
+  const fd = new FormData(); fd.append('file', f);
+  stat('Lade …');
+  const r = await fetch('/api/upload', {method:'POST', body: fd});
+  if (r.ok) openDoc(await r.json()); else stat('Upload fehlgeschlagen');
+});
+function clipboardWrite(text) {
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text); return true; }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove(); return ok;
+}
+async function clipboardRead() {
+  if (navigator.clipboard && window.isSecureContext) return await navigator.clipboard.readText();
+  return '';
+}
+document.addEventListener('keydown', (ev) => {
+  if (ev.ctrlKey && ev.key === 's') { ev.preventDefault(); saveDoc(); }
+  else if (ev.ctrlKey && ev.key === 'o') { ev.preventDefault(); document.getElementById('file').click(); }
+  else if (ev.ctrlKey && (ev.key === 'z' || ev.key === 'Z')) {
+    const ae = document.activeElement;
+    if (!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) { ev.preventDefault(); undoLast(); }
+  }
+  else if (ev.ctrlKey && (ev.key === 'c' || ev.key === 'C')) {
+    const ae = document.activeElement;
+    if (freeSel.length && !(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) { ev.preventDefault(); copyFreeSel(); }
+  }
+  else if (ev.key === 'Escape') {
+    if (inline) cancelInline();
+    else if (freeSel.length) clearFreeSel();
+    else if (mode !== 'normal') setMode(mode);
+  }
+});
+
+/* ---------- Theme (hell/dunkel) ---------- */
+function toggleTheme() {
+  const light = document.body.classList.toggle('light');
+  try { localStorage.setItem('pw-theme', light ? 'light' : 'dark'); } catch (e) {}
+  stat(light ? 'Helles Design aktiv.' : 'Dunkles Design aktiv.', true);
+}
+try { if (localStorage.getItem('pw-theme') === 'light') document.body.classList.add('light'); } catch (e) {}
+
+/* ---------- Seitenleiste: Seite + Ein-/Ausblenden ---------- */
+function updateSbIcons() {
+  const left = document.querySelector('main').classList.contains('side-left');
+  document.getElementById('sbSideBtn').innerHTML = left ? '&#xE76C;' : '&#xE76B;';
+  const hidden = document.querySelector('main').classList.contains('sb-collapsed');
+  // Pfeil zeigt in die Richtung, in die die Leiste beim Klick wandert
+  const expand = hidden;
+  document.getElementById('sbHandle').innerHTML =
+    (left ? (expand ? '&#xE76C;' : '&#xE76B;') : (expand ? '&#xE76B;' : '&#xE76C;'));
+}
+function setSide(side) {
+  document.querySelector('main').classList.toggle('side-left', side === 'left');
+  try { localStorage.setItem('pw-side', side); } catch (e) {}
+  updateSbIcons();
+}
+function toggleSide() {
+  setSide(document.querySelector('main').classList.contains('side-left') ? 'right' : 'left');
+}
+function setSbVisible(v) {
+  document.querySelector('main').classList.toggle('sb-collapsed', !v);
+  try { localStorage.setItem('pw-sb', v ? '1' : '0'); } catch (e) {}
+  updateSbIcons();
+}
+function toggleSb() {
+  setSbVisible(document.querySelector('main').classList.contains('sb-collapsed'));
+}
+try {
+  if (localStorage.getItem('pw-side') === 'left') setSide('left');
+  if (localStorage.getItem('pw-sb') === '0') setSbVisible(false);
+} catch (e) {}
+
+/* ---------- Freihand-Textauswahl (aufziehen & kopieren) ---------- */
+let freeSel = [], selDrag = null, lastWasDrag = false;
+
+function clearFreeSel() {
+  document.querySelectorAll('.line.linesel').forEach(e => e.classList.remove('linesel'));
+  document.getElementById('copyChip')?.remove();
+  freeSel = [];
+}
+function copyFreeSel() {
+  if (!freeSel.length) return;
+  const text = freeSel.map(el => el._text).join('\n');
+  if (clipboardWrite(text)) stat('Kopiert: ' + freeSel.length + ' Zeilen.', true);
+  clearFreeSel();
+}
+document.addEventListener('mousemove', (ev) => {
+  if (!selDrag) return;
+  const dx = ev.clientX - selDrag.startX, dy = ev.clientY - selDrag.startY;
+  if (!selDrag.active && Math.abs(dx) + Math.abs(dy) < 5) return;
+  selDrag.active = true;
+  const img = selDrag.img, k = parseFloat(img.dataset.k);
+  if (!k || !isFinite(k)) return;
+  const wrap = img.parentElement;
+  if (!selDrag.div) { selDrag.div = document.createElement('div'); selDrag.div.className = 'seldrag'; wrap.appendChild(selDrag.div); }
+  const wr = wrap.getBoundingClientRect();
+  const x1 = Math.min(selDrag.startX, ev.clientX), y1 = Math.min(selDrag.startY, ev.clientY);
+  const rx = (x1 - wr.left) / k, ry = (y1 - wr.top) / k;
+  const rw = Math.abs(dx) / k, rh = Math.abs(dy) / k;
+  const sd = selDrag.div;
+  sd.style.left = (rx*k)+'px'; sd.style.top = (ry*k)+'px';
+  sd.style.width = (rw*k)+'px'; sd.style.height = (rh*k)+'px';
+  const pr = [rx, ry, rx+rw, ry+rh];
+  freeSel = [];
+  wrap.querySelectorAll('.line').forEach(el => {
+    const r = el._pdfRect;
+    const hit = r && !(r[2] < pr[0] || r[0] > pr[2] || r[3] < pr[1] || r[1] > pr[3]);
+    el.classList.toggle('linesel', !!hit);
+    if (hit) freeSel.push(el);
+  });
+  freeSel.sort((a, b) => (a._pdfRect[1] - b._pdfRect[1]) || (a._pdfRect[0] - b._pdfRect[0]));
+});
+document.addEventListener('mouseup', (ev) => {
+  if (!selDrag) return;
+  const wasActive = selDrag.active;
+  const chipX = ev.clientX, chipY = ev.clientY;
+  selDrag = null;
+  lastWasDrag = wasActive;
+  setTimeout(() => { lastWasDrag = false; }, 60);
+  document.getElementById('copyChip')?.remove();
+  if (wasActive && freeSel.length) {
+    const chip = document.createElement('button');
+    chip.className = 'copyChip'; chip.id = 'copyChip';
+    chip.textContent = 'Kopieren (' + freeSel.length + ' Zeilen)';
+    chip.style.left = Math.min(window.innerWidth - 190, chipX + 8) + 'px';
+    chip.style.top = Math.min(window.innerHeight - 50, chipY + 8) + 'px';
+    chip.addEventListener('mousedown', (ev2) => ev2.stopPropagation());
+    chip.addEventListener('click', (ev2) => { ev2.stopPropagation(); copyFreeSel(); });
+    document.body.appendChild(chip);
+    stat(freeSel.length + ' Zeilen ausgewählt – Strg+C kopiert ebenfalls.', true);
+  } else if (!wasActive) {
+    clearFreeSel();
+  }
+});
+
+/* ---------- Rückgängig ---------- */
+async function undoLast() {
+  if (!cur) return;
+  const r = await fetch('/api/undo/' + cur.id, {method:'POST'});
+  const j = await r.json();
+  if (!j.undone) { stat('Nichts mehr rückgängig zu machen.'); return; }
+  setDirty(true);
+  refreshPage(j.page);
+  reloadAnnots(j.page);
+  loadFieldSummary();
+  stat('Rückgängig gemacht.', true);
+}
+
+/* ---------- Miniaturen ---------- */
+function buildThumbs() {
+  const rail = document.getElementById('thumbrail');
+  rail.innerHTML = '';
+  for (let n = 0; n < cur.pages; n++) {
+    const t = document.createElement('div');
+    t.className = 'thumb'; t.dataset.page = n;
+    const im = document.createElement('img');
+    im.loading = 'lazy';
+    im.src = `/api/page/${cur.id}/${n}?dpi=22&t=${Date.now()}`;
+    const tn = document.createElement('div'); tn.className = 'tn'; tn.textContent = n + 1;
+    t.appendChild(im); t.appendChild(tn);
+    t.onclick = () => jumpTo(n);
+    rail.appendChild(t);
+  }
+}
+function toggleThumbs() {
+  const off = document.querySelector('main').classList.toggle('thumbs-off');
+  try { localStorage.setItem('pw-thumbs', off ? '0' : '1'); } catch (e) {}
+}
+try { if (localStorage.getItem('pw-thumbs') === '0') document.querySelector('main').classList.add('thumbs-off'); } catch (e) {}
+
+/* ---------- Start ---------- */
+/* Toolbar passt sich an: 1. Beschriftungen aus (nur Icons), 2. Marke aus, 3. zweite Reihe */
+function fitToolbar() {
+  const h = document.getElementById('topbar');
+  if (!h) return;
+  const eng = () => h.scrollWidth > h.clientWidth + 2;
+  h.classList.remove('compact', 'slim', 'wrap');
+  if (!eng()) return;
+  h.classList.add('compact');
+  if (!eng()) return;
+  h.classList.add('slim');
+  if (!eng()) return;
+  h.classList.add('wrap');   // letzte Stufe: zweite Reihe
+}
+window.addEventListener('resize', fitToolbar);
+document.getElementById('topbar').addEventListener('scroll', fitToolbar);
+setTimeout(fitToolbar, 300);
+setTimeout(fitToolbar, 1200);
+document.getElementById('file').addEventListener('change', async (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append('file', f);
+  stat('Lade …');
+  const r = await fetch('/api/upload', {method:'POST', body: fd});
+  if (r.ok) openDoc(await r.json()); else stat('Upload fehlgeschlagen');
+  ev.target.value = '';
+});
+loadSignatures();
+(async () => {
+  try { const r = await fetch('/api/current'); const d = await r.json(); if (d && d.id) openDoc(d); } catch (e) {}
+  updatePageIndicator();
+})();
+</script>
+</body>
+</html>

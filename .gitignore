@@ -1,0 +1,16 @@
+# Build-Ausgaben (bleiben unversioniert)
+venv/
+paket/
+app/dist/
+wrapper/bin/
+wrapper/obj/
+*.WebView2/
+
+# Python
+__pycache__/
+*.pyc
+
+# Temp
+*.tmp
+temp/
+tmp/
