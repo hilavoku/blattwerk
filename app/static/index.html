@@ -467,13 +467,13 @@ function makePageEl(n) {
 function pageUrl(n) { return `/api/page/${cur.id}/${n}?dpi=${Math.round(BASE_DPI*zoom)}&t=${Date.now()}`; }
 function buildPage(img) {
   img._gen = (img._gen || 0) + 1;   // noch laufende Overlay-Bauten aelterer Durchlaeufe entwerten
-  img.parentElement.querySelectorAll('.line,.annot,.winput').forEach(e => e.remove());
+  img.parentElement.querySelectorAll('.line,.annot,.winput,.seldrag').forEach(e => e.remove());
   addLines(img); addAnnots(img); addWidgets(img);
 }
 function refreshPage(n) {
   const img = document.querySelector('#page' + n + ' img');
   if (!img) return;
-  img.parentElement.querySelectorAll('.line,.annot,.winput,.hit').forEach(e => e.remove());
+  img.parentElement.querySelectorAll('.line,.annot,.winput,.hit,.seldrag').forEach(e => e.remove());
   img.onload = () => buildPage(img);
   img.dataset.renderedDpi = Math.round(BASE_DPI * zoom);
   img.src = pageUrl(n);
@@ -516,7 +516,7 @@ function resizeWrap(w) {
   const k = kOfZoom();
   img.style.width = (parseFloat(img.dataset.pageW) * k) + 'px';   // altes Raster bleibt sichtbar, wird gestretcht
   img.dataset.k = k;
-  w.querySelectorAll('.line,.annot,.winput,.hit').forEach(el => reposition(el, k));
+  w.querySelectorAll('.line,.annot,.winput,.hit,.seldrag').forEach(el => reposition(el, k));
 }
 
 function applyZoom(z) {
@@ -1557,6 +1557,7 @@ function freeSelStart(ev, img) {
 
 function clearFreeSel() {
   document.querySelectorAll('.line.linesel').forEach(e => e.classList.remove('linesel'));
+  document.querySelectorAll('.seldrag').forEach(e => e.remove());   // haengen gebliebene Auswahlrechtecke
   document.getElementById('copyChip')?.remove();
   freeSel = [];
 }
@@ -1594,11 +1595,13 @@ document.addEventListener('mousemove', (ev) => {
 });
 document.addEventListener('mouseup', (ev) => {
   if (!selDrag) return;
-  const wasActive = selDrag.active;
+  const sd = selDrag;
+  const wasActive = sd.active;
   const chipX = ev.clientX, chipY = ev.clientY;
   selDrag = null;
   lastWasDrag = wasActive;
   setTimeout(() => { lastWasDrag = false; }, 60);
+  sd.div?.remove();                       // Auswahlrechteck verschwindet beim Loslassen
   document.getElementById('copyChip')?.remove();
   if (wasActive && freeSel.length) {
     const chip = document.createElement('button');

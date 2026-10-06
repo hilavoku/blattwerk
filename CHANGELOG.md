@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.11.5 — Auswahlrechteck verschwindet beim Loslassen
+- Fix: Das blaue Auswahlrechteck blieb nach dem Kopieren stehen und sammelte sich
+  bei jedem weiteren Zug an (es wurde nie entfernt und wanderte beim Zoomen nicht
+  mit). Jetzt wird es beim Loslassen entfernt; Sicherheitsnetz in clearFreeSel und
+  beim Seiten-Neuaufbau. Beim Ziehen ist es weiterhin sichtbar.
+
 ## v0.11.4 — Knopf „Kopie herunterladen" entfernt, Auswahl-Hinweise
 - „Kopie herunterladen" (Überbleibsel vor „Speichern unter") aus der Kopfzeile entfernt.
 - Zieht man eine Text-Auswahl über einen Bereich ohne erkannten Text, sagt die
