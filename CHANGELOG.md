@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.11 — Signaturen in beliebigen Winkeln drehen
+- Winkel-Feld in der Eigenschaftsleiste (nur bei Signatur): Zielwinkel in Grad frei
+  eingeben (positive Winkel = im Uhrzeigersinn). Rechtsklick → „Drehen (90°)" dreht
+  wie bisher als Schnellaktion weiter.
+- Der Server dreht das Bild IMMER vom Original aus um den Gesamtwinkel (keine
+  Qualitätsverluste bei wiederholtem Drehen, kein Aufblähen durch Kaskadierung);
+  der Auswahl-Kasten wird auf die gedrehte Hülle skaliert — die Signatur behält
+  ihre Größe, der Kasten wächst nur um die schrägen Ecken.
+- Overlay-Ansicht und eingebettetes PDF-Bild sind identisch (serverseitig gedrehte
+  Vorschau über /api/signature/file?rot=…). Undo dreht zurück. Suite um freie
+  Winkel erweitert (42 Checks).
+
 ## v0.10.3 — Einbrennen auch bei „Speichern unter"
 - Fix: Die Einbrennen-Abfrage kam nur beim normalen „Speichern" — „Speichern unter"
   schrieb immer bewegliche Annotationen. Jetzt dieselbe Abfrage (bzw. direktes

@@ -468,17 +468,29 @@ async def signature_delete(fname: str = Form(...)):
 
 
 @app.get("/api/signature/file/{fname}")
-def signature_file(fname: str):
+def signature_file(fname: str, rot: float = 0):
     fname = os.path.basename(fname)
     path = os.path.join(SIGN_DIR, fname)
     if not os.path.isfile(path):
         raise HTTPException(404, "Signatur nicht gefunden")
+    daten = None
     if _sig_gesperrt(fname):
         if fname not in sig_unlocked:
             raise HTTPException(401, "Signatur ist passwortgeschützt – erst entsperren")
-        return Response(content=sig_unlocked[fname], media_type="image/png")
-    media = "image/png" if path.lower().endswith(".png") else "image/jpeg"
-    return Response(content=open(path, "rb").read(), media_type=media)
+        daten = sig_unlocked[fname]
+    else:
+        with open(path, "rb") as f:
+            daten = f.read()
+    if rot % 360:
+        from PIL import Image
+        import io as _io
+        with Image.open(_io.BytesIO(daten)) as im:
+            gedreht = im.convert("RGBA").rotate(-(rot % 360), expand=True,
+                                                resample=Image.BICUBIC)
+        buf = _io.BytesIO()
+        gedreht.save(buf, format="PNG")
+        daten = buf.getvalue()
+    return Response(content=daten, media_type="image/png")
 
 
 @app.post("/api/signature/unlock")
@@ -527,16 +539,24 @@ async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("
 
 
 def _sig_nmteilen(nm: str):
-    """NM-Marker 'PDFW-SIG:datei(:rot)?' -> (dateiname, rotation)."""
+    """NM-Marker 'PDFW-SIG:datei(:rot)?' -> (dateiname, rotation). Rot ist float (beliebiger Winkel)."""
     if not (nm or "").startswith("PDFW-SIG:"):
-        return "", 0
+        return "", 0.0
     rest = nm[9:]
     fname, _, rot = rest.partition(":")
     try:
-        rot = int(rot) if rot else 0
+        rot = float(rot) if rot else 0.0
     except ValueError:
-        rot = 0
-    return fname, rot % 360
+        rot = 0.0
+    return fname, rot % 360.0
+
+
+def _bbox_gedreht(iw: float, ih: float, rot: float):
+    """Achsenparallele Huelle des um rot Grad gedrehten Bildes (iw x ih)."""
+    from math import sin, cos, radians
+    a = abs(cos(radians(rot)))
+    b = abs(sin(radians(rot)))
+    return iw * a + ih * b, iw * b + ih * a
 
 
 @app.post("/api/stamp/{did}")
@@ -600,9 +620,12 @@ def _bild_als_erscheinung(doc, png_bytes: bytes, rot: int = 0) -> int:
 
 @app.post("/api/annot/rotate/{did}")
 async def annot_rotate(did: str, page: int = Form(...), xref: int = Form(...),
-                       delta: int = Form(90)):
-    """Signatur um delta Grad drehen (90-Schritte): neue AP mit vorgedrehtem Bild,
-    Rect um das Zentrum tauschen (bei 90/270 wechseln sich Breite/Hoehe)."""
+                       delta: float = Form(90), to: str = Form("")):
+    """Signatur drehen - beliebige Winkel. Entweder ZIELwinkel (to="37.5") oder
+    delta (z.B. +90 per Kontextmenue). Das Bild wird IMMER vom Original aus um den
+    Gesamtwinkel gedreht (keine Qualitaetseinbussen bei wiederholtem Drehen); der
+    Kasten (Rect) wird auf die gedrehte Huelle skaliert, damit die Signatur ihre
+    Groesse behaelt - zentriert um die bisherige Kastenmitte."""
     d = _doc(did)
     pg = d[page]
     an = pg.load_annot(xref)
@@ -615,20 +638,29 @@ async def annot_rotate(did: str, page: int = Form(...), xref: int = Form(...),
         if fname and _sig_gesperrt(fname):
             raise HTTPException(401, "Signatur ist passwortgeschützt – erst entsperren")
         raise HTTPException(400, "Signaturdatei nicht mehr vorhanden")
-    delta = int(delta) % 360
-    if delta % 90:
-        raise HTTPException(400, "Nur 90-Grad-Schritte")
-    rot_neu = (rot_alt + delta) % 360
+    if to.strip():
+        try:
+            rot_neu = round(float(to) % 360.0, 2)
+        except ValueError:
+            raise HTTPException(400, "Ungültiger Winkel")
+    else:
+        rot_neu = round((rot_alt + float(delta)) % 360.0, 2)
+    from PIL import Image
+    import io as _io
+    with Image.open(_io.BytesIO(png)) as im:
+        iw, ih = im.size
     rect_alt = pymupdf.Rect(an.rect)                     # vor allen Aenderungen sichern
+    # Skalierung beibehalten: aktuelle Kastenbreite / aktuelle Huellenbreite
+    huelle_alt = _bbox_gedreht(iw, ih, rot_alt)
+    skala = rect_alt.width / huelle_alt[0] if huelle_alt[0] > 0 else 1.0
+    huelle_neu = _bbox_gedreht(iw, ih, rot_neu)
+    cx, cy = (rect_alt.x0 + rect_alt.x1) / 2, (rect_alt.y0 + rect_alt.y1) / 2
+    wn, hn = skala * huelle_neu[0], skala * huelle_neu[1]
+    r = pymupdf.Rect(cx - wn / 2, cy - hn / 2, cx + wn / 2, cy + hn / 2)
     form_xref = _bild_als_erscheinung(d, png, rot_neu)
     d.xref_set_key(xref, "AP", f"<< /N {form_xref} 0 R >>")
-    nm_neu = f"(PDFW-SIG:{fname}:{rot_neu})" if rot_neu else f"(PDFW-SIG:{fname})"
+    nm_neu = f"(PDFW-SIG:{fname}:{rot_neu:g})" if rot_neu else f"(PDFW-SIG:{fname})"
     d.xref_set_key(xref, "NM", nm_neu)
-    r = rect_alt
-    if delta % 180:  # 90 oder 270: Seitenverhaeltnis kippt
-        cx, cy = (r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2
-        w, h = r.width, r.height
-        r = pymupdf.Rect(cx - h / 2, cy - w / 2, cx + h / 2, cy + w / 2)
     an = pg.load_annot(xref)   # frische Annot-Referenz nach AP/NM-Aenderung
     an.set_rect(r)
     push_undo(did, {"op": "sig-rotate", "page": page, "xref": xref,
@@ -871,7 +903,7 @@ def undo(did: str):
             annot = pg.add_stamp_annot(pymupdf.Rect(e["rect"]))
             form_xref = _bild_als_erscheinung(d, png, rot)
             d.xref_set_key(annot.xref, "AP", f"<< /N {form_xref} 0 R >>")
-            nm = f"(PDFW-SIG:{fname}:{rot})" if rot else f"(PDFW-SIG:{fname})"
+            nm = f"(PDFW-SIG:{fname}:{rot:g})" if rot else f"(PDFW-SIG:{fname})"
             d.xref_set_key(annot.xref, "NM", nm)
     elif op == "sig-rotate":
         an = pg.load_annot(e["xref"])
@@ -884,7 +916,7 @@ def undo(did: str):
             else:
                 form_xref = _bild_als_erscheinung(d, png, rot_alt)
                 d.xref_set_key(e["xref"], "AP", f"<< /N {form_xref} 0 R >>")
-                nm = f"(PDFW-SIG:{fname}:{rot_alt})" if rot_alt else f"(PDFW-SIG:{fname})"
+                nm = f"(PDFW-SIG:{fname}:{rot_alt:g})" if rot_alt else f"(PDFW-SIG:{fname})"
                 d.xref_set_key(e["xref"], "NM", nm)
                 an = pg.load_annot(e["xref"])
                 an.set_rect(pymupdf.Rect(e["rect"]))
