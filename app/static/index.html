@@ -229,7 +229,6 @@
   <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
   <button class="tbtn save" id="saveBtn" onclick="saveDoc()" title="Speichern (Strg+S)"><span class="i">&#xE74E;</span><span class="lbl">Speichern</span></button>
   <button class="tbtn" id="saveAsBtn" onclick="saveasClick()" title="Kopie an anderem Ort speichern" disabled><span class="i">&#xE8C8;</span><span class="lbl">Speichern unter</span></button>
-  <button class="tbtn" id="dlBtn" onclick="downloadDoc()" title="Kopie herunterladen" disabled><span class="i">&#xE896;</span></button>
   <button class="tbtn" id="prBtn" onclick="printDoc()" title="Drucken (mit Signaturen, Texten und Formulareinträgen)" disabled><span class="i">&#xE749;</span></button>
   <div class="sep"></div>
   <button class="tbtn" id="sigBtn" onclick="toggleSigPanel(event)" title="Signatur wählen / verwalten">
@@ -293,7 +292,7 @@
     <div id="fields" class="muted">&ndash;</div>
     <h3>Kurzhilfe</h3>
     <p class="muted">
-      <b>Kopieren:</b> Textzeile anklicken (Strg+Klick hängt an).<br>
+      <b>Kopieren:</b> mit gedrückter Maustaste über den Text ziehen – oder einzelne Zeile anklicken (Strg+Klick hängt an).<br>
       <b>Signatur:</b> oben wählen, aufs Papier klicken, danach greifen &amp; ziehen – Anker unten rechts verändert die Größe.<br>
       <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
@@ -427,7 +426,7 @@ function openDoc(info) {
   cur = info;
   hits = []; hitIdx = -1; document.getElementById('hitInfo').textContent = '';
   document.getElementById('saveBtn').disabled = false;
-  ['saveAsBtn', 'dlBtn', 'prBtn'].forEach(id => document.getElementById(id).disabled = false);
+  ['saveAsBtn', 'prBtn'].forEach(id => document.getElementById(id).disabled = false);
   document.querySelectorAll('footer .sbtn').forEach(b => b.disabled = false);
   stat('Geöffnet: ' + info.name + ' (' + info.pages + ' Seiten)', true);
   const toc = document.getElementById('toc');
@@ -1611,6 +1610,8 @@ document.addEventListener('mouseup', (ev) => {
     chip.addEventListener('click', (ev2) => { ev2.stopPropagation(); copyFreeSel(); });
     document.body.appendChild(chip);
     stat(freeSel.length + ' Zeilen ausgewählt – Strg+C kopiert ebenfalls.', true);
+  } else if (wasActive && !freeSel.length) {
+    stat('Kein Text in der Auswahl – die Region erfasst nur erkannte Textzeilen.');
   } else if (!wasActive) {
     clearFreeSel();
   }

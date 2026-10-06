@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.11.4 — Knopf „Kopie herunterladen" entfernt, Auswahl-Hinweise
+- „Kopie herunterladen" (Überbleibsel vor „Speichern unter") aus der Kopfzeile entfernt.
+- Zieht man eine Text-Auswahl über einen Bereich ohne erkannten Text, sagt die
+  Statusleiste jetzt „Kein Text in der Auswahl…" (vorher geschah sichtbar nichts).
+- Kurzhilfe ergänzt: Kopieren per Aufziehen oder Zeilen-Klick.
+
 ## v0.11.3 — Freihand-Auswahl startet auf Textblöcken
 - Fix: Das Aufziehen der Textauswahl startete nur auf „leerem Papier" — bei OCR-Seiten
   liegt aber fast überall ein Textblock-Overlay, also traf der Start fast immer einen
