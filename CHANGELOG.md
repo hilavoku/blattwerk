@@ -1,6 +1,13 @@
 # PDF-Werkstatt — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
+
+## v0.11.3 — Freihand-Auswahl startet auf Textblöcken
+- Fix: Das Aufziehen der Textauswahl startete nur auf „leerem Papier" — bei OCR-Seiten
+  liegt aber fast überall ein Textblock-Overlay, also traf der Start fast immer einen
+  Block und die Auswahl erschien nie (übrig blieb der Einzelklick pro OCR-Block).
+  Jetzt startet das Aufziehen auch direkt auf Textblöcken; der Einzelklick kopiert
+  weiterhin eine Zeile, Strg+Klick hängt an.
 
 ## v0.11.2 — Drehen ohne Springer
 - Fix: Nach dem Drehen am Griff flippte die Signatur kurz auf die alte Darstellung

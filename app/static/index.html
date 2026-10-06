@@ -461,11 +461,7 @@ function makePageEl(n) {
   img.src = pageUrl(n);
   img.onload = () => buildPage(img);
   img.onclick = (ev) => pageClick(ev, img, n);
-  img.addEventListener('mousedown', (ev) => {
-    if (mode !== 'normal' || ev.button !== 0) return;
-    clearFreeSel();
-    selDrag = {n, img, startX: ev.clientX, startY: ev.clientY, active: false, div: null};
-  });
+  img.addEventListener('mousedown', (ev) => freeSelStart(ev, img));
   wrap.appendChild(lbl); wrap.appendChild(img);
   return wrap;
 }
@@ -616,6 +612,7 @@ async function addLines(img) {
     d.dataset.rect = [ln.x0, ln.y0, ln.x1, ln.y1].join(',');
     positionRect(d, [ln.x0, ln.y0, ln.x1, ln.y1], k);
     d.title = ln.t;
+    d.addEventListener('mousedown', (ev) => freeSelStart(ev, img));
     d.onclick = async (ev) => {
       ev.stopPropagation();
       if (lastWasDrag) return;   // Drag-Ende, kein Klick
@@ -1548,6 +1545,16 @@ function toggleSb() {
 
 /* ---------- Freihand-Textauswahl (aufziehen & kopieren) ---------- */
 let freeSel = [], selDrag = null, lastWasDrag = false;
+
+/* Auswahl-Start: auf dem Papier UND direkt auf Textzeilen (bei OCR-Seiten liegt
+   fast ueberall ein Textblock-Overlay - dort musste die Auswahl vorher scheitern,
+   uebrig blieb nur der Einzelklick pro Block). */
+function freeSelStart(ev, img) {
+  if (mode !== 'normal' || ev.button !== 0) return;
+  clearFreeSel();
+  selDrag = {n: parseInt(img.dataset.page), img, startX: ev.clientX, startY: ev.clientY,
+             active: false, div: null};
+}
 
 function clearFreeSel() {
   document.querySelectorAll('.line.linesel').forEach(e => e.classList.remove('linesel'));
