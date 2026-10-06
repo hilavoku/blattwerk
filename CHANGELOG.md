@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.11.1 — Drehgriff am Rahmen + Funktionsleisten-Start-Fix
+- **Direkt drehen:** Runder Griff über der ausgewählten Signatur — daran ziehen dreht
+  live (Rahmen dreht mit); Umschalt-Taste rastet auf 15°-Schritte, der Winkel wird
+  während des Ziehens angezeigt. Winkelfeld bleibt für exakte Werte.
+- Fix (Toolbar): Beim Start zeigte die Funktionsleiste nicht alles und brach erst nach
+  manueller Fenstergrößenänderung um. Ursache: Breitenänderungen NACH dem Laden
+  (Signatur-Vorschau im Knopf, Schriftart-Wechsel) erwischen die fixen Timeouts.
+  Jetzt ereignisbasiert nachgeführt (ResizeObserver, load, document.fonts.ready,
+  Vorschaubild-Load).
+
 ## v0.11 — Signaturen in beliebigen Winkeln drehen
 - Winkel-Feld in der Eigenschaftsleiste (nur bei Signatur): Zielwinkel in Grad frei
   eingeben (positive Winkel = im Uhrzeigersinn). Rechtsklick → „Drehen (90°)" dreht
