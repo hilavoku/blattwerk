@@ -2,6 +2,17 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.9 — Einstellungen & Fenster bleiben gespeichert
+- Fix: Einstellungen (Theme, Seitenleiste links/rechts + ein-/ausgeklappt, Miniaturen)
+  überlebten den Neustart nicht — localStorage ist pro Server-Port, und der Port wechselt
+  bei jedem Programmstart. Jetzt: `/api/prefs` (GET/POST) speichert in
+  `PDF-Werkstatt\einstellungen.json` (neben der EXE, überlebt Server-Updates).
+- Neu: Fensterposition, -größe und Maximiert-Zustand werden beim Schließen in `fenster.json`
+  gespeichert und beim Start wiederhergestellt (Off-Screen-Schutz bei Monitorwechseln,
+  DPI-korrekt da WinForms logische Koordinaten nutzt).
+- Wrapper neu gebaut (`dotnet publish`); beim Deployment bleiben neben den Signaturen jetzt
+  auch `einstellungen.json`/`fenster.json` erhalten.
+
 ## v0.8.1 — Fix: Signatur-Kopien & Löschen
 - Fix: Nach Zoomen verdoppelten sich die Overlays (Signatur-/Text-"Kopien"). Ursache: Das
   Scharfstellen des Seitenrasters (loadFresh) feuerte img.onload → buildPage baute die Overlays

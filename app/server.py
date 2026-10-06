@@ -9,7 +9,7 @@ import base64
 import shutil
 
 import pymupdf
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
 from fastapi.responses import HTMLResponse, Response, FileResponse
 
 if getattr(sys, "frozen", False):
@@ -23,6 +23,10 @@ else:
 UPLOADS = os.path.join(BASE, "uploads")
 SIGN_DIR = os.path.join(BASE, "signatures")
 DEMO = os.path.join(BASE, "demo", "demo.pdf")
+# Einstellungen NEBEN dem Programmordner: Deployment = PDF-Werkstatt\einstellungen.json
+# (ueberlebt server-Aktualisierungen); Entwicklung = Projektwurzel
+PREFS_FILE = os.path.join(os.path.dirname(BASE) if getattr(sys, "frozen", False) else BASE,
+                          "einstellungen.json")
 os.makedirs(UPLOADS, exist_ok=True)
 os.makedirs(SIGN_DIR, exist_ok=True)
 
@@ -142,6 +146,29 @@ def favicon():
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/api/prefs")
+def get_prefs():
+    """Gespeicherte UI-Einstellungen (portunabhaengig, da der Serverport pro Start wechselt)."""
+    try:
+        with open(PREFS_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+@app.post("/api/prefs")
+async def set_prefs(data: dict = Body(...)):
+    if len(data) > 40:
+        raise HTTPException(400, "Zu viele Eintraege")
+    try:
+        with open(PREFS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(500, "Einstellungen nicht speicherbar: " + str(e))
 
 
 @app.get("/api/current")

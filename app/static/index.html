@@ -332,6 +332,18 @@ function setDirty(v) {
   try { window.chrome?.webview?.postMessage(v ? 'dirty:1' : 'dirty:0'); } catch (e) {}
 }
 
+/* ---------- Einstellungen (serverseitig gespeichert, nicht localStorage:
+   der Serverport wechselt bei jedem Start -> localStorage waere immer leer) ---------- */
+let prefs = {};
+async function loadPrefs() {
+  try { prefs = await (await fetch('/api/prefs')).json(); } catch (e) { prefs = {}; }
+}
+function setPref(key, value) {
+  prefs[key] = value;
+  fetch('/api/prefs', {method:'POST', headers:{'Content-Type':'application/json'},
+                       body: JSON.stringify(prefs)}).catch(() => {});
+}
+
 /* ---------- Modi ---------- */
 function setMode(m) {
   if (m === 'sign' && !sigSelected) { stat('Bitte zuerst eine Signatur auswählen (Knopf oben).'); return; }
@@ -1218,10 +1230,9 @@ document.addEventListener('keydown', (ev) => {
 /* ---------- Theme (hell/dunkel) ---------- */
 function toggleTheme() {
   const light = document.body.classList.toggle('light');
-  try { localStorage.setItem('pw-theme', light ? 'light' : 'dark'); } catch (e) {}
+  setPref('theme', light ? 'light' : 'dark');
   stat(light ? 'Helles Design aktiv.' : 'Dunkles Design aktiv.', true);
 }
-try { if (localStorage.getItem('pw-theme') === 'light') document.body.classList.add('light'); } catch (e) {}
 
 /* ---------- Seitenleiste: Seite + Ein-/Ausblenden ---------- */
 function updateSbIcons() {
@@ -1235,7 +1246,7 @@ function updateSbIcons() {
 }
 function setSide(side) {
   document.querySelector('main').classList.toggle('side-left', side === 'left');
-  try { localStorage.setItem('pw-side', side); } catch (e) {}
+  setPref('side', side);
   updateSbIcons();
 }
 function toggleSide() {
@@ -1243,16 +1254,12 @@ function toggleSide() {
 }
 function setSbVisible(v) {
   document.querySelector('main').classList.toggle('sb-collapsed', !v);
-  try { localStorage.setItem('pw-sb', v ? '1' : '0'); } catch (e) {}
+  setPref('sb', v ? '1' : '0');
   updateSbIcons();
 }
 function toggleSb() {
   setSbVisible(document.querySelector('main').classList.contains('sb-collapsed'));
 }
-try {
-  if (localStorage.getItem('pw-side') === 'left') setSide('left');
-  if (localStorage.getItem('pw-sb') === '0') setSbVisible(false);
-} catch (e) {}
 
 /* ---------- Freihand-Textauswahl (aufziehen & kopieren) ---------- */
 let freeSel = [], selDrag = null, lastWasDrag = false;
@@ -1348,9 +1355,8 @@ function buildThumbs() {
 }
 function toggleThumbs() {
   const off = document.querySelector('main').classList.toggle('thumbs-off');
-  try { localStorage.setItem('pw-thumbs', off ? '0' : '1'); } catch (e) {}
+  setPref('thumbs', off ? '0' : '1');
 }
-try { if (localStorage.getItem('pw-thumbs') === '0') document.querySelector('main').classList.add('thumbs-off'); } catch (e) {}
 
 /* ---------- Start ---------- */
 /* Toolbar passt sich an: 1. Beschriftungen aus (nur Icons), 2. Marke aus, 3. zweite Reihe */
@@ -1380,6 +1386,12 @@ document.getElementById('file').addEventListener('change', async (ev) => {
 });
 loadSignatures();
 (async () => {
+  await loadPrefs();                      // Einstellungen zuerst (Theme, Leisten) ...
+  if (prefs.theme === 'light') document.body.classList.add('light');
+  if (prefs.side === 'left') setSide('left');
+  if (prefs.sb === '0') setSbVisible(false);
+  if (prefs.thumbs === '0') document.querySelector('main').classList.add('thumbs-off');
+  updateSbIcons();
   try { const r = await fetch('/api/current'); const d = await r.json(); if (d && d.id) openDoc(d); } catch (e) {}
   updatePageIndicator();
 })();

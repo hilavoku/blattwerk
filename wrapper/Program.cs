@@ -50,6 +50,30 @@ internal static class Program
             StartPosition = FormStartPosition.CenterScreen,
             Font = new Font("Segoe UI", 9f)
         };
+
+        // Fenstergroesse/-position wiederherstellen (fenster.json neben der EXE)
+        string winFile = Path.Combine(baseDir, "fenster.json");
+        try
+        {
+            if (File.Exists(winFile))
+            {
+                using var winDoc = JsonDocument.Parse(File.ReadAllText(winFile));
+                var r = winDoc.RootElement;
+                int wx = r.TryGetProperty("x", out var px) && px.ValueKind == JsonValueKind.Number ? px.GetInt32() : 100;
+                int wy = r.TryGetProperty("y", out var py) && py.ValueKind == JsonValueKind.Number ? py.GetInt32() : 60;
+                int ww = r.TryGetProperty("w", out var pw) && pw.ValueKind == JsonValueKind.Number ? Math.Max(400, pw.GetInt32()) : 1450;
+                int wh = r.TryGetProperty("h", out var ph) && ph.ValueKind == JsonValueKind.Number ? Math.Max(300, ph.GetInt32()) : 940;
+                bool wasMax = r.TryGetProperty("max", out var pm) && pm.ValueKind == JsonValueKind.True;
+                var bounds = new Rectangle(wx, wy, ww, wh);
+                if (Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(bounds)))
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Bounds = bounds;
+                }
+                if (wasMax) form.WindowState = FormWindowState.Maximized;
+            }
+        }
+        catch { /* kaputte Datei: Standardgroesse und zentriert starten */ }
         var webView = new WebView2 { Dock = DockStyle.Fill, DefaultBackgroundColor = System.Drawing.Color.FromArgb(23, 25, 29) };
         form.Controls.Add(webView);
         try { form.Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
@@ -136,6 +160,18 @@ internal static class Program
 
         form.FormClosed += (_, _) =>
         {
+            // Fenstergroesse/-position fuer den naechsten Start merken
+            try
+            {
+                var state = form.WindowState;
+                var b = state == FormWindowState.Normal
+                    ? new Rectangle(form.Left, form.Top, form.Width, form.Height)
+                    : form.RestoreBounds;
+                if (b.Width >= 400 && b.Height >= 300)
+                    File.WriteAllText(winFile, System.Text.Json.JsonSerializer.Serialize(
+                        new { x = b.X, y = b.Y, w = b.Width, h = b.Height, max = state == FormWindowState.Maximized }));
+            }
+            catch { /* nicht speicherbar: naechster Start mit Standardgroesse */ }
             try { if (server is { HasExited: false }) server.Kill(entireProcessTree: true); }
             catch { /* Server war schon weg */ }
         };
