@@ -299,6 +299,7 @@
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
       <b>Geschützte Signatur:</b> im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.<br>
       <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe).<br>
+      <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen, Enter.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
       Alles wird erst mit <b>Speichern</b> dauerhaft.
@@ -612,9 +613,11 @@ async function addLines(img) {
     positionRect(d, [ln.x0, ln.y0, ln.x1, ln.y1], k);
     d.title = ln.t;
     d.addEventListener('mousedown', (ev) => freeSelStart(ev, img));
+    d.addEventListener('dblclick', (ev) => { ev.stopPropagation(); if (mode === 'normal') startOriginalEdit(n, d); });
     d.onclick = async (ev) => {
       ev.stopPropagation();
       if (lastWasDrag) return;   // Drag-Ende, kein Klick
+      if (ev.detail > 1) return; // Doppelklick = editieren, nicht kopieren
       if (mode === 'delete') {
         d.classList.toggle('marked');
         if (d.classList.contains('marked')) marked.push({page: n, rect: d.dataset.rect.split(',').map(Number)});
@@ -1046,6 +1049,87 @@ async function reloadAnnots(n) {
   selectAnnot(null);
   img._gen = (img._gen || 0) + 1;       // noch laufende addAnnots entwerten (keine Doppel-Overlays)
   await addAnnots(img);
+}
+
+/* ---------- Originaltext editieren (Doppelklick auf echte Textzeilen, kein Bildtext) ---------- */
+let origEdit = null;   // {page, rect, textAlt, ta, delBtn}
+
+async function startOriginalEdit(pageN, lineDiv) {
+  commitInline();
+  cancelOriginalEdit();
+  const rect = lineDiv._pdfRect.slice();
+  const img = document.querySelector('#page' + pageN + ' img');
+  if (!img || !img.dataset.k) return;
+  const k = parseFloat(img.dataset.k);
+  let probe = {};
+  try {
+    const q = `x0=${rect[0]}&y0=${rect[1]}&x1=${rect[2]}&y1=${rect[3]}`;
+    probe = await (await fetch(`/api/textspan/${cur.id}/${pageN}?${q}`)).json();
+  } catch (e) {}
+  const size = probe.size || 11, farbe = probe.color || [0, 0, 0];
+  const ta = document.createElement('textarea');
+  ta.className = 'inlineEdit';
+  ta.dataset.k = k;
+  ta.value = lineDiv._text || '';
+  ta.spellcheck = false;
+  const [ff, fw, fs] = FAM_PREFIX[probe.alias] || FAM_PREFIX.helv;
+  ta.style.fontFamily = ff; ta.style.fontWeight = fw; ta.style.fontStyle = fs;
+  ta.style.fontSize = (size * k) + 'px';
+  ta.style.color = `rgb(${farbe.map(v => Math.round(v)).join(',')})`;
+  positionRect(ta, rect, k);
+  const hoehe0 = (rect[3] - rect[1]) * k;
+  const autoGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(hoehe0, ta.scrollHeight) + 'px'; };
+  ta.addEventListener('input', autoGrow);
+  ta.addEventListener('blur', () => commitOriginalEdit());
+  ta.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') { ev.stopPropagation(); cancelOriginalEdit(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); commitOriginalEdit(); }
+  });
+  const delBtn = document.createElement('button');
+  delBtn.className = 'inlineDel'; delBtn.innerHTML = '&#xE74D;'; delBtn.title = 'Originaltext entfernen';
+  delBtn.style.left = (rect[0] * k) + 'px';
+  delBtn.style.top = (rect[1] * k - 24) + 'px';
+  delBtn.addEventListener('mousedown', (ev) => ev.preventDefault());
+  delBtn.addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    await fetch(`/api/text/replace/${cur.id}`, {method:'POST', body: originalEditForm(pageN, rect, '')});
+    teardownOriginalEdit();
+    setDirty(true); refreshPage(pageN);
+    stat('Originaltext entfernt – Strg+Z setzt ihn zurück.', true);
+  });
+  img.parentElement.appendChild(delBtn);
+  img.parentElement.appendChild(ta);
+  origEdit = {page: pageN, rect, textAlt: ta.value, ta, delBtn};
+  ta.focus();
+  ta.select();
+  autoGrow();
+}
+function originalEditForm(pageN, rect, text) {
+  const fd = new FormData();
+  fd.append('page', pageN);
+  fd.append('rect', JSON.stringify(rect.map(v => Math.round(v * 10) / 10)));
+  fd.append('text', text);
+  return fd;
+}
+function teardownOriginalEdit() {
+  if (!origEdit) return;
+  origEdit.ta.remove();
+  origEdit.delBtn.remove();
+  origEdit = null;
+}
+function cancelOriginalEdit() { teardownOriginalEdit(); }
+async function commitOriginalEdit() {
+  if (!origEdit) return;
+  const st = origEdit;
+  const text = st.ta.value.replace(/\s+/g, ' ').trim();
+  const unveraendert = text === (st.textAlt || '').replace(/\s+/g, ' ').trim();
+  teardownOriginalEdit();
+  if (unveraendert) return;
+  const r = await fetch(`/api/text/replace/${cur.id}`, {method:'POST', body: originalEditForm(st.page, st.rect, text)});
+  if (r.ok) {
+    setDirty(true); refreshPage(st.page);
+    stat('Originaltext geändert – Speichern macht es dauerhaft, Strg+Z setzt zurück.', true);
+  } else stat('Textänderung fehlgeschlagen');
 }
 
 /* ---------- Klick aufs Papier ---------- */
@@ -1499,6 +1583,7 @@ document.addEventListener('keydown', (ev) => {
   else if (ev.key === 'Escape') {
     if (ctxMenu.style.display === 'block') hideCtxMenu();
     else if (inline) cancelInline();
+    else if (origEdit) cancelOriginalEdit();
     else if (freeSel.length) clearFreeSel();
     else if (mode !== 'normal') setMode(mode);
   }

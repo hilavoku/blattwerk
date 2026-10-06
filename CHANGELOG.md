@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12 — Originaltext editieren (wie PDFgear, nur echter Text)
+- **Doppelklick auf eine Textzeile** (echter Text, kein Scan-Bild) öffnet ein
+  Eingabefeld direkt über dem Text, mit übernommener Schriftgröße/-farbe/-art
+  (Helvetica/Times/Courier + Fett/Kursiv aus der dominanten Textspanne).
+- Enter übernimmt: Originaltext wird an der Stelle entfernt (Redaction), der neue
+  als echter Seiteninhalt mit gleicher Basislinie eingesetzt. Leerer Text/der rote
+  Knopf = Originaltext entfernen. Strg+Z stellt den Originaltext zurück.
+- Einzelklick kopiert weiterhin (Doppelklick kopiert nicht mehr aus Versehen);
+  /api/textspan liefert die Schriftdaten für die Vorschau. Suite +5 Checks (47).
+
 ## v0.11.5 — Auswahlrechteck verschwindet beim Loslassen
 - Fix: Das blaue Auswahlrechteck blieb nach dem Kopieren stehen und sammelte sich
   bei jedem weiteren Zug an (es wurde nie entfernt und wanderte beim Zoomen nicht

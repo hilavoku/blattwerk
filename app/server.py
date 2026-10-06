@@ -744,6 +744,68 @@ async def annot_delete(did: str, page: int = Form(...), xref: int = Form(...)):
     return {"ok": True}
 
 
+def _span_in_rect(pg, rect):
+    """Dominante Textspanne im Bereich (groesste Schrift) - liefert Groesse, Farbe,
+    Schrift-Alias (helv/tiro/cour + Varianten) und die Schreibursprung-Baseline."""
+    best = None
+    for bl in pg.get_text("dict", clip=pymupdf.Rect(rect))["blocks"]:
+        for ln in bl.get("lines", []):
+            for sp in ln.get("spans", []):
+                if sp["text"].strip() and (best is None or sp["size"] > best["size"]):
+                    best = sp
+    if not best:
+        return None
+    f = best["font"].lower()
+    fett = "bold" in f or "black" in f
+    kursiv = "italic" in f or "oblique" in f
+    if "times" in f:
+        alias = "tibo" if fett else ("tiit" if kursiv else "tiro")
+    elif "cour" in f:
+        alias = "cobo" if fett else ("coit" if kursiv else "cour")
+    else:
+        alias = "hebo" if fett else ("heit" if kursiv else "helv")
+    c = best["color"]
+    return {"size": round(best["size"], 1),
+            "color": [c >> 16 & 255, c >> 8 & 255, c & 255],
+            "alias": alias, "origin": list(best["origin"])}
+
+
+@app.get("/api/textspan/{did}/{n}")
+def textspan(did: str, n: int, x0: float, y0: float, x1: float, y1: float):
+    """Schrifteigenschaften des Texts im Bereich (fuer die Editier-Vorschau)."""
+    d = _doc(did)
+    if n < 0 or n >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    return _span_in_rect(d[n], [x0, y0, x1, y1]) or {}
+
+
+@app.post("/api/text/replace/{did}")
+async def text_replace(did: str, page: int = Form(...), rect: str = Form(...), text: str = Form("")):
+    """Originaltext im Bereich ersetzen (kein Bildtext): alten Text tilgen (Redaction),
+    den neuen mit uebernommener Schrift als echten Seiteninhalt einsetzen.
+    Leerer Text = nur entfernen."""
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    r = pymupdf.Rect(*[float(v) for v in json.loads(rect)])
+    text = " ".join(text.split())          # ersetzt wird zeilenweise
+    pg = d[page]
+    info = _span_in_rect(pg, r) or {}
+    size = float(info.get("size") or 11.0)
+    farbe = tuple((info.get("color") or [0, 0, 0])[i] / 255 for i in range(3))
+    alias = info.get("alias") or "helv"
+    origin = tuple(info.get("origin") or (r.x0, r.y1 - size * 0.25))
+    text_alt = " ".join(pg.get_text("text", clip=r).split())
+    pg.add_redact_annot(r)
+    pg.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
+    if text:
+        pg.insert_text(origin, text, fontsize=size, fontname=alias, color=farbe)
+    push_undo(did, {"op": "text-replace", "page": page, "rect": list(r),
+                    "text_alt": text_alt, "text_neu": text, "origin": list(origin),
+                    "size": size, "color": list(farbe), "font": alias})
+    return {"ok": True, "size": size, "font": alias}
+
+
 FONTS = {"helv": "Helvetica", "hebo": "Helvetica Fett", "heit": "Helvetica Kursiv", "hebi": "Helvetica Fett-Kursiv",
          "tiro": "Times", "tibo": "Times Fett", "tiit": "Times Kursiv", "tibi": "Times Fett-Kursiv",
          "cour": "Courier", "cobo": "Courier Fett", "coit": "Courier Kursiv", "cobi": "Courier Fett-Kursiv"}
@@ -926,6 +988,20 @@ def undo(did: str):
         a.update()
         d.xref_set_key(a.xref, "NM",
                        f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]})")
+    elif op == "text-replace":
+        o = e
+        o0 = o["origin"]
+        breite_neu = pymupdf.get_text_length(o["text_neu"], fontsize=o["size"],
+                                             fontname=o["font"]) if o["text_neu"] else 0
+        fl = pymupdf.Rect(min(o["rect"][0], o0[0]),
+                          min(o["rect"][1], o0[1] - o["size"]),
+                          max(o["rect"][2], o0[0] + breite_neu),
+                          max(o["rect"][3], o0[1] + o["size"] * 0.3))
+        pg.add_redact_annot(fl)              # neuen Text tilgen ...
+        pg.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
+        if o["text_alt"]:                    # ... und Original zurueckschreiben
+            pg.insert_text(tuple(o0), o["text_alt"], fontsize=o["size"],
+                           fontname=o["font"], color=tuple(o["color"]))
     elif op == "field":
         for w in pg.widgets():
             if w.field_name == e["name"]:
