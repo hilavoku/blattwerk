@@ -85,11 +85,43 @@ internal static class Program
                 await webView.EnsureCoreWebView2Async();
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 webView.CoreWebView2.Settings.AreHostObjectsAllowed = false;
-                webView.CoreWebView2.WebMessageReceived += (_, e) =>
+                webView.CoreWebView2.WebMessageReceived += async (_, e) =>
                 {
                     var msg = e.TryGetWebMessageAsString();
                     if (msg == "dirty:1") dirty = true;
                     else if (msg == "dirty:0") dirty = false;
+                    else if (msg != null && msg.StartsWith("saveas|"))
+                    {
+                        // "saveas|<docid>|<dateiname>" -> Systemdialog, dann Kopie speichern
+                        var teile = msg.Split('|', 3);
+                        if (teile.Length == 3)
+                        {
+                            using var dlg = new SaveFileDialog
+                            {
+                                Filter = "PDF-Datei (*.pdf)|*.pdf|Alle Dateien (*.*)|*.*",
+                                FileName = teile[2].EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                                    ? teile[2] : teile[2] + ".pdf"
+                            };
+                            if (dlg.ShowDialog() == DialogResult.OK)
+                            {
+                                bool ok = false;
+                                try
+                                {
+                                    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+                                    var resp = await http.GetAsync(
+                                        $"http://127.0.0.1:{port}/api/saveas/{teile[1]}?path={Uri.EscapeDataString(dlg.FileName)}");
+                                    ok = resp.IsSuccessStatusCode;
+                                }
+                                catch { ok = false; }
+                                try
+                                {
+                                    var script = $"window.pwSaveasDone && window.pwSaveasDone({(ok ? "true" : "false")}, {System.Text.Json.JsonSerializer.Serialize(dlg.FileName)});";
+                                    await webView.CoreWebView2.ExecuteScriptAsync(script);
+                                }
+                                catch { /* UI ist evtl. schon zu */ }
+                            }
+                        }
+                    }
                 };
 
                 // Erst den Startbildschirm zeigen - NIE die Edge-Fehlerseite

@@ -2,6 +2,29 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.10 — Speichern unter, Drehen, Einbrennen, Passwort-Signaturen
+- **Speichern unter**: Toolbar-Knopf, Systemdialog (Wrapper), Kopie inkl. aller Änderungen
+  über `/api/saveas`; Meldung per Skript-Rückkanal in die Statusleiste
+- **Signatur drehen**: Rechtsklick → „Drehen (90°)", beliebig oft; Rect tauscht um das
+  Zentrum, Bild wird vorgedreht neu eingebettet (NM-Marker führt den Winkel mit);
+  Strg+Z dreht zurück. Neu anlegen statt AP-Tausch geht nicht: add_stamp_annot
+  normalisiert das Rect (neue PyMuPDF-Falle, in AGENTS.md dokumentiert)
+- **Einbrennen beim Speichern**: Speichern fragt (falls bewegliche Objekte da sind):
+  „Einbrennen & speichern" (Signatur/Texte werden fixer Seiteninhalt, in keinem PDF-Programm
+  mehr entfernbar; Formularfelder bleiben ausfüllbar) oder „Beweglich speichern".
+  Auswahl merkbar (Einstellung `flatten`). Server: `bake(widgets=False)`
+- **Passwortgeschützte Signaturen**: Beim Hochladen optionales Passwort → Datei liegt
+  als `.pwdsig` AES-verschlüsselt (Fernet + PBKDF2-SHA256, 200k Iterationen) — im
+  Gegensatz zu PDFgear ist die Signatur auf der Festplatte nicht mehr auslesbar.
+  Passwort gilt bis Programmende (RAM), wird nie gespeichert. Galerie zeigt Schloss,
+  Entsperr-Dialog mit Fehlermeldung bei falschem Passwort. Nach Serverneustart wieder
+  gesperrt. Löschen/Umbenennen ohne Passwort möglich (Dateiname, nicht Inhalt)
+- Fix (mitgefunden): Kopfzeilen-Knöpfe „Kopie herunterladen" und „Drucken" waren seit
+  der Toolbar-Umstellung deaktiviert
+- Neues Signatur-Icon (Unterschriftszug statt Stift)
+- Suite um 8 Checks erweitert (33 gesamt): Speichern unter, Drehen+Undo, Einbrennen,
+  verschlüsselte Ablage, Sperrzustand nach Neustart
+
 ## v0.9 — Einstellungen & Fenster bleiben gespeichert
 - Fix: Einstellungen (Theme, Seitenleiste links/rechts + ein-/ausgeklappt, Miniaturen)
   überlebten den Neustart nicht — localStorage ist pro Server-Port, und der Port wechselt

@@ -81,6 +81,23 @@
   #ctxMenu button .i { font-family:var(--icon); font-size:14px; }
   #ctxMenu button.danger { color:var(--danger); }
   #ctxMenu button.danger:hover { background:rgba(229,83,75,.14); }
+  .miniBox { position:fixed; z-index:400; background:var(--chrome); border:1px solid var(--border); border-radius:10px;
+             padding:12px; display:none; width:300px; box-shadow:0 12px 40px rgba(0,0,0,.65); }
+  .miniBox .row { display:flex; gap:8px; margin-top:10px; }
+  .miniBox button { flex:1; padding:6px 0; border-radius:6px; border:1px solid var(--border); background:var(--chrome2);
+                    color:var(--text); cursor:pointer; font-size:12.5px; }
+  .miniBox button:hover { background:var(--hover); }
+  .miniBox button.prim { background:var(--accent); color:#0b1620; border-color:var(--accent); font-weight:600; }
+  .miniBox input[type=password] { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
+                                  border-radius:6px; padding:7px 9px; font-size:13px; outline:none; }
+  .miniBox input[type=password]:focus { border-color:var(--accent-dim); }
+  .miniBox label.chk { display:flex; align-items:center; gap:7px; margin-top:10px; font-size:12px; color:var(--muted); }
+  #sigPwRow { margin-top:6px; }
+  #sigPwRow input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;
+                    padding:6px 8px; font-size:12px; outline:none; }
+  #sigPwRow input:focus { border-color:var(--accent-dim); }
+  .siglock { width:72px; height:36px; flex:none; border-radius:5px; background:var(--chrome2); display:flex;
+             align-items:center; justify-content:center; color:var(--muted); font-family:var(--icon); font-size:16px; }
   .searchwrap { display:flex; align-items:center; background:var(--chrome2); border:1px solid var(--border);
                 border-radius:6px; padding:2px 8px; gap:6px; }
   .searchwrap .i { font-family:var(--icon); font-size:13px; color:var(--muted); }
@@ -204,16 +221,17 @@
   <div class="brand"><div class="logo"><img src="/favicon.ico" alt=""></div><b>PDF-Werkstatt</b></div>
   <input type="file" id="file" accept=".pdf" style="display:none">
   <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
-  <button class="tbtn save" id="saveBtn" onclick="saveDoc()" title="Speichern (Strg+S)" disabled><span class="i">&#xE74E;</span><span class="lbl">Speichern</span></button>
-  <button class="tbtn" onclick="downloadDoc()" title="Kopie herunterladen" disabled><span class="i">&#xE896;</span></button>
-  <button class="tbtn" onclick="printDoc()" title="Drucken (mit Signaturen, Texten und Formulareinträgen)" disabled><span class="i">&#xE749;</span></button>
+  <button class="tbtn save" id="saveBtn" onclick="saveDoc()" title="Speichern (Strg+S)"><span class="i">&#xE74E;</span><span class="lbl">Speichern</span></button>
+  <button class="tbtn" id="saveAsBtn" onclick="saveasClick()" title="Kopie an anderem Ort speichern" disabled><span class="i">&#xE8C8;</span><span class="lbl">Speichern unter</span></button>
+  <button class="tbtn" id="dlBtn" onclick="downloadDoc()" title="Kopie herunterladen" disabled><span class="i">&#xE896;</span></button>
+  <button class="tbtn" id="prBtn" onclick="printDoc()" title="Drucken (mit Signaturen, Texten und Formulareinträgen)" disabled><span class="i">&#xE749;</span></button>
   <div class="sep"></div>
   <button class="tbtn" id="sigBtn" onclick="toggleSigPanel(event)" title="Signatur wählen / verwalten">
     <img id="sigCurImg" alt=""><span id="sigCurName">Signatur…</span><span class="i">&#xE70D;</span>
   </button>
   <div id="sigPanel"></div>
   <input type="file" id="sigFile" accept=".png,.jpg,.jpeg" style="display:none">
-  <button class="tbtn" id="btnSign" onclick="setMode('sign')" title="Signatur wählen, dann aufs Papier klicken"><span class="i">&#xE70F;</span><span class="lbl">Signatur</span></button>
+  <button class="tbtn" id="btnSign" onclick="setMode('sign')" title="Signatur wählen, dann aufs Papier klicken"><svg width="17" height="15" viewBox="0 0 20 16" style="flex:none"><path d="M2 9.5c2.6 0 3.4-6.5 5.6-6.5 2.1 0 1.8 6.5 3.9 6.5 1.9 0 2.6-5 4.3-5 1.3 0 1.7 2.5 2.2 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 13.5h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lbl">Signatur</span></button>
   <button class="tbtn" id="btnText" onclick="setMode('text')" title="Aufs Papier klicken und direkt tippen"><span style="font-weight:600">T</span><span class="lbl">Text</span></button>
   <button class="tbtn" id="btnDel" onclick="setMode('delete')" title="Original-Text entfernen"><span class="i">&#xE74D;</span><span class="lbl">Löschen</span></button>
   <button class="tbtn" id="undoBtn" onclick="undoLast()" title="Rückgängig (Strg+Z)" disabled><span class="i">&#xE7A7;</span><span class="lbl">Rückgängig</span></button>
@@ -271,6 +289,9 @@
       <b>Kopieren:</b> Textzeile anklicken (Strg+Klick hängt an).<br>
       <b>Signatur:</b> oben wählen, aufs Papier klicken, danach greifen &amp; ziehen – Anker unten rechts verändert die Größe.<br>
       <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
+      <b>Drehen:</b> Rechtsklick auf die Signatur → „Drehen (90°)".<br>
+      <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
+      <b>Geschützte Signatur:</b> im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.<br>
       <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe).<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
@@ -307,6 +328,29 @@
 </div>
 
 <div id="ctxMenu"></div>
+
+<div id="saveBox" class="miniBox">
+  <div><b>Beim Speichern einbrennen?</b></div>
+  <p class="muted" style="margin:8px 0 0; line-height:1.5">Eingebrennt werden Signaturen und Texte fixer
+  Seiteninhalt – in keinem PDF-Programm mehr entfernbar oder verschiebbar. Formularfelder bleiben ausfüllbar.</p>
+  <label class="chk"><input type="checkbox" id="saveRemember"> Auswahl merken (nicht mehr fragen)</label>
+  <div class="row">
+    <button id="saveBurn" class="prim">Einbrennen &amp; speichern</button>
+    <button id="saveKeep">Beweglich speichern</button>
+    <button id="saveCancel">Abbrechen</button>
+  </div>
+</div>
+
+<div id="pwBox" class="miniBox">
+  <div><b id="pwTitle">Signatur entsperren</b></div>
+  <p class="muted" style="margin:8px 0 0">Diese Signatur ist passwortgeschützt. Das Passwort gilt bis zum
+  Programmende (wird nie gespeichert).</p>
+  <div style="margin-top:9px"><input type="password" id="pwInput" placeholder="Passwort"></div>
+  <div class="row">
+    <button id="pwOk" class="prim">Entsperren</button>
+    <button id="pwCancel">Abbrechen</button>
+  </div>
+</div>
 
 <script>
 let cur = null;
@@ -377,6 +421,7 @@ function openDoc(info) {
   cur = info;
   hits = []; hitIdx = -1; document.getElementById('hitInfo').textContent = '';
   document.getElementById('saveBtn').disabled = false;
+  ['saveAsBtn', 'dlBtn', 'prBtn'].forEach(id => document.getElementById(id).disabled = false);
   document.querySelectorAll('footer .sbtn').forEach(b => b.disabled = false);
   stat('Geöffnet: ' + info.name + ' (' + info.pages + ' Seiten)', true);
   const toc = document.getElementById('toc');
@@ -623,8 +668,17 @@ async function addAnnots(img) {
     d.dataset.xref = a.xref; d.dataset.page = n;
     d._pdfRect = a.rect; d._annot = a;
     if (a.type === 'sign') {
-      d.style.backgroundImage = a.file ? `url(/api/signature/file/${encodeURIComponent(a.file)})` : '';
-      if (!a.file) { d.style.background = 'rgba(200,200,200,.5)'; d.textContent = '✍'; }
+      const gesperrt = a.locked && !a.unlocked;
+      d.style.backgroundImage = (a.file && !gesperrt) ? `url(/api/signature/file/${encodeURIComponent(a.file)})` : '';
+      if (!a.file || gesperrt) {
+        d.style.background = 'rgba(200,200,200,.5)'; d.textContent = '';
+        d.title = gesperrt ? 'Passwortgeschützte Signatur – im Signatur-Menü (oben) entsperren' : 'Signaturdatei fehlt';
+        const lock = document.createElement('span');
+        lock.textContent = gesperrt ? '\uE72E' : '✍';
+        lock.style.fontFamily = gesperrt ? 'var(--icon)' : 'inherit';
+        lock.style.cssText += ';display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:18px;color:#666';
+        d.appendChild(lock);
+      }
     } else {
       const [ff, fw, fs] = FAM_PREFIX[a.font] || FAM_PREFIX.helv;
       d.style.fontFamily = ff; d.style.fontWeight = fw; d.style.fontStyle = fs;
@@ -712,6 +766,8 @@ document.addEventListener('contextmenu', (ev) => {
     ctxMenu.appendChild(b);
   };
   const pageN = parseInt(div.dataset.page);
+  if (div._annot.type === 'sign')
+    eintrag('Drehen (90°)', '&#xE7A8;', () => rotateAnnot(div));
   if (div._annot.type === 'text')
     eintrag('Bearbeiten', '&#xE70F;', () => startInlineEdit(pageN, null, null, div._annot));
   eintrag('Löschen', '&#xE74D;', () => deleteAnnot(div), true);
@@ -731,6 +787,19 @@ async function deleteAnnot(div) {
     selectAnnot(null); setDirty(true); reloadAnnots(pageN);
     stat((isSign ? 'Signatur' : 'Text') + ' gelöscht – Strg+Z holt es zurück.', true);
   } else stat('Löschen fehlgeschlagen');
+}
+async function rotateAnnot(div) {
+  if (!div || !div._annot) return;
+  const pageN = parseInt(div.dataset.page);
+  const fd = new FormData();
+  fd.append('page', pageN); fd.append('xref', div.dataset.xref); fd.append('delta', 90);
+  const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
+  if (r.ok) {
+    setDirty(true); await reloadAnnots(pageN);
+    const nd = document.querySelector('#page' + pageN + ' .annot[data-xref="' + div.dataset.xref + '"]');
+    if (nd) selectAnnot({div: nd});
+    stat('Signatur gedreht (90°) – Strg+Z dreht zurück.', true);
+  } else stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
 }
 
 function startDrag(ev, div, a, pageN, k, kind) {
@@ -907,7 +976,7 @@ async function pageClick(ev, img, n) {
       if (nd) selectAnnot({div: nd});
       stat('Signatur gesetzt – ziehen oder Werte oben ändern.', true);
     }
-    else stat('Signatur fehlgeschlagen');
+    else stat((await resp.json().catch(() => ({}))).detail || 'Signatur fehlgeschlagen');
   } else {
     startInlineEdit(n, x, y, null);
   }
@@ -1038,13 +1107,53 @@ async function printDoc() {
   } catch (e) { stat('Drucken fehlgeschlagen'); }
 }
 
-/* ---------- Speichern / Laden / Demo ---------- */
-async function saveDoc() {
+/* ---------- Speichern / Speichern unter / Einbrennen ---------- */
+async function saveDoc(flatten) {
   if (!cur) return;
-  const r = await fetch('/api/save/' + cur.id, {method:'POST'});
-  if (r.ok) { setDirty(false); stat('Gespeichert: ' + (await r.json()).path, true); }
+  if (flatten === undefined) {
+    if (prefs.flatten === 'burn') flatten = 1;
+    else if (prefs.flatten === 'keep') flatten = 0;
+    else {
+      const has = await (await fetch('/api/hasannots/' + cur.id)).json();
+      if (has.any) { showSaveBox(); return; }   // erst fragen, dann speichern
+      flatten = 0;
+    }
+  }
+  const r = await fetch('/api/save/' + cur.id + '?flatten=' + (flatten ? 1 : 0), {method:'POST'});
+  if (r.ok) {
+    setDirty(false);
+    const j = await r.json();
+    stat(j.flattened ? 'Gespeichert (eingebrannt): ' + j.path : 'Gespeichert: ' + j.path, true);
+    if (j.flattened) await reloadAllAnnotOverlays();   // Overlays sind jetzt Seiteninhalt
+  }
   else stat('Speichern fehlgeschlagen');
 }
+function showSaveBox() {
+  const b = document.getElementById('saveBox');
+  b.style.display = 'block';
+  const r = document.getElementById('saveBtn').getBoundingClientRect();
+  b.style.left = Math.max(8, Math.min(window.innerWidth - 316, r.left - 60)) + 'px';
+  b.style.top = (r.bottom + 6) + 'px';
+}
+document.getElementById('saveBurn').onclick = () => { merkeSaveWahl('burn'); saveDoc(1); };
+document.getElementById('saveKeep').onclick = () => { merkeSaveWahl('keep'); saveDoc(0); };
+document.getElementById('saveCancel').onclick = () => document.getElementById('saveBox').style.display = 'none';
+function merkeSaveWahl(wahl) {
+  document.getElementById('saveBox').style.display = 'none';
+  if (document.getElementById('saveRemember').checked) setPref('flatten', wahl);
+}
+/* Speichern unter: Wrapper oeffnet den Systemdialog und meldet sich per pwSaveasDone zurueck.
+   Ohne Wrapper (Browser) fällt die Funktion auf einen Download zurück. */
+function saveasClick() {
+  if (!cur) return;
+  if (window.chrome?.webview?.postMessage) {
+    try { window.chrome.webview.postMessage('saveas|' + cur.id + '|' + cur.name); } catch (e) {}
+    stat('„Speichern unter": Ordner und Dateinamen wählen …');
+  } else downloadDoc();
+}
+window.pwSaveasDone = function (ok, path) {
+  stat(ok ? 'Kopie gespeichert: ' + path : 'Speichern unter fehlgeschlagen', ok);
+};
 function downloadDoc() { if (cur) location.href = '/api/download/' + cur.id; }
 function openDemo() { fetch('/api/demo').then(r => r.json()).then(openDoc); }
 
@@ -1060,7 +1169,8 @@ async function loadSignatures(keepPanel) {
   if (keepPanel && document.getElementById('sigPanel').style.display === 'block') buildSigPanel();
 }
 function prettySig(name) {
-  let pretty = name.replace(/^SignatureWrite/i, '').replace(/^Signature/i, '').replace(/\.png$/i, '');
+  let pretty = name.replace(/^SignatureWrite/i, '').replace(/^Signature/i, '')
+                   .replace(/\.pwdsig$/i, '').replace(/\.png$/i, '');
   if (/^\d{8}\d{6}$/.test(pretty)) pretty = pretty.replace(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/, '$1-$2-$3 $4:$5');
   return pretty || name;
 }
@@ -1068,6 +1178,12 @@ function updateSigButton() {
   const img = document.getElementById('sigCurImg');
   const lbl = document.getElementById('sigCurName');
   if (sigSelected) {
+    const eintrag = sigList.find(s => s.file === sigSelected);
+    if (eintrag && eintrag.locked && !eintrag.unlocked) {   // gesperrt: kein Bild anzeigen
+      img.style.display = 'none'; img.removeAttribute('src');
+      lbl.textContent = prettySig(sigSelected) + ' \uE72E';
+      return;
+    }
     img.style.display = '';
     img.src = '/api/signature/file/' + encodeURIComponent(sigSelected);
     lbl.textContent = prettySig(sigSelected);
@@ -1097,8 +1213,19 @@ function buildSigPanel() {
   for (const s of sigList) {
     const item = document.createElement('div');
     item.className = 'sigitem' + (s.file === sigSelected ? ' sel' : '');
-    const img = document.createElement('img');
-    img.src = '/api/signature/file/' + encodeURIComponent(s.file);
+    const gesperrt = s.locked && !s.unlocked;
+    if (gesperrt || (s.locked && s.unlocked)) {
+      const lock = document.createElement('div');
+      lock.className = 'siglock';
+      lock.textContent = '\uE72E';
+      lock.title = s.unlocked ? 'entsperrt bis Programmende' : 'passwortgeschützt';
+      if (s.unlocked) lock.style.color = 'var(--ok)';
+      item.appendChild(lock);
+    } else {
+      const img = document.createElement('img');
+      img.src = '/api/signature/file/' + encodeURIComponent(s.file);
+      item.appendChild(img);
+    }
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = prettySig(s.file);
     const act = document.createElement('div'); act.className = 'act';
     const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = 'Umbenennen';
@@ -1114,8 +1241,9 @@ function buildSigPanel() {
       stat('Signatur gelöscht.', true);
     };
     act.appendChild(ren); act.appendChild(del);
-    item.appendChild(img); item.appendChild(nm); item.appendChild(act);
+    item.appendChild(nm); item.appendChild(act);
     item.onclick = () => {
+      if (s.locked && !s.unlocked) { openPwBox(s.file); return; }   // erst Passwort
       sigSelected = s.file; updateSigButton();
       p.style.display = 'none';
       stat('Signatur gewählt: ' + prettySig(s.file), true);
@@ -1127,7 +1255,47 @@ function buildSigPanel() {
   add.innerHTML = '<span class="i" style="font-family:var(--icon)">&#xE710;</span> Neue Signatur hochladen (Hintergrund wird transparent)';
   add.onclick = () => document.getElementById('sigFile').click();
   p.appendChild(add);
+  const pwRow = document.createElement('div');
+  pwRow.id = 'sigPwRow';
+  pwRow.innerHTML = '<input type="password" id="sigPw" placeholder="Passwort (optional) – verschlüsselt die Signatur">';
+  p.appendChild(pwRow);
 }
+
+/* Entsperr-Dialog für passwortgeschützte Signaturen */
+let pwTarget = '';
+function openPwBox(file) {
+  pwTarget = file;
+  const box = document.getElementById('pwBox');
+  document.getElementById('pwTitle').textContent = 'Entsperren: ' + prettySig(file);
+  document.getElementById('pwInput').value = '';
+  box.style.display = 'block';
+  const btn = document.getElementById('sigBtn').getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 316, btn.left)) + 'px';
+  box.style.top = Math.min(window.innerHeight - 220, btn.bottom + 6) + 'px';
+  document.getElementById('pwInput').focus();
+}
+document.getElementById('pwCancel').addEventListener('click', () => document.getElementById('pwBox').style.display = 'none');
+async function tryUnlock() {
+  const pw = document.getElementById('pwInput').value;
+  if (!pw || !pwTarget) return;
+  const fd = new FormData(); fd.append('fname', pwTarget); fd.append('password', pw);
+  const r = await fetch('/api/signature/unlock', {method:'POST', body: fd});
+  if (r.ok) {
+    document.getElementById('pwBox').style.display = 'none';
+    sigSelected = pwTarget;
+    await loadSignatures(true);
+    if (cur) await reloadAllAnnotOverlays();   // Platzhalter durch Bilder ersetzen
+    updateSigButton();
+    stat('Signatur entsperrt (bis Programmende): ' + prettySig(pwTarget), true);
+    pwTarget = '';
+  } else {
+    stat((await r.json().catch(() => ({}))).detail || 'Falsches Passwort');
+    const inp = document.getElementById('pwInput');
+    inp.value = ''; inp.focus();
+  }
+}
+document.getElementById('pwOk').addEventListener('click', tryUnlock);
+document.getElementById('pwInput').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') tryUnlock(); });
 document.addEventListener('click', (ev) => {
   const p = document.getElementById('sigPanel');
   if (p.style.display === 'block' && !p.contains(ev.target) && ev.target.id !== 'sigBtn' && !document.getElementById('sigBtn').contains(ev.target)) {
@@ -1172,9 +1340,17 @@ async function reloadAllAnnotOverlays() {
 document.getElementById('sigFile').addEventListener('change', async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   const fd = new FormData(); fd.append('file', f); fd.append('remove_bg', '1');
+  const pwFeld = document.getElementById('sigPw');
+  if (pwFeld && pwFeld.value) fd.append('password', pwFeld.value);
   stat('Signatur wird verarbeitet …');
   const r = await fetch('/api/signature/upload', {method:'POST', body: fd});
-  if (r.ok) { await loadSignatures(); stat('Signatur hinzugefügt.', true); }
+  if (r.ok) {
+    if (pwFeld) pwFeld.value = '';
+    await loadSignatures();
+    const j = await r.json();
+    if (j.file && j.file.endsWith('.pwdsig')) stat('Geschützte Signatur hinzugefügt (verschlüsselt gespeichert).', true);
+    else stat('Signatur hinzugefügt.', true);
+  }
   else stat('Upload fehlgeschlagen');
   ev.target.value = '';
 });

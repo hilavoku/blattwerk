@@ -11,7 +11,6 @@ import shutil
 import pymupdf
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
 from fastapi.responses import HTMLResponse, Response, FileResponse
-
 if getattr(sys, "frozen", False):
     # Als PyInstaller-EXE: Dateien neben der EXE, gebündelte Assets in _MEIPASS
     BASE = os.path.dirname(sys.executable)
@@ -44,6 +43,53 @@ async def _kein_cache(request, call_next):
 docs = {}     # doc_id -> {"path": str, "doc": pymupdf.Document}
 current = {}  # zuletzt geöffnetes Dokument (für Doppelklick-Start)
 undo_stacks = {}  # did -> Liste von Undo-Einträgen
+sig_unlocked = {}  # fname -> entschlüsselte PNG-Bytes (nur im RAM, bis Serverstop)
+
+# ---------- Passwort-geschützte Signaturen (.pwdsig, Fernet/PBKDF2) ----------
+
+def _fernet_schluessel(passwort: str, salt: bytes):
+    """Ableitung: PBKDF2-HMAC-SHA256, 200k Iterationen."""
+    import base64
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=200_000)
+    return base64.urlsafe_b64encode(kdf.derive(passwort.encode("utf-8")))
+
+
+def _sig_verschluesseln(png_bytes: bytes, passwort: str) -> str:
+    import base64
+    from cryptography.fernet import Fernet
+    salt = os.urandom(16)
+    tok = Fernet(_fernet_schluessel(passwort, salt)).encrypt(png_bytes)
+    return json.dumps({"v": 1, "salt": base64.b64encode(salt).decode(),
+                       "token": tok.decode()})
+
+
+def _sig_entschluesseln(inhalt: str, passwort: str) -> bytes:
+    import base64
+    from cryptography.fernet import Fernet, InvalidToken
+    daten = json.loads(inhalt)
+    salt = base64.b64decode(daten["salt"])
+    try:
+        return Fernet(_fernet_schluessel(passwort, salt)).decrypt(daten["token"].encode())
+    except InvalidToken:
+        raise HTTPException(401, "Falsches Passwort")
+
+
+def _sig_gesperrt(fname: str) -> bool:
+    return fname.lower().endswith(".pwdsig")
+
+
+def _sig_bytes(fname: str):
+    """PNG-Bytes einer Signatur; None, wenn geschützt und noch nicht entsperrt."""
+    fname = os.path.basename(fname)
+    pfad = os.path.join(SIGN_DIR, fname)
+    if not os.path.isfile(pfad):
+        return None
+    if _sig_gesperrt(fname):
+        return sig_unlocked.get(fname)
+    with open(pfad, "rb") as f:
+        return f.read()
 
 
 def push_undo(did, entry):
@@ -272,9 +318,25 @@ async def set_field(did: str, page: int = Form(...), name: str = Form(...), valu
     return {"ok": True}
 
 
-@app.post("/api/save/{did}")
-def save(did: str):
+@app.get("/api/hasannots/{did}")
+def hasannots(did: str):
+    """Gibt es bewegliche Objekte (Signaturen/Texte)? - fuer die Einbrennen-Rueckfrage."""
     d = _doc(did)
+    for pg in d:
+        for a in pg.annots():
+            if a.type[1] in ("Stamp", "FreeText"):
+                return {"any": True}
+    return {"any": False}
+
+
+@app.post("/api/save/{did}")
+def save(did: str, flatten: int = 0):
+    d = _doc(did)
+    if flatten:
+        # Signaturen/Texte einbrennen: werden Seiteninhalt, nicht mehr entfernbar.
+        # widgets=False: Formularfelder bleiben ausfuellbar. Danach ist Undo sinnlos.
+        d.bake(widgets=False)
+        undo_stacks[did] = []
     path = docs[did]["path"]
     try:
         d.saveIncr()
@@ -284,6 +346,20 @@ def save(did: str):
         d.close()
         shutil.move(tmp, path)
         docs[did]["doc"] = pymupdf.open(path)
+    return {"ok": True, "path": path, "flattened": bool(flatten)}
+
+
+@app.get("/api/saveas/{did}")
+def saveas(did: str, path: str):
+    """Kopie des aktuellen Dokuments (inkl. aller Aenderungen) unter neuem Pfad speichern."""
+    d = _doc(did)
+    path = os.path.normpath(path)
+    if path.lower() == os.path.normpath(docs[did]["path"]).lower():
+        raise HTTPException(400, "Ziel ist die bereits geöffnete Datei – bitte 'Speichern' nutzen")
+    try:
+        d.save(path, garbage=3, deflate=True)
+    except Exception as e:
+        raise HTTPException(400, "Speichern unter fehlgeschlagen: " + str(e))
     return {"ok": True, "path": path}
 
 
@@ -303,10 +379,10 @@ def download(did: str):
 
 # ---------- Signaturen ----------
 
-def _entferne_weissen_hintergrund(png_path: str):
-    """Macht nahezu weisse Pixel transparent (wie PDFgears Signatur-Trick)."""
+def _entferne_weissen_hintergrund(img):
+    """Macht nahezu weisse Pixel transparent (wie PDFgears Signatur-Trick). Im RAM."""
     from PIL import Image
-    img = Image.open(png_path).convert("RGBA")
+    img = img.convert("RGBA")
     px = img.load()
     w, h = img.size
     for y in range(h):
@@ -314,28 +390,36 @@ def _entferne_weissen_hintergrund(png_path: str):
             r, g, b, a = px[x, y]
             if r > 232 and g > 232 and b > 232 and a > 0:
                 px[x, y] = (r, g, b, 0)
-    img.save(png_path)
+    return img
 
 
 @app.get("/api/signatures")
 def signatures():
     out = []
     for fn in sorted(os.listdir(SIGN_DIR)):
-        if fn.lower().endswith((".png", ".jpg", ".jpeg")):
-            out.append({"file": fn, "name": os.path.splitext(fn)[0]})
+        locked = _sig_gesperrt(fn)
+        if fn.lower().endswith((".png", ".jpg", ".jpeg")) or locked:
+            out.append({"file": fn, "name": os.path.splitext(fn)[0],
+                        "locked": locked, "unlocked": locked and fn in sig_unlocked})
     return out
 
 
 def _alle_stamp_verweise_umbenennen(old: str, new: str):
-    """NM-Marker aller gesetzten Signatur-Annotationen auf neuen Dateinamen ziehen."""
+    """NM-Marker aller gesetzten Signatur-Annotationen auf neuen Dateinamen ziehen.
+    Rot-Suffix (':90' etc.) bleibt erhalten; Dateinamen enthalten nie ':' (Windows)."""
+    praefix = f"PDFW-SIG:{old}"
     for did in list(docs.keys()):
         d = docs[did]["doc"]
         for pno in range(d.page_count):
             for a in d[pno].annots():
                 if a.type[1] == "Stamp":
                     nm = a.info.get("id", "") or ""
-                    if nm == f"PDFW-SIG:{old}":
-                        d.xref_set_key(a.xref, "NM", f"(PDFW-SIG:{new})")
+                    if nm.startswith(praefix):
+                        rest = nm[len(praefix):]      # '' oder ':rot'
+                        if new:
+                            d.xref_set_key(a.xref, "NM", f"(PDFW-SIG:{new}{rest})")
+                        else:                          # Loeschen: Verweis leeren
+                            d.xref_set_key(a.xref, "NM", "(PDFW-SIG:)")
 
 
 @app.post("/api/signature/rename")
@@ -352,6 +436,8 @@ async def signature_rename(old: str = Form(...), new: str = Form(...)):
     if os.path.isfile(dst):
         raise HTTPException(400, "Dieser Name existiert bereits")
     os.rename(src, dst)
+    if old in sig_unlocked:
+        sig_unlocked[new + ext] = sig_unlocked.pop(old)
     _alle_stamp_verweise_umbenennen(old, new + ext)
     return {"ok": True, "file": new + ext}
 
@@ -362,6 +448,7 @@ async def signature_delete(fname: str = Form(...)):
     path = os.path.join(SIGN_DIR, fname)
     if os.path.isfile(path):
         os.remove(path)
+    sig_unlocked.pop(fname, None)
     # Verweise leeren -> Vorschau zeigt Platzhalter; gespeicherte PDFs bleiben unberuehrt
     _alle_stamp_verweise_umbenennen(fname, "")
     return {"ok": True}
@@ -369,26 +456,74 @@ async def signature_delete(fname: str = Form(...)):
 
 @app.get("/api/signature/file/{fname}")
 def signature_file(fname: str):
-    path = os.path.join(SIGN_DIR, os.path.basename(fname))
+    fname = os.path.basename(fname)
+    path = os.path.join(SIGN_DIR, fname)
     if not os.path.isfile(path):
         raise HTTPException(404, "Signatur nicht gefunden")
+    if _sig_gesperrt(fname):
+        if fname not in sig_unlocked:
+            raise HTTPException(401, "Signatur ist passwortgeschützt – erst entsperren")
+        return Response(content=sig_unlocked[fname], media_type="image/png")
     media = "image/png" if path.lower().endswith(".png") else "image/jpeg"
     return Response(content=open(path, "rb").read(), media_type=media)
 
 
+@app.post("/api/signature/unlock")
+async def signature_unlock(fname: str = Form(...), password: str = Form(...)):
+    """Prueft das Passwort und haelt die entschluesselten Bytes bis Serverstop im RAM."""
+    fname = os.path.basename(fname)
+    path = os.path.join(SIGN_DIR, fname)
+    if not _sig_gesperrt(fname) or not os.path.isfile(path):
+        raise HTTPException(404, "Keine passwortgeschützte Signatur")
+    with open(path, encoding="utf-8") as f:
+        daten = _sig_entschluesseln(f.read(), password)
+    sig_unlocked[fname] = daten
+    return {"ok": True, "file": fname}
+
+
 @app.post("/api/signature/upload")
-async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("1")):
+async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("1"),
+                           password: str = Form("")):
+    from PIL import Image
+    import io as _io
     name = os.path.splitext(os.path.basename(file.filename or "Signatur"))[0]
     name = "".join(c for c in name if c not in '\\/:*?"<>|') or "Signatur"
-    path = os.path.join(SIGN_DIR, name + ".png")
-    with open(path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    roh = await file.read()
+    try:
+        img = Image.open(_io.BytesIO(roh))
+    except Exception:
+        raise HTTPException(400, "Keine Bilddatei")
     if remove_bg == "1":
         try:
-            _entferne_weissen_hintergrund(path)
+            img = _entferne_weissen_hintergrund(img)
         except Exception:
             pass  # ohne Hintergrund-Entfernung weiterbenutzen
+    buf = _io.BytesIO()
+    img.save(buf, format="PNG")
+    png = buf.getvalue()
+    if password:
+        path = os.path.join(SIGN_DIR, name + ".pwdsig")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(_sig_verschluesseln(png, password))
+        sig_unlocked[name + ".pwdsig"] = png   # frisch hochgeladen: gleich entsperren
+    else:
+        path = os.path.join(SIGN_DIR, name + ".png")
+        with open(path, "wb") as f:
+            f.write(png)
     return {"ok": True, "file": os.path.basename(path)}
+
+
+def _sig_nmteilen(nm: str):
+    """NM-Marker 'PDFW-SIG:datei(:rot)?' -> (dateiname, rotation)."""
+    if not (nm or "").startswith("PDFW-SIG:"):
+        return "", 0
+    rest = nm[9:]
+    fname, _, rot = rest.partition(":")
+    try:
+        rot = int(rot) if rot else 0
+    except ValueError:
+        rot = 0
+    return fname, rot % 360
 
 
 @app.post("/api/stamp/{did}")
@@ -398,28 +533,37 @@ async def stamp(did: str, page: int = Form(...), x: float = Form(...), y: float 
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
-    img_path = os.path.join(SIGN_DIR, os.path.basename(fname))
-    if not os.path.isfile(img_path):
+    fname = os.path.basename(fname)
+    png = _sig_bytes(fname)
+    if png is None:
+        if _sig_gesperrt(fname):
+            raise HTTPException(401, "Signatur ist passwortgeschützt – erst entsperren")
         raise HTTPException(404, "Signatur nicht gefunden: " + fname)
     from PIL import Image
-    with Image.open(img_path) as im:
+    import io as _io
+    with Image.open(_io.BytesIO(png)) as im:
         iw, ih = im.size
     w = max(30.0, min(float(width), 400.0))
     h = w * ih / iw
     pg = d[page]
     annot = pg.add_stamp_annot(pymupdf.Rect(float(x), float(y), float(x) + w, float(y) + h))
-    form_xref = _bild_als_erscheinung(d, img_path)
+    form_xref = _bild_als_erscheinung(d, png)
     d.xref_set_key(annot.xref, "AP", f"<< /N {form_xref} 0 R >>")
-    d.xref_set_key(annot.xref, "NM", f"(PDFW-SIG:{os.path.basename(fname)})")
+    d.xref_set_key(annot.xref, "NM", f"(PDFW-SIG:{fname})")
     push_undo(did, {"op": "annot-delete", "page": page, "xref": annot.xref})
     return {"ok": True, "xref": annot.xref, "rect": list(annot.rect), "page": page}
 
 
-def _bild_als_erscheinung(doc, png_path: str) -> int:
-    """Baut Form-XObject mit Bild+Alphamaske als Annotation-Erscheinung. Liefert Form-XRef."""
+def _bild_als_erscheinung(doc, png_bytes: bytes, rot: int = 0) -> int:
+    """Baut Form-XObject mit Bild+Alphamaske als Annotation-Erscheinung.
+    rot: Vielfache von 90 - das Bild wird vorgedreht eingebettet (BBox passt dann zum
+    getauschten Rect). Liefert Form-XRef."""
     from PIL import Image
-    with Image.open(png_path) as im:
-        im = im.convert("RGBA")
+    import io as _io
+    with Image.open(_io.BytesIO(png_bytes)) as im0:
+        im = im0.convert("RGBA")
+        if rot % 360:
+            im = im.rotate(-(rot % 360), expand=True)
         iw, ih = im.size
         rgb = im.convert("RGB").tobytes()
         alpha = im.getchannel("A").tobytes()
@@ -439,6 +583,44 @@ def _bild_als_erscheinung(doc, png_path: str) -> int:
                             f"/Resources << /XObject << /Img0 {img} 0 R >> >> >>")
     doc.update_stream(form, f"q {iw} 0 0 {ih} 0 0 cm /Img0 Do Q".encode(), new=1)
     return form
+
+
+@app.post("/api/annot/rotate/{did}")
+async def annot_rotate(did: str, page: int = Form(...), xref: int = Form(...),
+                       delta: int = Form(90)):
+    """Signatur um delta Grad drehen (90-Schritte): neue AP mit vorgedrehtem Bild,
+    Rect um das Zentrum tauschen (bei 90/270 wechseln sich Breite/Hoehe)."""
+    d = _doc(did)
+    pg = d[page]
+    an = pg.load_annot(xref)
+    if an is None:
+        raise HTTPException(404, "Annotation nicht gefunden")
+    nm = an.info.get("id", "") or ""
+    fname, rot_alt = _sig_nmteilen(nm)
+    png = _sig_bytes(fname) if fname else None
+    if png is None:
+        if fname and _sig_gesperrt(fname):
+            raise HTTPException(401, "Signatur ist passwortgeschützt – erst entsperren")
+        raise HTTPException(400, "Signaturdatei nicht mehr vorhanden")
+    delta = int(delta) % 360
+    if delta % 90:
+        raise HTTPException(400, "Nur 90-Grad-Schritte")
+    rot_neu = (rot_alt + delta) % 360
+    rect_alt = pymupdf.Rect(an.rect)                     # vor allen Aenderungen sichern
+    form_xref = _bild_als_erscheinung(d, png, rot_neu)
+    d.xref_set_key(xref, "AP", f"<< /N {form_xref} 0 R >>")
+    nm_neu = f"(PDFW-SIG:{fname}:{rot_neu})" if rot_neu else f"(PDFW-SIG:{fname})"
+    d.xref_set_key(xref, "NM", nm_neu)
+    r = rect_alt
+    if delta % 180:  # 90 oder 270: Seitenverhaeltnis kippt
+        cx, cy = (r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2
+        w, h = r.width, r.height
+        r = pymupdf.Rect(cx - h / 2, cy - w / 2, cx + h / 2, cy + w / 2)
+    an = pg.load_annot(xref)   # frische Annot-Referenz nach AP/NM-Aenderung
+    an.set_rect(r)
+    push_undo(did, {"op": "sig-rotate", "page": page, "xref": xref,
+                    "rect": list(rect_alt), "fname": fname, "rot": rot_alt})
+    return {"ok": True, "rot": rot_neu, "rect": list(an.rect)}
 
 
 @app.get("/api/annots/{did}/{n}")
@@ -468,8 +650,10 @@ def annots(did: str, n: int):
             })
         elif t == "Stamp":
             name = a.info.get("id", "") or ""
-            sig = name[9:] if name.startswith("PDFW-SIG:") else ""  # "PDFW-SIG:" ist 9 Zeichen
-            out.append({"xref": a.xref, "type": "sign", "rect": list(a.rect), "file": sig})
+            sig, rot = _sig_nmteilen(name)  # "PDFW-SIG:" ist 9 Zeichen
+            out.append({"xref": a.xref, "type": "sign", "rect": list(a.rect), "file": sig,
+                        "rot": rot, "locked": bool(sig) and _sig_gesperrt(sig),
+                        "unlocked": bool(sig) and sig in sig_unlocked})
     return out
 
 
@@ -502,8 +686,9 @@ async def annot_delete(did: str, page: int = Form(...), xref: int = Form(...)):
     old_rect = list(an.rect)
     if t == "Stamp":
         nm = an.info.get("id", "") or ""
-        fname = nm[9:] if nm.startswith("PDFW-SIG:") else ""
-        push_undo(did, {"op": "stamp-recreate", "page": page, "rect": old_rect, "fname": fname})
+        fname, rot = _sig_nmteilen(nm)
+        push_undo(did, {"op": "stamp-recreate", "page": page, "rect": old_rect,
+                        "fname": fname, "rot": rot})
     elif t == "FreeText":
         nm = an.info.get("id", "") or ""
         font, size, color = _txt_props(nm)
@@ -667,12 +852,29 @@ def undo(did: str):
                        f"(PDFW-TXT:{o['font']}:{o['size']}:{o['color'][0]},{o['color'][1]},{o['color'][2]})")
     elif op == "stamp-recreate":
         fname = os.path.basename(e.get("fname") or "")
-        img_path = os.path.join(SIGN_DIR, fname)
-        if fname and os.path.isfile(img_path):
+        png = _sig_bytes(fname) if fname else None
+        if png is not None:
+            rot = int(e.get("rot") or 0)
             annot = pg.add_stamp_annot(pymupdf.Rect(e["rect"]))
-            form_xref = _bild_als_erscheinung(d, img_path)
+            form_xref = _bild_als_erscheinung(d, png, rot)
             d.xref_set_key(annot.xref, "AP", f"<< /N {form_xref} 0 R >>")
-            d.xref_set_key(annot.xref, "NM", f"(PDFW-SIG:{fname})")
+            nm = f"(PDFW-SIG:{fname}:{rot})" if rot else f"(PDFW-SIG:{fname})"
+            d.xref_set_key(annot.xref, "NM", nm)
+    elif op == "sig-rotate":
+        an = pg.load_annot(e["xref"])
+        if an is not None:
+            fname = e.get("fname") or ""
+            png = _sig_bytes(fname) if fname else None
+            rot_alt = int(e.get("rot") or 0)
+            if png is None:
+                pg.delete_annot(an)   # Signaturdatei weg - besser loeschen als falsch herum
+            else:
+                form_xref = _bild_als_erscheinung(d, png, rot_alt)
+                d.xref_set_key(e["xref"], "AP", f"<< /N {form_xref} 0 R >>")
+                nm = f"(PDFW-SIG:{fname}:{rot_alt})" if rot_alt else f"(PDFW-SIG:{fname})"
+                d.xref_set_key(e["xref"], "NM", nm)
+                an = pg.load_annot(e["xref"])
+                an.set_rect(pymupdf.Rect(e["rect"]))
     elif op == "text-recreate":
         a = pg.add_freetext_annot(pymupdf.Rect(e["rect"]), e["text"], fontsize=e["size"],
                                   fontname=e["font"], text_color=tuple(e["color"]))

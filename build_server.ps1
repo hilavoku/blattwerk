@@ -23,7 +23,8 @@ Set-Location (Join-Path $root "app")
 $pargs = @("--noconfirm","--clean","--onedir","--name","PdfWerkstattServer",
            "--icon",(Join-Path $root "wrapper\pdfwerkstatt_icon.ico"),
            "--add-data","static;static",
-           "--collect-all","pymupdf","--collect-all","uvicorn","--collect-all","fastapi")
+           "--collect-all","pymupdf","--collect-all","uvicorn","--collect-all","fastapi",
+           "--collect-all","cryptography")
 if ($mp -eq "multipart") { $pargs += @("--collect-all","multipart") }
 if ($mp -eq "python_multipart") { $pargs += @("--collect-all","python_multipart") }
 
