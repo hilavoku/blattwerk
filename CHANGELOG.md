@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.8.1 — Fix: Signatur-Kopien & Löschen
+- Fix: Nach Zoomen verdoppelten sich die Overlays (Signatur-/Text-"Kopien"). Ursache: Das
+  Scharfstellen des Seitenrasters (loadFresh) feuerte img.onload → buildPage baute die Overlays
+  NEU, ohne die alten zu entfernen. Jetzt: onload wird beim stillen Bildtausch gelöst; buildPage
+  räumt vor dem Neuaufbau auf und entwertet laufende Aufbauten per Generationen-Token (deckt auch
+  die Undo-Race zwischen refreshPage und reloadAnnots ab). Server-PDF war nie betroffen
+  (nachgewiesen per Repro: set_rect erzeugt keine Duplikate).
+- Neu: Rechtsklick auf Signatur/Text öffnet eigenes Kontextmenü (Löschen; Text zusätzlich
+  Bearbeiten) — statt des WebView2-Bildmenüs ("Bild speichern"/"Bild kopieren"). Eingabefelder
+  behalten ihr natives Menü.
+- Neu: Entf-Taste löscht die ausgewählte Signatur/Text (Strg+Z holt beides zurück).
+
 ## v0.8 — Freihand-Auswahl, Miniaturen, Rückgängig
 - Text per Maus aufziehen und kopieren (Auswahlrechteck, Chip „Kopieren", Strg+C)
 - Miniatur-Leiste links (Klick springt, aktuelle Seite markiert, ein-/ausblendbar)

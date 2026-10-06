@@ -72,6 +72,15 @@
                       color:var(--text); cursor:pointer; font-size:12.5px; }
   #renameBox button:hover { background:var(--hover); }
   #renameBox #rnOk { background:var(--accent); color:#0b1620; border-color:var(--accent); font-weight:600; }
+  #ctxMenu { position:fixed; z-index:400; background:var(--chrome); border:1px solid var(--border); border-radius:8px;
+             box-shadow:0 10px 30px rgba(0,0,0,.55); padding:4px; display:none; min-width:190px; }
+  #ctxMenu button { display:flex; align-items:center; gap:9px; width:100%; background:none; border:none;
+                    color:var(--text); padding:7px 10px; border-radius:5px; cursor:pointer; font-size:12.5px;
+                    text-align:left; }
+  #ctxMenu button:hover { background:var(--hover); }
+  #ctxMenu button .i { font-family:var(--icon); font-size:14px; }
+  #ctxMenu button.danger { color:var(--danger); }
+  #ctxMenu button.danger:hover { background:rgba(229,83,75,.14); }
   .searchwrap { display:flex; align-items:center; background:var(--chrome2); border:1px solid var(--border);
                 border-radius:6px; padding:2px 8px; gap:6px; }
   .searchwrap .i { font-family:var(--icon); font-size:13px; color:var(--muted); }
@@ -261,6 +270,7 @@
     <p class="muted">
       <b>Kopieren:</b> Textzeile anklicken (Strg+Klick hängt an).<br>
       <b>Signatur:</b> oben wählen, aufs Papier klicken, danach greifen &amp; ziehen – Anker unten rechts verändert die Größe.<br>
+      <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe).<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
@@ -295,6 +305,8 @@
     <button id="rnCancel">Abbrechen</button>
   </div>
 </div>
+
+<div id="ctxMenu"></div>
 
 <script>
 let cur = null;
@@ -395,7 +407,11 @@ function makePageEl(n) {
   return wrap;
 }
 function pageUrl(n) { return `/api/page/${cur.id}/${n}?dpi=${Math.round(BASE_DPI*zoom)}&t=${Date.now()}`; }
-function buildPage(img) { addLines(img); addAnnots(img); addWidgets(img); }
+function buildPage(img) {
+  img._gen = (img._gen || 0) + 1;   // noch laufende Overlay-Bauten aelterer Durchlaeufe entwerten
+  img.parentElement.querySelectorAll('.line,.annot,.winput').forEach(e => e.remove());
+  addLines(img); addAnnots(img); addWidgets(img);
+}
 function refreshPage(n) {
   const img = document.querySelector('#page' + n + ' img');
   if (!img) return;
@@ -507,7 +523,10 @@ function loadFresh(n, img, dpi) {
   if (!img || img.dataset.renderedDpi == dpi) return;
   const src = `/api/page/${cur.id}/${n}?dpi=${dpi}&t=${Date.now()}`;
   const pre = new Image();
-  pre.onload = () => { img.src = src; img.dataset.renderedDpi = dpi; };  // stiller Tausch, kein Leeren
+  // onload loeschen: der src-Wechsel darf buildPage nicht erneut feuern, sonst
+  // verdoppeln sich die Overlays (Signatur-"Kopien" beim Zoomen). Die Overlays
+  // stehen in PDF-Koordinaten und sind schon richtig positioniert.
+  pre.onload = () => { img.onload = null; img.src = src; img.dataset.renderedDpi = dpi; };
   pre.src = src;
 }
 
@@ -518,9 +537,11 @@ document.getElementById('viewer').addEventListener('wheel', (ev) => {
 /* ---------- Textzeilen ---------- */
 async function addLines(img) {
   const n = img.dataset.page;
+  const gen = img._gen;
   const r = await fetch('/api/text/' + cur.id + '/' + n);
-  if (!r.ok) return;
+  if (!r.ok || img._gen !== gen) return;
   const data = await r.json();
+  if (img._gen !== gen) return;
   const k = img.clientWidth / data.page_w;
   img.dataset.k = k; img.dataset.pageW = data.page_w;
   const wrap = img.parentElement;
@@ -577,9 +598,11 @@ async function deleteMarked() {
 /* ---------- Annotationen ---------- */
 async function addAnnots(img) {
   const n = img.dataset.page;
+  const gen = img._gen;
   const r = await fetch('/api/annots/' + cur.id + '/' + n);
-  if (!r.ok) return;
+  if (!r.ok || img._gen !== gen) return;
   const list = await r.json();
+  if (img._gen !== gen) return;
   const k = parseFloat(img.dataset.k);
   const wrap = img.parentElement;
   for (const a of list) {
@@ -655,6 +678,48 @@ async function applyProps() {
   } else stat('Fehler beim Setzen');
 }
 ['prX','prY','prW','prH'].forEach(id => document.getElementById(id).addEventListener('change', applyProps));
+
+/* ---------- Kontextmenü (Rechtsklick) + Entf-Taste: Objekte löschen ---------- */
+const ctxMenu = document.getElementById('ctxMenu');
+function hideCtxMenu() { ctxMenu.style.display = 'none'; ctxMenu.innerHTML = ''; }
+document.addEventListener('click', (ev) => { if (!ctxMenu.contains(ev.target)) hideCtxMenu(); });
+document.addEventListener('scroll', hideCtxMenu, true);
+window.addEventListener('blur', hideCtxMenu);
+document.addEventListener('contextmenu', (ev) => {
+  if (ev.target.closest('input, textarea')) return;   // natives Menü in Eingabefeldern erlauben
+  ev.preventDefault();                                 // kein WebView2-Bildmenü ("Bild speichern" etc.)
+  const div = ev.target.closest('.annot');
+  if (!div || !div._annot) return;
+  selectAnnot({div});
+  ctxMenu.innerHTML = '';
+  const eintrag = (label, icon, fn, danger) => {
+    const b = document.createElement('button');
+    if (danger) b.className = 'danger';
+    b.innerHTML = '<span class="i">' + icon + '</span>' + label;
+    b.onclick = (ev2) => { ev2.stopPropagation(); hideCtxMenu(); fn(); };
+    ctxMenu.appendChild(b);
+  };
+  const pageN = parseInt(div.dataset.page);
+  if (div._annot.type === 'text')
+    eintrag('Bearbeiten', '&#xE70F;', () => startInlineEdit(pageN, null, null, div._annot));
+  eintrag('Löschen', '&#xE74D;', () => deleteAnnot(div), true);
+  ctxMenu.style.display = 'block';
+  const r = ctxMenu.getBoundingClientRect();
+  ctxMenu.style.left = Math.max(4, Math.min(ev.clientX, window.innerWidth - r.width - 6)) + 'px';
+  ctxMenu.style.top = Math.max(4, Math.min(ev.clientY, window.innerHeight - r.height - 6)) + 'px';
+});
+async function deleteAnnot(div) {
+  if (!div || !div._annot) return;
+  const pageN = parseInt(div.dataset.page);
+  const fd = new FormData();
+  fd.append('page', pageN); fd.append('xref', div.dataset.xref);
+  const r = await fetch('/api/annot/delete/' + cur.id, {method:'POST', body: fd});
+  if (r.ok) {
+    const isSign = div._annot.type === 'sign';
+    selectAnnot(null); setDirty(true); reloadAnnots(pageN);
+    stat((isSign ? 'Signatur' : 'Text') + ' gelöscht – Strg+Z holt es zurück.', true);
+  } else stat('Löschen fehlgeschlagen');
+}
 
 function startDrag(ev, div, a, pageN, k, kind) {
   if (mode !== 'normal') return;
@@ -807,6 +872,7 @@ async function reloadAnnots(n) {
   if (!img || !img.dataset.k) return;   // Seite noch nicht gerendert -> Overlays kommen beim Laden
   img.parentElement.querySelectorAll('.annot').forEach(e => e.remove());
   selectAnnot(null);
+  img._gen = (img._gen || 0) + 1;       // noch laufende addAnnots entwerten (keine Doppel-Overlays)
   await addAnnots(img);
 }
 
@@ -1138,9 +1204,14 @@ document.addEventListener('keydown', (ev) => {
     if (freeSel.length && !(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) { ev.preventDefault(); copyFreeSel(); }
   }
   else if (ev.key === 'Escape') {
-    if (inline) cancelInline();
+    if (ctxMenu.style.display === 'block') hideCtxMenu();
+    else if (inline) cancelInline();
     else if (freeSel.length) clearFreeSel();
     else if (mode !== 'normal') setMode(mode);
+  }
+  else if (ev.key === 'Delete' && selAnnot && selAnnot.div) {
+    const ae = document.activeElement;
+    if (!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) { ev.preventDefault(); deleteAnnot(selAnnot.div); }
   }
 });
 
