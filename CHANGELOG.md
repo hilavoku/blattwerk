@@ -2,6 +2,13 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.11.2 — Drehen ohne Springer
+- Fix: Nach dem Drehen am Griff flippte die Signatur kurz auf die alte Darstellung
+  zurück, bevor die neue kam. Jetzt bleibt die Live-Drehung bis zum Abschluss stehen;
+  das gedrehte Bild wird vorab geladen und Kasten/Bild/Daten in einem Rutsch am
+  vorhandenen Overlay ausgetauscht (kein Neuaufbau, kein Flackern — auch beim
+  Winkelfeld und der 90°-Aktion).
+
 ## v0.11.1 — Drehgriff am Rahmen + Funktionsleisten-Start-Fix
 - **Direkt drehen:** Runder Griff über der ausgewählten Signatur — daran ziehen dreht
   live (Rahmen dreht mit); Umschalt-Taste rastet auf 15°-Schritte, der Winkel wird

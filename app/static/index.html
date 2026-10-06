@@ -816,9 +816,7 @@ async function rotateAnnot(div) {
   fd.append('page', pageN); fd.append('xref', div.dataset.xref); fd.append('delta', 90);
   const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
   if (r.ok) {
-    setDirty(true); await reloadAnnots(pageN);
-    const nd = document.querySelector('#page' + pageN + ' .annot[data-xref="' + div.dataset.xref + '"]');
-    if (nd) selectAnnot({div: nd});
+    await rotateDivAktualisieren(div, await r.json());
     stat('Signatur gedreht (90°) – Strg+Z dreht zurück.', true);
   } else stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
 }
@@ -829,11 +827,32 @@ async function rotateAnnotTo(div, ziel) {
   fd.append('page', pageN); fd.append('xref', div.dataset.xref); fd.append('to', ziel);
   const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
   if (r.ok) {
-    setDirty(true); await reloadAnnots(pageN);
-    const nd = document.querySelector('#page' + pageN + ' .annot[data-xref="' + div.dataset.xref + '"]');
-    if (nd) selectAnnot({div: nd});
-    stat('Signatur auf ' + ziel + '° gedreht.', true);
+    await rotateDivAktualisieren(div, await r.json());
+    stat('Signatur auf ' + ziel + '\u00B0 gedreht.', true);
   } else stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+}
+/* Drehung ohne Flackern uebernehmen: Bild mit neuem Winkel VORAB laden, dann
+   Kasten, Hintergrund und Daten in einem synchronen Rutsch austauschen (kein
+   Neuaufbau der Overlays, kein Zwischenbild, kein Springer zurueck). */
+async function rotateDivAktualisieren(div, j) {
+  if (!div || !div._annot || !j || !j.ok) return;
+  const a = div._annot;
+  const gesperrt = a.locked && !a.unlocked;
+  const rp = j.rot ? '?rot=' + j.rot : '';
+  const url = '/api/signature/file/' + encodeURIComponent(a.file) + rp;
+  if (a.file && !gesperrt) {
+    await new Promise(res => { const im = new Image(); im.onload = im.onerror = res; im.src = url; });
+  }
+  a.rot = j.rot;
+  a.rect = j.rect;
+  div._pdfRect = j.rect;
+  const img = document.querySelector('#page' + div.dataset.page + ' img');
+  const k = img && img.dataset.k ? parseFloat(img.dataset.k) : 1;
+  positionRect(div, j.rect, k);
+  div.style.backgroundImage = (a.file && !gesperrt) ? `url(${url})` : '';
+  div.style.transform = '';          // Live-Drehung erst jetzt abloesen
+  setDirty(true);
+  selectAnnot({div});
 }
 
 function startDrag(ev, div, a, pageN, k, kind) {
@@ -880,17 +899,23 @@ document.addEventListener('mouseup', async () => {
   if (drag.kind === 'rotate') {
     const dr = drag;
     drag = null;
-    dr.div.style.transform = '';
-    if (dr.rotNeu === undefined || Math.abs(dr.rotNeu - dr.rotStart) < 0.05) return;
+    if (dr.rotNeu === undefined || Math.abs(dr.rotNeu - dr.rotStart) < 0.05) {
+      dr.div.style.transform = '';      // kaum gedreht: ruhig zuruecksetzen
+      return;
+    }
+    // transform bleibt STEHEN bis der neue Zustand da ist - sonst flippt die
+    // Signatur kurz auf die alte Darstellung zurueck (sichtbarer Sprung).
+    const ziel = Math.round(dr.rotNeu * 100) / 100;
     const fd = new FormData();
-    fd.append('page', dr.page); fd.append('xref', dr.xref); fd.append('to', dr.rotNeu);
+    fd.append('page', dr.page); fd.append('xref', dr.xref); fd.append('to', ziel);
     const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
     if (r.ok) {
-      setDirty(true); await reloadAnnots(dr.page);
-      const nd = document.querySelector('#page' + dr.page + ' .annot[data-xref="' + dr.xref + '"]');
-      if (nd) selectAnnot({div: nd});
-      stat('Signatur auf ' + (Math.round(dr.rotNeu * 10) / 10) + '\u00B0 gedreht – Strg+Z dreht zurück.', true);
-    } else stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+      await rotateDivAktualisieren(dr.div, await r.json());
+      stat('Signatur auf ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', true);
+    } else {
+      dr.div.style.transform = '';
+      stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+    }
     return;
   }
   if (!drag.newRect) { drag = null; return; }
