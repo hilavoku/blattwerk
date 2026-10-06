@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.10.3 — Einbrennen auch bei „Speichern unter"
+- Fix: Die Einbrennen-Abfrage kam nur beim normalen „Speichern" — „Speichern unter"
+  schrieb immer bewegliche Annotationen. Jetzt dieselbe Abfrage (bzw. direktes
+  Speichern ohne Objekte) auch dort; Server: /api/saveas?flatten=1.
+- Die Checkbox „Auswahl merken" ist entfallen: Wer einmal „beweglich + merken" gewählt
+  hatte, kam nie wieder zur Einbrennen-Frage. Der Dialog erscheint jetzt bei jedem
+  Speichern/Speichern-unter, sobald bewegliche Objekte vorhanden sind.
+- Statusmeldungen präzisiert: „Gespeichert (eingebrannt)" bzw.
+  „Gespeichert (beweglich) – Signaturen/Texte bleiben änderbar".
+- Datei-Beweis geführt (frisch geöffnete PDFs): flatten=1 → Signatur im Seiteninhalt,
+  keine Annotationen; flatten=0 → Annotation mit eingebettetem Bild in der Datei.
+
 ## v0.10.2 — „Speichern unter" wechselt das Arbeitsdokument
 - Fix (UX): Nach „Speichern unter" blieb die Änderungsmarkierung stehen — beim Beenden
   kam die Warnung „nicht gespeicherte Änderungen", obwohl gerade gespeichert wurde.

@@ -92,10 +92,11 @@ internal static class Program
                     else if (msg == "dirty:0") dirty = false;
                     else if (msg != null && msg.StartsWith("saveas|"))
                     {
-                        // "saveas|<docid>|<dateiname>" -> Systemdialog, dann Kopie speichern
-                        var teile = msg.Split('|', 3);
-                        if (teile.Length == 3)
+                        // "saveas|<docid>|<dateiname>|<flatten>" -> Systemdialog, dann speichern
+                        var teile = msg.Split('|', 4);
+                        if (teile.Length >= 3)
                         {
+                            int flatten = teile.Length == 4 && teile[3] == "1" ? 1 : 0;
                             using var dlg = new SaveFileDialog
                             {
                                 Filter = "PDF-Datei (*.pdf)|*.pdf|Alle Dateien (*.*)|*.*",
@@ -109,7 +110,7 @@ internal static class Program
                                 {
                                     using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
                                     var resp = await http.GetAsync(
-                                        $"http://127.0.0.1:{port}/api/saveas/{teile[1]}?path={Uri.EscapeDataString(dlg.FileName)}");
+                                        $"http://127.0.0.1:{port}/api/saveas/{teile[1]}?path={Uri.EscapeDataString(dlg.FileName)}&flatten={flatten}");
                                     ok = resp.IsSuccessStatusCode;
                                 }
                                 catch { ok = false; }

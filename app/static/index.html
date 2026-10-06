@@ -330,10 +330,9 @@
 <div id="ctxMenu"></div>
 
 <div id="saveBox" class="miniBox">
-  <div><b>Beim Speichern einbrennen?</b></div>
+  <div><b id="saveBoxTitle">Beim Speichern einbrennen?</b></div>
   <p class="muted" style="margin:8px 0 0; line-height:1.5">Eingebrennt werden Signaturen und Texte fixer
   Seiteninhalt – in keinem PDF-Programm mehr entfernbar oder verschiebbar. Formularfelder bleiben ausfüllbar.</p>
-  <label class="chk"><input type="checkbox" id="saveRemember"> Auswahl merken (nicht mehr fragen)</label>
   <div class="row">
     <button id="saveBurn" class="prim">Einbrennen &amp; speichern</button>
     <button id="saveKeep">Beweglich speichern</button>
@@ -1111,43 +1110,51 @@ async function printDoc() {
 async function saveDoc(flatten) {
   if (!cur) return;
   if (flatten === undefined) {
-    if (prefs.flatten === 'burn') flatten = 1;
-    else if (prefs.flatten === 'keep') flatten = 0;
-    else {
-      const has = await (await fetch('/api/hasannots/' + cur.id)).json();
-      if (has.any) { showSaveBox(); return; }   // erst fragen, dann speichern
-      flatten = 0;
-    }
+    const has = await (await fetch('/api/hasannots/' + cur.id)).json();
+    if (has.any) { showSaveBox('save'); return; }   // erst fragen, dann speichern
+    flatten = 0;
   }
   const r = await fetch('/api/save/' + cur.id + '?flatten=' + (flatten ? 1 : 0), {method:'POST'});
   if (r.ok) {
     setDirty(false);
     const j = await r.json();
-    stat(j.flattened ? 'Gespeichert (eingebrannt): ' + j.path : 'Gespeichert: ' + j.path, true);
+    stat(j.flattened ? 'Gespeichert (eingebrannt): ' + j.path
+                    : 'Gespeichert (beweglich): ' + j.path + ' – Signaturen/Texte bleiben änderbar', true);
     if (j.flattened) await reloadAllAnnotOverlays();   // Overlays sind jetzt Seiteninhalt
   }
   else stat('Speichern fehlgeschlagen');
 }
-function showSaveBox() {
+/* Speichern unter: Wrapper oeffnet den Systemdialog und meldet sich per pwSaveasDone zurueck.
+   Ohne Wrapper (Browser) fällt die Funktion auf einen Download zurück.
+   Vorher dieselbe Einbrennen-Rueckfrage wie beim normalen Speichern. */
+let saveZiel = 'save';        // fuer welchen Vorgang fragt der Einbrennen-Dialog?
+let saveasFlatten = 0;        // lief diese Speichern-unter-Runde mit Einbrennen?
+function showSaveBox(ziel) {
+  saveZiel = ziel;
+  document.getElementById('saveBoxTitle').textContent =
+    ziel === 'saveas' ? 'Beim „Speichern unter" einbrennen?' : 'Beim Speichern einbrennen?';
   const b = document.getElementById('saveBox');
   b.style.display = 'block';
   const r = document.getElementById('saveBtn').getBoundingClientRect();
   b.style.left = Math.max(8, Math.min(window.innerWidth - 316, r.left - 60)) + 'px';
   b.style.top = (r.bottom + 6) + 'px';
 }
-document.getElementById('saveBurn').onclick = () => { merkeSaveWahl('burn'); saveDoc(1); };
-document.getElementById('saveKeep').onclick = () => { merkeSaveWahl('keep'); saveDoc(0); };
-document.getElementById('saveCancel').onclick = () => document.getElementById('saveBox').style.display = 'none';
-function merkeSaveWahl(wahl) {
-  document.getElementById('saveBox').style.display = 'none';
-  if (document.getElementById('saveRemember').checked) setPref('flatten', wahl);
-}
-/* Speichern unter: Wrapper oeffnet den Systemdialog und meldet sich per pwSaveasDone zurueck.
-   Ohne Wrapper (Browser) fällt die Funktion auf einen Download zurück. */
-function saveasClick() {
+document.getElementById('saveBurn').onclick = () => { hideSaveBox(); if (saveZiel === 'saveas') saveasFortsetzen(1); else saveDoc(1); };
+document.getElementById('saveKeep').onclick = () => { hideSaveBox(); if (saveZiel === 'saveas') saveasFortsetzen(0); else saveDoc(0); };
+document.getElementById('saveCancel').onclick = hideSaveBox;
+function hideSaveBox() { document.getElementById('saveBox').style.display = 'none'; }
+async function saveasClick() {
   if (!cur) return;
+  const has = await (await fetch('/api/hasannots/' + cur.id)).json();
+  if (has.any) { showSaveBox('saveas'); return; }
+  saveasFortsetzen(0);
+}
+function saveasFortsetzen(flatten) {
+  hideSaveBox();
+  if (!cur) return;
+  saveasFlatten = flatten;
   if (window.chrome?.webview?.postMessage) {
-    try { window.chrome.webview.postMessage('saveas|' + cur.id + '|' + cur.name); } catch (e) {}
+    try { window.chrome.webview.postMessage('saveas|' + cur.id + '|' + cur.name + '|' + (flatten ? 1 : 0)); } catch (e) {}
     stat('„Speichern unter": Ordner und Dateinamen wählen …');
   } else downloadDoc();
 }
@@ -1155,7 +1162,9 @@ window.pwSaveasDone = function (ok, path) {
   if (ok) {
     setDirty(false);                       // gilt als gespeichert: neue Datei ist das Arbeitsdokument
     if (cur) cur.name = path.split(/[\\/]/).pop();
-    stat('Gespeichert unter: ' + path + ' – weiter gearbeitet wird in dieser Datei.', true);
+    stat('Gespeichert unter: ' + path + (saveasFlatten ? ' (eingebrannt)' : '') + ' – weiter gearbeitet wird in dieser Datei.', true);
+    if (saveasFlatten) reloadAllAnnotOverlays();
+    saveasFlatten = 0;
   } else stat('Speichern unter fehlgeschlagen');
 };
 function downloadDoc() { if (cur) location.href = '/api/download/' + cur.id; }

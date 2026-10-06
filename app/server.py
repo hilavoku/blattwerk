@@ -350,15 +350,19 @@ def save(did: str, flatten: int = 0):
 
 
 @app.get("/api/saveas/{did}")
-def saveas(did: str, path: str):
+def saveas(did: str, path: str, flatten: int = 0):
     """Dokument unter neuem Namen speichern - die neue Datei wird zum Arbeitsdokument
     (wie ueblich bei "Speichern unter"). Ohne garbage: Xref-Nummern bleiben stabil,
-    Undo-Referenzen ueberleben. Original-Datei bleibt unveraendert liegen."""
+    Undo-Referenzen ueberleben. Original-Datei bleibt unveraendert liegen.
+    flatten=1 brennt Signaturen/Texte vorher ein (wie beim normalen Speichern)."""
     d = _doc(did)
     path = os.path.normpath(path)
     if path.lower() == os.path.normpath(docs[did]["path"]).lower():
         raise HTTPException(400, "Ziel ist die bereits geöffnete Datei – bitte 'Speichern' nutzen")
     try:
+        if flatten:
+            d.bake(widgets=False)
+            undo_stacks[did] = []
         d.save(path, deflate=True)
         d.close()
         docs[did]["doc"] = pymupdf.open(path)
@@ -369,7 +373,7 @@ def saveas(did: str, path: str):
         raise
     except Exception as e:
         raise HTTPException(400, "Speichern unter fehlgeschlagen: " + str(e))
-    return {"ok": True, "path": path}
+    return {"ok": True, "path": path, "flattened": bool(flatten)}
 
 
 @app.get("/api/download/{did}")
