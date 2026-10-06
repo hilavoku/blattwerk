@@ -1152,7 +1152,11 @@ function saveasClick() {
   } else downloadDoc();
 }
 window.pwSaveasDone = function (ok, path) {
-  stat(ok ? 'Kopie gespeichert: ' + path : 'Speichern unter fehlgeschlagen', ok);
+  if (ok) {
+    setDirty(false);                       // gilt als gespeichert: neue Datei ist das Arbeitsdokument
+    if (cur) cur.name = path.split(/[\\/]/).pop();
+    stat('Gespeichert unter: ' + path + ' – weiter gearbeitet wird in dieser Datei.', true);
+  } else stat('Speichern unter fehlgeschlagen');
 };
 function downloadDoc() { if (cur) location.href = '/api/download/' + cur.id; }
 function openDemo() { fetch('/api/demo').then(r => r.json()).then(openDoc); }

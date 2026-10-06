@@ -351,13 +351,22 @@ def save(did: str, flatten: int = 0):
 
 @app.get("/api/saveas/{did}")
 def saveas(did: str, path: str):
-    """Kopie des aktuellen Dokuments (inkl. aller Aenderungen) unter neuem Pfad speichern."""
+    """Dokument unter neuem Namen speichern - die neue Datei wird zum Arbeitsdokument
+    (wie ueblich bei "Speichern unter"). Ohne garbage: Xref-Nummern bleiben stabil,
+    Undo-Referenzen ueberleben. Original-Datei bleibt unveraendert liegen."""
     d = _doc(did)
     path = os.path.normpath(path)
     if path.lower() == os.path.normpath(docs[did]["path"]).lower():
         raise HTTPException(400, "Ziel ist die bereits geöffnete Datei – bitte 'Speichern' nutzen")
     try:
-        d.save(path, garbage=3, deflate=True)
+        d.save(path, deflate=True)
+        d.close()
+        docs[did]["doc"] = pymupdf.open(path)
+        docs[did]["path"] = path
+        if current.get("id") == did:
+            current["name"] = os.path.basename(path)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(400, "Speichern unter fehlgeschlagen: " + str(e))
     return {"ok": True, "path": path}

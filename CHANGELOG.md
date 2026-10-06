@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag).
 
+## v0.10.2 — „Speichern unter" wechselt das Arbeitsdokument
+- Fix (UX): Nach „Speichern unter" blieb die Änderungsmarkierung stehen — beim Beenden
+  kam die Warnung „nicht gespeicherte Änderungen", obwohl gerade gespeichert wurde.
+  Jetzt wie üblich (Word & Co.): Die neue Datei wird das Arbeitsdokument — Warnung
+  entfällt, Strg+S und Speichern-beim-Schließen schreiben die neue Datei, Statusleiste
+  meldet den Wechsel. Server öffnet das Dokument nach dem Kopieren neu (ohne garbage,
+  damit Undo-Referenzen stabil bleiben); Annotationen/Undo bleiben nutzbar.
+
+## v0.10.1 — Logo im Startbildschirm
+- Startbildschirm und Fehlerbildschirm zeigen das App-Logo (Base64 aus der
+  Server-Instanz `server\_internal\static\logo.png`, Fallback: Entwicklungspfad bzw. Symbol)
+
 ## v0.10 — Speichern unter, Drehen, Einbrennen, Passwort-Signaturen
 - **Speichern unter**: Toolbar-Knopf, Systemdialog (Wrapper), Kopie inkl. aller Änderungen
   über `/api/saveas`; Meldung per Skript-Rückkanal in die Statusleiste
@@ -22,8 +34,6 @@ Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag
 - Fix (mitgefunden): Kopfzeilen-Knöpfe „Kopie herunterladen" und „Drucken" waren seit
   der Toolbar-Umstellung deaktiviert
 - Neues Signatur-Icon (Unterschriftszug statt Stift)
-- Startbildschirm und Fehlerbildschirm zeigen das App-Logo (Base64 aus der
-  Server-Instanz `server\_internal\static\logo.png`, Fallback: Entwicklungspfad bzw. Symbol)
 - Suite um 8 Checks erweitert (33 gesamt): Speichern unter, Drehen+Undo, Einbrennen,
   verschlüsselte Ablage, Sperrzustand nach Neustart
 
