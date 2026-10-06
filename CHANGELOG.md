@@ -22,6 +22,8 @@ Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-06 (Entwicklungstag
 - Fix (mitgefunden): Kopfzeilen-Knöpfe „Kopie herunterladen" und „Drucken" waren seit
   der Toolbar-Umstellung deaktiviert
 - Neues Signatur-Icon (Unterschriftszug statt Stift)
+- Startbildschirm und Fehlerbildschirm zeigen das App-Logo (Base64 aus der
+  Server-Instanz `server\_internal\static\logo.png`, Fallback: Entwicklungspfad bzw. Symbol)
 - Suite um 8 Checks erweitert (33 gesamt): Speichern unter, Drehen+Undo, Einbrennen,
   verschlüsselte Ablage, Sperrzustand nach Neustart
 

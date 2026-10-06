@@ -211,29 +211,65 @@ internal static class Program
         Application.Run(form);
     }
 
+    private static string? _logoCache;
+
+    private static string? LogoDataUrl()
+    {
+        if (_logoCache == null)
+        {
+            try
+            {
+                string basis = AppDomain.CurrentDomain.BaseDirectory;
+                string[] kandidaten =
+                {
+                    Path.Combine(basis, "server", "_internal", "static", "logo.png"),  // Deployment
+                    Path.Combine(basis, "..", "app", "static", "logo.png"),            // Entwicklung / paket
+                };
+                var pfad = kandidaten.FirstOrDefault(File.Exists);
+                _logoCache = pfad != null
+                    ? "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(pfad))
+                    : "";
+            }
+            catch { _logoCache = ""; }
+        }
+        return _logoCache.Length > 0 ? _logoCache : null;
+    }
+
+    private static string LogoHtml(int groesse)
+    {
+        var url = LogoDataUrl();
+        return url != null
+            ? $"<img class=\"logo\" style=\"width:{groesse}px;height:{groesse}px\" src=\"{url}\" alt=\"\">"
+            : $"<div class=\"logo emoji\" style=\"font-size:{Math.Max(24, groesse - 10)}px\">&#128196;</div>";
+    }
+
     private static string SplashHtml() => """
         <!DOCTYPE html><html><head><meta charset="utf-8"><style>
         html,body{height:100%;margin:0}
         body{background:#17191d;color:#e6e9ee;font-family:'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center}
         .c{text-align:center}
+        .logo{display:block;margin:0 auto 16px;border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+        .logo.emoji{line-height:1}
         h1{font-weight:600;margin:0 0 8px}
         p{color:#97a0af;margin:0}
         .bar{width:140px;height:3px;background:#2c313a;border-radius:2px;margin:18px auto 0;overflow:hidden}
         .bar i{display:block;width:40%;height:100%;background:#4cc2ff;border-radius:2px;animation:sl 1.1s infinite linear}
         @keyframes sl{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
-        </style></head><body><div class="c"><h1>&#128196; PDF-Werkstatt</h1><p>wird gestartet &hellip;</p><div class="bar"><i></i></div></div></body></html>
-        """;
+        </style></head><body><div class="c">__LOGO__<h1>PDF-Werkstatt</h1><p>wird gestartet &hellip;</p><div class="bar"><i></i></div></div></body></html>
+        """.Replace("__LOGO__", LogoHtml(84));
 
     private static string ErrorHtml() => """
         <!DOCTYPE html><html><head><meta charset="utf-8"><style>
         html,body{height:100%;margin:0}
         body{background:#17191d;color:#e6e9ee;font-family:'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center}
         .c{text-align:center;max-width:420px}
+        .logo{display:block;margin:0 auto 18px;border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+        .logo.emoji{line-height:1}
         h1{font-weight:600;margin:0 0 10px}
         p{color:#97a0af;line-height:1.6;margin:0}
-        </style></head><body><div class="c"><h1>&#9888;&#65039; Server nicht erreichbar</h1>
-        <p>Der PDF-Werkstatt-Server konnte nicht gestartet werden.<br>Bitte das Programm schlie\u00dfen und neu starten.<br>Besteht das Problem, den Ordner <b>server</b> im Programmverzeichnis pr\u00fcfen.</p></div></body></html>
-        """;
+        </style></head><body><div class="c">__LOGO__<h1>&#9888;&#65039; Server nicht erreichbar</h1>
+        <p>Der PDF-Werkstatt-Server konnte nicht gestartet werden.<br>Bitte das Programm schlie\u00dfen und neu starten.<br>Besteht das Problem, den Ordner <b>server</b> im Programmverzeichnis <b>pr\u00fcfen</b>.</p></div></body></html>
+        """.Replace("__LOGO__", LogoHtml(64));
 
     private static bool SaveCurrent()
     {
