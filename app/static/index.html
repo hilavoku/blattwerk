@@ -8,8 +8,8 @@
   :root {
     /* Dark Theme in Schwarz-Rot-Gold: tiefschwarze Flaechen, Gold als Akzent,
        Rot fuer Gefahr/Loeschen (Nationalfarben, Wunsch des Nutzers 2026-10-07) */
-    --bg: #0c0c0e; --chrome: #141417; --chrome2: #1b1b20; --hover: #24242b;
-    --border: #2c2c33; --text: #e8e6e1; --muted: #9c978c; --accent: #e6b400;
+    --bg: #17181b; --chrome: #1f2024; --chrome2: #26272d; --hover: #2f3037;
+    --border: #34353c; --text: #e8e6e1; --muted: #9c978c; --accent: #e6b400;
     --accent-dim: rgba(230, 180, 0, .30); --danger: #e0242f; --ok: #4cc97e;
     --icon: "Segoe MDL2 Assets";
     --sel-fill: rgba(230, 180, 0, .16); --sel-border: rgba(230, 180, 0, .55);
@@ -153,7 +153,7 @@
               transition: transform var(--d3) var(--e-standard), width var(--d3) var(--e-standard), opacity var(--d2); pointer-events:none; }
   header { position: relative; }
   body:not(.light) header::before { content:""; position:absolute; top:0; left:0; right:0; height:3px;
-    background:linear-gradient(90deg, #1a1a1a 0 33.3%, #dd0000 33.3% 66.6%, #ffcc00 66.6% 100%); }
+    background:linear-gradient(90deg, #1a1a1a, #dd0000 50%, #ffcc00 100%); }
   header .tbtn { position: relative; z-index: 1; }
   header .tbtn.active { background: transparent; }   /* die gleitende Pill liefert die Fläche */
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }

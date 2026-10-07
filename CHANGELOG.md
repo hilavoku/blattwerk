@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.13.4 — Dark Theme: dunkles Grau + weiche Flaggen-Verlaufskante
+- Rückmeldung umgesetzt: Der Dark-Theme-Grundton ist wieder **dunkles Grau**
+  (statt fast Schwarz) — damit heben sich schwarze Elemente sichtbar ab.
+- Die Schwarz-Rot-Gold-Kante der Kopfzeile verläuft jetzt als **weicher
+  Farbverlauf** (Schwarz → Rot → Gold) statt in harten Dritteln.
+
 ## v0.13.3 — Dark Theme in Schwarz-Rot-Gold
 - **Nationalfarben im Dark Theme:** tiefschwarze Flächen (Dokumentbereich,
   Kopfzeile, Panels), **Gold** als Akzentfarbe (aktives Werkzeug, Pill,
