@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.13.3 — Dark Theme in Schwarz-Rot-Gold
+- **Nationalfarben im Dark Theme:** tiefschwarze Flächen (Dokumentbereich,
+  Kopfzeile, Panels), **Gold** als Akzentfarbe (aktives Werkzeug, Pill,
+  Auswahlrahmen, Auswahlfeld-Ränder, Slider, primäre Dialogknöpfe), **Rot** für
+  Gefahr/Löschen. Dazu eine dezente Schwarz-Rot-Gold-Kante an der Oberkante der
+  Kopfzeile.
+- Die Auswahl- und Fokusfarben (Freihand-Auswahl, Zeilenmarkierung, Textfelder)
+  sind jetzt themengesteuert: Dark = Gold, Light = unverändert Blau. Das Light
+  Theme bleibt komplett, wie es war.
+
 ## v0.13.2 — Fix: eingebrannte Signatur bleibt nach dem Speichern sichtbar
 - Beim Speichern mit Einbrennen verschwand die Signatur optisch aus der Ansicht:
   die Overlays wurden entfernt, aber das Seitenbild stammte noch von vor dem

@@ -6,10 +6,16 @@
 <title>PDF-Werkstatt</title>
 <style>
   :root {
-    --bg: #17191d; --chrome: #1f232a; --chrome2: #242933; --hover: #2e3541;
-    --border: #2c313a; --text: #e6e9ee; --muted: #97a0af; --accent: #4cc2ff;
-    --accent-dim: #2b5f7d; --danger: #e5534b; --ok: #4cc97e;
+    /* Dark Theme in Schwarz-Rot-Gold: tiefschwarze Flaechen, Gold als Akzent,
+       Rot fuer Gefahr/Loeschen (Nationalfarben, Wunsch des Nutzers 2026-10-07) */
+    --bg: #0c0c0e; --chrome: #141417; --chrome2: #1b1b20; --hover: #24242b;
+    --border: #2c2c33; --text: #e8e6e1; --muted: #9c978c; --accent: #e6b400;
+    --accent-dim: rgba(230, 180, 0, .30); --danger: #e0242f; --ok: #4cc97e;
     --icon: "Segoe MDL2 Assets";
+    --sel-fill: rgba(230, 180, 0, .16); --sel-border: rgba(230, 180, 0, .55);
+    --linehover: rgba(230, 180, 0, .25); --linehover-outline: rgba(230, 180, 0, .6);
+    --linesel-fill: rgba(230, 180, 0, .30); --linesel-outline: rgba(230, 180, 0, .65);
+    --feld-border: #c79a00; --fokus-ring: rgba(230, 180, 0, .35);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -146,6 +152,8 @@
   #modePill { position:absolute; top:0; left:0; background:var(--accent-dim); border-radius:8px; z-index:0; opacity:0;
               transition: transform var(--d3) var(--e-standard), width var(--d3) var(--e-standard), opacity var(--d2); pointer-events:none; }
   header { position: relative; }
+  body:not(.light) header::before { content:""; position:absolute; top:0; left:0; right:0; height:3px;
+    background:linear-gradient(90deg, #1a1a1a 0 33.3%, #dd0000 33.3% 66.6%, #ffcc00 66.6% 100%); }
   header .tbtn { position: relative; z-index: 1; }
   header .tbtn.active { background: transparent; }   /* die gleitende Pill liefert die Fläche */
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
@@ -171,7 +179,7 @@
   .pagewrap.mode-sign img, .pagewrap.mode-text img { cursor:crosshair; }
   .pagewrap .lbl { position:absolute; top:-18px; left:0; font-size:11px; color:var(--muted); }
   .line { position:absolute; cursor:text; border-radius:2px; z-index:2; }
-  .line:hover { background:rgba(76,194,255,.25); outline:1px solid rgba(76,194,255,.6); }
+  .line:hover { background:var(--linehover); outline:1px solid var(--linehover-outline); }
   .line.copied { background:rgba(76,201,126,.45) !important; }
   .line.marked { background:rgba(229,83,75,.4) !important; outline:1px solid var(--danger); }
   .mode-sign .line, .mode-text .line, .mode-delete .winput, .mode-delete .annot { pointer-events:none; }
@@ -193,7 +201,7 @@
   .annot.imgobj { background-size:100% 100%; background-repeat:no-repeat; }
   .annot.txtobj { overflow:hidden; padding:1px 2px; background:rgba(255,255,255,.01); }
   .winput { position:absolute; z-index:3; }
-  .winput input { width:100%; height:100%; border:1px solid #2a6fd6; background:rgba(255,255,244,.93);
+  .winput input { width:100%; height:100%; border:1px solid var(--feld-border); background:rgba(255,255,244,.93);
                   font-size:inherit; padding:1px 3px; border-radius:1px; }
   .winput input:focus { outline:2px solid var(--accent); background:white; }
 
@@ -250,9 +258,9 @@
                     border-radius:6px; padding:4px 6px; font-size:12px; }
   .propsbar .lbl { color:var(--muted); font-size:11px; }
   .propsbar .typ { color:var(--accent); font-size:11.5px; font-weight:600; margin-right:2px; }
-  .seldrag { position:absolute; background:rgba(76,194,255,.16); border:1px solid rgba(76,194,255,.55); z-index:4; pointer-events:none; }
+  .seldrag { position:absolute; background:var(--sel-fill); border:1px solid var(--sel-border); z-index:4; pointer-events:none; }
   body.panning, body.panning * { cursor:grabbing !important; }
-  .line.linesel { background:rgba(76,140,255,.32) !important; outline:1px solid rgba(76,140,255,.7); }
+  .line.linesel { background:var(--linesel-fill) !important; outline:1px solid var(--linesel-outline); }
   .copyChip { position:fixed; z-index:210; background:var(--accent); color:#0b1620; border:none; border-radius:6px;
               padding:6px 12px; cursor:pointer; font-size:12.5px; font-weight:600; box-shadow:0 4px 16px rgba(0,0,0,.4); }
   #thumbrail { width:174px; overflow:hidden; background:var(--chrome); border-right:1px solid var(--border); padding:10px 8px; flex:none;
@@ -270,12 +278,16 @@
   .inlineEdit { position:absolute; z-index:50; background:rgba(255,255,255,.97); border:1px dashed var(--accent);
                 outline:none; padding:2px 4px; margin:0; overflow:hidden; white-space:pre-wrap;
                 min-height:1.2em; border-radius:2px; font-family:Helvetica,Arial,sans-serif; }
-  .inlineEdit:focus { border-style:solid; box-shadow:0 0 0 2px rgba(76,194,255,.35); }
+  .inlineEdit:focus { border-style:solid; box-shadow:0 0 0 2px var(--fokus-ring); }
   .inlineDel { position:absolute; z-index:51; background:var(--danger); color:white; border:none; border-radius:5px;
                cursor:pointer; font-family:var(--icon); font-size:12px; padding:3px 7px; display:none; }
   .inlineDel:hover { filter:brightness(1.15); }
   body.light { --bg:#eef1f5; --chrome:#ffffff; --chrome2:#f5f7fa; --hover:#e8ecf2; --border:#d5dae2;
-               --text:#1a1f27; --muted:#626c7a; --accent:#0b6ec9; --accent-dim:#cfe6f8; --danger:#d13438; --ok:#0e8a4c; }
+               --text:#1a1f27; --muted:#626c7a; --accent:#0b6ec9; --accent-dim:#cfe6f8; --danger:#d13438; --ok:#0e8a4c;
+               --sel-fill: rgba(76, 194, 255, .16); --sel-border: rgba(76, 194, 255, .55);
+               --linehover: rgba(76, 194, 255, .25); --linehover-outline: rgba(76, 194, 255, .6);
+               --linesel-fill: rgba(76, 140, 255, .32); --linesel-outline: rgba(76, 140, 255, .7);
+               --feld-border: #2a6fd6; --fokus-ring: rgba(76, 194, 255, .35); }
   body.light .pagewrap { box-shadow:0 1px 4px rgba(30,40,60,.25), 0 0 0 1px rgba(0,0,0,.06); }
   body.light ::-webkit-scrollbar-thumb { background:#c4cbd6; border-color:var(--bg); }
 
