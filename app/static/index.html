@@ -1546,7 +1546,10 @@ async function saveDoc(flatten) {
     stempel('saveBtn');
     stat(j.flattened ? 'Gespeichert (eingebrannt): ' + j.path
                     : 'Gespeichert (beweglich): ' + j.path + ' – Signaturen/Texte bleiben änderbar', true);
-    if (j.flattened) await reloadAllAnnotOverlays();   // Overlays sind jetzt Seiteninhalt
+    if (j.flattened) {
+      await reloadAllAnnotOverlays();   // Overlays sind jetzt Seiteninhalt
+      (j.seiten || []).forEach(n => refreshPage(n));   // Seitenbilder neu laden: eingebrannte Signatur sichtbar machen
+    }
   }
   else stat('Speichern fehlgeschlagen');
 }
@@ -1584,13 +1587,18 @@ function saveasFortsetzen(flatten) {
     stat('„Speichern unter": Ordner und Dateinamen wählen …');
   } else downloadDoc();
 }
-window.pwSaveasDone = function (ok, path) {
+window.pwSaveasDone = async function (ok, path) {
   if (ok) {
     setDirty(false);                       // gilt als gespeichert: neue Datei ist das Arbeitsdokument
     if (cur) cur.name = path.split(/[\\/]/).pop();
     stat('Gespeichert unter: ' + path + (saveasFlatten ? ' (eingebrannt)' : '') + ' – weiter gearbeitet wird in dieser Datei.', true);
     stempel('saveAsBtn');
-    if (saveasFlatten) reloadAllAnnotOverlays();
+    if (saveasFlatten) {
+      await reloadAllAnnotOverlays();
+      document.querySelectorAll('.pagewrap').forEach(w => {   // Seiten mit Overlays = eingebrannte Seiten
+        if (w.querySelector('.annot')) refreshPage(parseInt(w.dataset.page));
+      });
+    }
     saveasFlatten = 0;
   } else stat('Speichern unter fehlgeschlagen');
 };

@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.13.2 — Fix: eingebrannte Signatur bleibt nach dem Speichern sichtbar
+- Beim Speichern mit Einbrennen verschwand die Signatur optisch aus der Ansicht:
+  die Overlays wurden entfernt, aber das Seitenbild stammte noch von vor dem
+  Einbrennen. Erst das Neuladen des Dokuments zeigte sie wieder.
+- Jetzt liefert `/api/save` die betroffenen Seiten mit (Seiten mit Annotationen
+  vor dem Einbrennen), und die UI lädt genau diese Seitenbilder neu — die
+  eingebrannte Signatur ist sofort sichtbar. „Speichern unter" mit Einbrennen
+  aktualisiert die Seiten mit Overlays ebenfalls (Wrapper-Pfad).
+
 ## v0.13.1 — Fix: Modus-Pill sitzt exakt, auch nach Größenwechseln
 - Die gleitende Werkzeug-Pill war vertikal statisch verankert und maß ihre
   Position nur einmal — sobald die Knopfbeschriftungen verschwanden (schmales

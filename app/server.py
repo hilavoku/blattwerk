@@ -332,9 +332,11 @@ def hasannots(did: str):
 @app.post("/api/save/{did}")
 def save(did: str, flatten: int = 0):
     d = _doc(did)
+    seiten = []
     if flatten:
         # Signaturen/Texte einbrennen: werden Seiteninhalt, nicht mehr entfernbar.
         # widgets=False: Formularfelder bleiben ausfuellbar. Danach ist Undo sinnlos.
+        seiten = [i for i in range(d.page_count) if d[i].annots()]   # UI laedt diese Seitenbilder neu
         d.bake(widgets=False)
         undo_stacks[did] = []
     path = docs[did]["path"]
@@ -346,7 +348,7 @@ def save(did: str, flatten: int = 0):
         d.close()
         shutil.move(tmp, path)
         docs[did]["doc"] = pymupdf.open(path)
-    return {"ok": True, "path": path, "flattened": bool(flatten)}
+    return {"ok": True, "path": path, "flattened": bool(flatten), "seiten": seiten}
 
 
 @app.get("/api/saveas/{did}")
