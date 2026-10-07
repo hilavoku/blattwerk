@@ -2,6 +2,17 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.5 — Signaturen per Drag & Drop aufs Papier ziehen
+- **Direkt aus der Liste ziehen:** Kachel im „Signatur…"-Menü anfassen, aufs
+  Dokument ziehen, loslassen — die Signatur landet genau an der Stelle (das
+  Papier leuchtet beim Darüberziehen auf, danach wie üblich greifen & ziehen).
+  Klicken zum Auswählen funktioniert wie bisher.
+- **Passwort-Logik verständlich gemacht:** Das Passwortfeld im Menü verschlüsselt
+  die als nächstes hochgeladene Signatur (Schloss-Symbol). Gesperrte Kacheln sind
+  erst nach dem Entsperren auswählbar und ziehbar; Entsperren gilt bis
+  Programmende. Hinweiszeile im Menü erklärt den Ablauf.
+- Kurzhilfe aktualisiert.
+
 ## v0.12.4 — „Auswahl"-Knopf: Modus verlassen, gesetzten Text verschieben
 - Neuer Knopf **„Auswahl" (Mauszeiger-Symbol)** links neben „Signatur": Er kehrt
   aus dem Text-/Löschen-/Signatur-Modus in den normalen Modus zurück (geht

@@ -126,6 +126,7 @@
   .hit.active { background:rgba(255,150,0,.5); outline:2px solid #ff9600; }
   .annot { position:absolute; z-index:5; cursor:move; }
   .mode-sign .annot, .mode-text .annot { cursor:default; }
+  #viewer.sigdrop { box-shadow: inset 0 0 0 2px var(--accent); }
   .annot.sel { outline:2px dashed var(--accent); }
   .annot .rz { position:absolute; right:-5px; bottom:-5px; width:11px; height:11px; background:var(--accent);
                border:1px solid #123; border-radius:2px; cursor:nwse-resize; display:none; }
@@ -309,7 +310,7 @@
     <p class="muted">
       <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
       <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
-      <b>Signatur:</b> oben wählen, aufs Papier klicken, danach greifen &amp; ziehen – Anker unten rechts verändert die Größe.<br>
+      <b>Signatur:</b> im Menü „Signatur…" auswählen oder direkt aus der Liste aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Signaturen mit Schloss fragen beim Platzieren nach dem Passwort.<br>
       <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
@@ -1194,24 +1195,66 @@ async function pageClick(ev, img, n) {
   const k = parseFloat(img.dataset.k);
   const x = ev.offsetX / k, y = ev.offsetY / k;
   if (mode === 'sign') {
-    const fd = new FormData();
-    fd.append('page', n); fd.append('x', x.toFixed(1)); fd.append('y', y.toFixed(1));
-    fd.append('width', 140); fd.append('fname', sigSelected);
-    const resp = await fetch('/api/stamp/' + cur.id, {method:'POST', body: fd});
-    if (resp.ok) {
-      setDirty(true);
-      const placed = await resp.json();
-      await reloadAnnots(n);
-      setMode('normal');   // direkt weiterarbeiten: greifen/ziehen ohne Moduswechsel
-      const nd = document.querySelector('#page' + n + ' .annot[data-xref="' + placed.xref + '"]');
-      if (nd) selectAnnot({div: nd});
-      stat('Signatur gesetzt – ziehen oder Werte oben ändern.', true);
-    }
-    else stat((await resp.json().catch(() => ({}))).detail || 'Signatur fehlgeschlagen');
+    await placeSignature(n, x, y);
   } else {
     startInlineEdit(n, x, y, null);
   }
 }
+
+/* Signatur setzen - gemeinsam fuer Klick im Signatur-Modus und Drag & Drop */
+async function placeSignature(n, x, y) {
+  const fd = new FormData();
+  fd.append('page', n); fd.append('x', x.toFixed(1)); fd.append('y', y.toFixed(1));
+  fd.append('width', 140); fd.append('fname', sigSelected);
+  const resp = await fetch('/api/stamp/' + cur.id, {method:'POST', body: fd});
+  if (resp.ok) {
+    setDirty(true);
+    const placed = await resp.json();
+    await reloadAnnots(n);
+    setMode('normal');   // direkt weiterarbeiten: greifen/ziehen ohne Moduswechsel
+    const nd = document.querySelector('#page' + n + ' .annot[data-xref="' + placed.xref + '"]');
+    if (nd) selectAnnot({div: nd});
+    stat('Signatur gesetzt – ziehen oder Werte oben ändern.', true);
+  }
+  else stat((await resp.json().catch(() => ({}))).detail || 'Signatur fehlgeschlagen');
+}
+
+/* ---------- Signatur aus dem Panel aufs Papier ziehen (Drag & Drop) ---------- */
+let sigDragDepth = 0;
+const sigDropViewer = document.getElementById('viewer');
+sigDropViewer.addEventListener('dragenter', (ev) => {
+  if (!cur || !ev.dataTransfer || !ev.dataTransfer.types.includes('text/plain')) return;
+  ev.preventDefault();
+  sigDragDepth++;
+  sigDropViewer.classList.add('sigdrop');
+});
+sigDropViewer.addEventListener('dragover', (ev) => {
+  if (!cur || !ev.dataTransfer || !ev.dataTransfer.types.includes('text/plain')) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'copy';
+});
+sigDropViewer.addEventListener('dragleave', () => {
+  sigDragDepth = Math.max(0, sigDragDepth - 1);
+  if (!sigDragDepth) sigDropViewer.classList.remove('sigdrop');
+});
+sigDropViewer.addEventListener('drop', async (ev) => {
+  sigDragDepth = 0;
+  sigDropViewer.classList.remove('sigdrop');
+  const file = ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '';
+  if (!file || !sigList.some(s => s.file === file)) return;
+  ev.preventDefault();
+  const el = document.elementFromPoint(ev.clientX, ev.clientY);
+  const wrap = el ? el.closest('.pagewrap') : null;
+  if (!wrap) { stat('Daneben abgelegt – die Signatur wurde nicht gesetzt.'); return; }
+  const img = wrap.querySelector('img');
+  const k = parseFloat(img.dataset.k);
+  if (!k || !isFinite(k)) { stat('Seite noch nicht bereit – bitte kurz warten und erneut ziehen.'); return; }
+  const wr = img.getBoundingClientRect();
+  sigSelected = file; updateSigButton();
+  document.getElementById('sigPanel').style.display = 'none';
+  await placeSignature(parseInt(wrap.dataset.page),
+                       (ev.clientX - wr.left) / k, (ev.clientY - wr.top) / k);
+});
 
 /* ---------- Formularfelder ---------- */
 let fieldCache = [];
@@ -1471,6 +1514,18 @@ function buildSigPanel() {
       img.src = '/api/signature/file/' + encodeURIComponent(s.file);
       item.appendChild(img);
     }
+    // Ziehbare Kachel: direkt aus der Liste aufs Papier ziehen
+    item.draggable = !gesperrt;
+    if (!gesperrt) {
+      item.addEventListener('dragstart', (ev) => {
+        sigSelected = s.file; updateSigButton();
+        ev.dataTransfer.setData('text/plain', s.file);
+        ev.dataTransfer.effectAllowed = 'copy';
+      });
+      item.title = 'Klicken: auswählen – oder direkt aufs Papier ziehen';
+    } else {
+      item.title = 'Passwortgeschützt: erst entsperren (Klick), dann auswählbar und ziehbar';
+    }
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = prettySig(s.file);
     const act = document.createElement('div'); act.className = 'act';
     const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = 'Umbenennen';
@@ -1502,8 +1557,13 @@ function buildSigPanel() {
   p.appendChild(add);
   const pwRow = document.createElement('div');
   pwRow.id = 'sigPwRow';
-  pwRow.innerHTML = '<input type="password" id="sigPw" placeholder="Passwort (optional) – verschlüsselt die Signatur">';
+  pwRow.innerHTML = '<input type="password" id="sigPw" placeholder="Passwort (optional) – verschlüsselt die als nächstes hochgeladene Signatur">';
   p.appendChild(pwRow);
+  const hint = document.createElement('div');
+  hint.className = 'muted';
+  hint.style.cssText = 'padding:2px 6px 4px; font-size:11px; line-height:1.4;';
+  hint.textContent = 'Signaturen mit Schloss verlangen beim Platzieren das Passwort – entsperren gilt bis Programmende.';
+  p.appendChild(hint);
 }
 
 /* Entsperr-Dialog für passwortgeschützte Signaturen */
