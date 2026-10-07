@@ -2,6 +2,19 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.4 — „Auswahl"-Knopf: Modus verlassen, gesetzten Text verschieben
+- Neuer Knopf **„Auswahl" (Mauszeiger-Symbol)** links neben „Signatur": Er kehrt
+  aus dem Text-/Löschen-/Signatur-Modus in den normalen Modus zurück (geht
+  weiterhin auch mit Esc). Das aktive Werkzeug ist in der Leiste hervorgehoben —
+  inklusive „Auswahl" als Startzustand.
+- **Nach dem Setzen eines Textes kehrt die App automatisch in den Auswahl-Modus
+  zurück** (wie bei Signaturen schon üblich). Der neue Text ist damit sofort
+  greifbar und verschiebbar — vorher blieb der Text-Modus aktiv und der
+  Verschiebe-Cursor log (Ziehen tat nichts). Wer mehrere Texte hintereinander
+  platziert, bleibt durch Klick aufs Papier im Text-Modus.
+- Der Vier-Pfeil-Cursor auf Signaturen/Texten erscheint nur noch, wenn sie auch
+  wirklich verschiebbar sind (im Text-/Signatur-Modus kein falscher Hinweis).
+
 ## v0.12.3 — Seitenvorschau: einklappen und Seite wählen
 - Die Seitenvorschau lässt sich jetzt wie die Lesezeichen-Leiste **am Rand ein-
   und ausklappen** (neuer Griff neben der Spalte; der „Seiten"-Knopf unten wirkt

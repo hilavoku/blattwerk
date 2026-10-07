@@ -125,6 +125,7 @@
   .hit { position:absolute; z-index:2; background:rgba(255,213,0,.35); outline:1px solid rgba(255,213,0,.8); border-radius:2px; pointer-events:none; }
   .hit.active { background:rgba(255,150,0,.5); outline:2px solid #ff9600; }
   .annot { position:absolute; z-index:5; cursor:move; }
+  .mode-sign .annot, .mode-text .annot { cursor:default; }
   .annot.sel { outline:2px dashed var(--accent); }
   .annot .rz { position:absolute; right:-5px; bottom:-5px; width:11px; height:11px; background:var(--accent);
                border:1px solid #123; border-radius:2px; cursor:nwse-resize; display:none; }
@@ -243,6 +244,7 @@
   </button>
   <div id="sigPanel"></div>
   <input type="file" id="sigFile" accept=".png,.jpg,.jpeg" style="display:none">
+  <button class="tbtn" id="btnNormal" onclick="setMode('normal')" title="Auswahl & Verschieben – beendet Text-/Löschen-Modus (Esc)"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M2.5 1 L2.5 14.4 L5.6 11.5 L7.5 15.7 L9.6 14.8 L7.7 10.7 L11.7 10.7 Z" fill="currentColor"/></svg><span class="lbl">Auswahl</span></button>
   <button class="tbtn" id="btnSign" onclick="setMode('sign')" title="Signatur wählen, dann aufs Papier klicken"><svg width="17" height="15" viewBox="0 0 20 16" style="flex:none"><path d="M2 9.5c2.6 0 3.4-6.5 5.6-6.5 2.1 0 1.8 6.5 3.9 6.5 1.9 0 2.6-5 4.3-5 1.3 0 1.7 2.5 2.2 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 13.5h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lbl">Signatur</span></button>
   <button class="tbtn" id="btnText" onclick="setMode('text')" title="Aufs Papier klicken und direkt tippen"><span style="font-weight:600">T</span><span class="lbl">Text</span></button>
   <button class="tbtn" id="btnDel" onclick="setMode('delete')" title="Original-Text entfernen"><span class="i">&#xE74D;</span><span class="lbl">Löschen</span></button>
@@ -312,7 +314,7 @@
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
       <b>Geschützte Signatur:</b> im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.<br>
-      <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe).<br>
+      <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe). Enter beendet – zurück zu <b>Auswahl</b> (Pfeil oben).<br>
       <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen, Enter.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
@@ -413,10 +415,10 @@ function setPref(key, value) {
 function setMode(m) {
   if (m === 'sign' && !sigSelected) { stat('Bitte zuerst eine Signatur auswählen (Knopf oben).'); return; }
   mode = (mode === m) ? 'normal' : m;
-  ['btnSign','btnText','btnDel'].forEach(id => document.getElementById(id).classList.remove('active'));
+  ['btnNormal','btnSign','btnText','btnDel'].forEach(id => document.getElementById(id).classList.remove('active'));
   document.getElementById('btnDelGo')?.remove();
-  if (mode !== 'normal') document.getElementById('btn' + {sign:'Sign',text:'Text',delete:'Del'}[mode]).classList.add('active');
-  marked = []; commitInline(); selectAnnot(null); clearFreeSel(); updateMarked();
+  document.getElementById('btn' + (mode === 'normal' ? 'Normal' : {sign:'Sign',text:'Text',delete:'Del'}[mode])).classList.add('active');
+  marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
   document.querySelectorAll('.pagewrap').forEach(w => {
     w.classList.remove('mode-sign','mode-text','mode-delete');
     if (mode !== 'normal') w.classList.add('mode-' + mode);
@@ -995,7 +997,7 @@ function applyFormatTo(ta, sizePt) {
 }
 
 function startInlineEdit(pageN, pdfX, pdfY, existing) {
-  commitInline();
+  commitInline(true);
   const img = document.querySelector('#page' + pageN + ' img');
   if (!img || !img.dataset.k) return;
   const k = parseFloat(img.dataset.k);
@@ -1065,7 +1067,7 @@ function teardownInline() {
   inline = null;
 }
 function cancelInline() { teardownInline(); }
-async function commitInline() {
+async function commitInline(keepMode) {
   if (!inline) return;
   const st = inline;
   const text = st.ta.value;
@@ -1088,7 +1090,12 @@ async function commitInline() {
   fd.append('text', text); fd.append('size', size); fd.append('font', font); fd.append('color', color);
   fd.append('xref', st.xref);
   const r = await fetch('/api/annot/text/' + cur.id, {method: 'POST', body: fd});
-  if (r.ok) { setDirty(true); stat('Text gesetzt – Speichern macht ihn dauerhaft.', true); await reloadAnnots(st.page); }
+  if (r.ok) {
+    setDirty(true); stat('Text gesetzt – Speichern macht ihn dauerhaft.', true); await reloadAnnots(st.page);
+    // Nach dem Tippen zurueck zum Verschieben (wie bei Signaturen); nur wenn
+    // gerade der naechste Text platziert wird, bleibt der Text-Modus erhalten.
+    if (!keepMode && mode === 'text') setMode('normal');
+  }
   else stat('Text fehlgeschlagen');
 }
 async function reloadAnnots(n) {
@@ -1104,7 +1111,7 @@ async function reloadAnnots(n) {
 let origEdit = null;   // {page, rect, textAlt, ta, delBtn}
 
 async function startOriginalEdit(pageN, lineDiv) {
-  commitInline();
+  commitInline(true);
   cancelOriginalEdit();
   const rect = lineDiv._pdfRect.slice();
   const img = document.querySelector('#page' + pageN + ' img');
@@ -1875,6 +1882,7 @@ loadSignatures();
   if (prefs.sb === '0') setSbVisible(false);
   if (prefs.thumbs === '0') setThumbsVisible(false);
   updatePanelIcons();
+  document.getElementById('btnNormal').classList.add('active');   // Startwerkzeug
   try { const r = await fetch('/api/current'); const d = await r.json(); if (d && d.id) openDoc(d); } catch (e) {}
   updatePageIndicator();
 })();
