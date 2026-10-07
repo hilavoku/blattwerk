@@ -4,6 +4,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-08.
 
+## v0.14.6 — Editier-Feld transparent: Hintergrund beim Tippen sehen
+- Das Eingabefeld (neuer Text wie Originaltext-Editor) ist jetzt **transparent** —
+  beim Tippen sieht man das Papier bzw. das Formular darunter und kann Text,
+  Position und Zeichenabstand direkt daran ausrichten. Der gestrichelte Rahmen
+  markiert weiter den Bearbeitungsbereich.
+
 ## v0.14.5 — Fix: Schriftänderung wirkt jetzt auf angeklickte Texte (und Fett/Kursiv überall)
 - **Die Werkzeugleiste wirkt live auf angeklickte Text-Annotationen:** Text
   anklicken, Schrift/Familie/Stil/Größe/Farbe/Abstand oben ändern — sofort
