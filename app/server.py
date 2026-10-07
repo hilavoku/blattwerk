@@ -1,4 +1,4 @@
-# PDF-Werkstatt - lokaler PDF-Server
+# Blattwerk (Projekt: PDF-Werkstatt) - lokaler PDF-Server
 # Läuft auf 127.0.0.1, wird vom WebView2-Wrapper (PdfWerkstatt.exe) gestartet.
 import os
 import sys
@@ -29,7 +29,7 @@ PREFS_FILE = os.path.join(os.path.dirname(BASE) if getattr(sys, "frozen", False)
 os.makedirs(UPLOADS, exist_ok=True)
 os.makedirs(SIGN_DIR, exist_ok=True)
 
-app = FastAPI(title="PDF-Werkstatt")
+app = FastAPI(title="Blattwerk")
 
 
 @app.middleware("http")
@@ -147,7 +147,7 @@ def _ensure_demo():
     doc = pymupdf.open()
     toc = []
     p = doc.new_page()
-    p.insert_text((72, 90), "PDF-Werkstatt Demo-Dokument", fontsize=18)
+    p.insert_text((72, 90), "Blattwerk Demo-Dokument", fontsize=18)
     p.insert_text((72, 120), "Seite 1: Markiere mich - diese Zeile ist zum Kopieren da.", fontsize=11)
     p.insert_text((72, 140), "Klicke auf eine Zeile, um sie in die Zwischenablage zu legen.", fontsize=11)
     toc.append([1, "Einleitung", 1])

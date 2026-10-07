@@ -2,6 +2,19 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.14.0 — Die App heißt jetzt **Blattwerk**
+- Umbenennung an allen sichtbaren Stellen: Fenstertitel und Taskbar („Blattwerk –
+  Datei.pdf"), Splash-Screen, Kopfzeile, HTML-Titel, Demodokument
+  („Blattwerk Demo-Dokument"), Fehler- und Hinweisdialoge, FastAPI-Titel.
+- Technische Namen bleiben unverändert (Exe PdfWerkstatt.exe /
+  PdfWerkstattServer.exe, Projektordner pdf-werkstatt, Dateizuordnung und
+  Deploy-Pfade funktionieren weiter wie gehabt).
+- Vollswap-Deployment nötig, da der Wrapper (Fenstertitel) geändert wurde;
+  Einstellungen, Fensterlage und Signatur-Ordner wurden gesichert und
+  zurückgespielt. Demodokument wird beim nächsten Start mit neuem Titel erzeugt.
+- Namensfindung: „Blattwerk" = Blatt (PDF-Seite) + Werk; im PDF-Markt
+  kollisionsfrei (Nutzerentscheidung aus 3 Kandidaten).
+
 ## v0.13.4 — Dark Theme: dunkles Grau + weiche Flaggen-Verlaufskante
 - Rückmeldung umgesetzt: Der Dark-Theme-Grundton ist wieder **dunkles Grau**
   (statt fast Schwarz) — damit heben sich schwarze Elemente sichtbar ab.

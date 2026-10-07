@@ -12,7 +12,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>false</PublishSingleFile>
     <Version>0.5.2</Version>
-    <Product>PDF-Werkstatt</Product>
+    <Product>Blattwerk</Product>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,4 +1,4 @@
-# Baut den PDF-Werkstatt-Server (PyInstaller).
+# Baut den Blattwerk-Server (PyInstaller).
 # Ortunabhängig: liegt im Projektordner, nutzt $PSScriptRoot.
 $ErrorActionPreference = "Continue"
 $ProgressPreference = "SilentlyContinue"
