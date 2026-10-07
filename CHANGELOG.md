@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.2 — Ziehen verschiebt die Seite, Kopieren per Alt+Ziehen
+- **Ziehen mit der Maustaste auf dem Papier schiebt jetzt die Ansicht** (Pan,
+  Hand-Cursor beim Ziehen) — vorher wurde dabei die Kopier-Auswahl aufgezogen.
+- Die Freihand-Textauswahl gibt es weiterhin, per **Alt+Ziehen**. Unverändert:
+  einzelne Zeile anklicken kopiert, Strg+Klick hängt an, Doppelklick editiert
+  den Originaltext.
+- Nur im normalen Modus (Signatur-/Text-/Löschen-Modus arbeiten wie bisher).
+  Kurzhilfe aktualisiert.
+
 ## v0.12.1 — Zoom hält den Mauspunkt fest
 - **Strg+Mausrad zoomt auf den Punkt unterm Cursor** (vorher lief das Bild immer
   zur oberen linken Ecke der Seite). Nach dem Zoom bleibt derselbe Dokumentpunkt

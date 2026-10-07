@@ -114,7 +114,7 @@
         font-size:22px; color:var(--accent); pointer-events:none; }
   .pagewrap { margin:0 auto 22px; position:relative; background:white; box-shadow:0 1px 4px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
               width:fit-content; }
-  .pagewrap img { display:block; }
+  .pagewrap img { display:block; cursor:grab; }
   .pagewrap.mode-sign img, .pagewrap.mode-text img { cursor:crosshair; }
   .pagewrap .lbl { position:absolute; top:-18px; left:0; font-size:11px; color:var(--muted); }
   .line { position:absolute; cursor:text; border-radius:2px; z-index:2; }
@@ -195,6 +195,7 @@
   .propsbar .lbl { color:var(--muted); font-size:11px; }
   .propsbar .typ { color:var(--accent); font-size:11.5px; font-weight:600; margin-right:2px; }
   .seldrag { position:absolute; background:rgba(76,194,255,.16); border:1px solid rgba(76,194,255,.55); z-index:4; pointer-events:none; }
+  body.panning, body.panning * { cursor:grabbing !important; }
   .line.linesel { background:rgba(76,140,255,.32) !important; outline:1px solid rgba(76,140,255,.7); }
   .copyChip { position:fixed; z-index:210; background:var(--accent); color:#0b1620; border:none; border-radius:6px;
               padding:6px 12px; cursor:pointer; font-size:12.5px; font-weight:600; box-shadow:0 4px 16px rgba(0,0,0,.4); }
@@ -292,7 +293,8 @@
     <div id="fields" class="muted">&ndash;</div>
     <h3>Kurzhilfe</h3>
     <p class="muted">
-      <b>Kopieren:</b> mit gedrückter Maustaste über den Text ziehen – oder einzelne Zeile anklicken (Strg+Klick hängt an).<br>
+      <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
+      <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
       <b>Signatur:</b> oben wählen, aufs Papier klicken, danach greifen &amp; ziehen – Anker unten rechts verändert die Größe.<br>
       <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
@@ -461,7 +463,7 @@ function makePageEl(n) {
   img.src = pageUrl(n);
   img.onload = () => buildPage(img);
   img.onclick = (ev) => pageClick(ev, img, n);
-  img.addEventListener('mousedown', (ev) => freeSelStart(ev, img));
+  img.addEventListener('mousedown', (ev) => paperDragStart(ev, img));
   wrap.appendChild(lbl); wrap.appendChild(img);
   return wrap;
 }
@@ -646,7 +648,7 @@ async function addLines(img) {
     d.dataset.rect = [ln.x0, ln.y0, ln.x1, ln.y1].join(',');
     positionRect(d, [ln.x0, ln.y0, ln.x1, ln.y1], k);
     d.title = ln.t;
-    d.addEventListener('mousedown', (ev) => freeSelStart(ev, img));
+    d.addEventListener('mousedown', (ev) => paperDragStart(ev, img));
     d.addEventListener('dblclick', (ev) => { ev.stopPropagation(); if (mode === 'normal') startOriginalEdit(n, d); });
     d.onclick = async (ev) => {
       ev.stopPropagation();
@@ -1661,17 +1663,23 @@ function toggleSb() {
   setSbVisible(document.querySelector('main').classList.contains('sb-collapsed'));
 }
 
-/* ---------- Freihand-Textauswahl (aufziehen & kopieren) ---------- */
-let freeSel = [], selDrag = null, lastWasDrag = false;
+/* ---------- Papier-Drag: ziehen verschiebt die Seite, Alt+Ziehen wählt Text ---------- */
+let freeSel = [], selDrag = null, panDrag = null, lastWasDrag = false;
 
-/* Auswahl-Start: auf dem Papier UND direkt auf Textzeilen (bei OCR-Seiten liegt
-   fast ueberall ein Textblock-Overlay - dort musste die Auswahl vorher scheitern,
-   uebrig blieb nur der Einzelklick pro Block). */
-function freeSelStart(ev, img) {
+/* Normaler Modus: Maustaste ziehen schiebt die Ansicht (Pan); mit Alt wird
+   stattdessen die Freihand-Textauswahl aufgezogen. Ein stiller Klick bleibt
+   Kopieren (Zeile anklicken) bzw. Doppelklick Editieren. */
+function paperDragStart(ev, img) {
   if (mode !== 'normal' || ev.button !== 0) return;
   clearFreeSel();
-  selDrag = {n: parseInt(img.dataset.page), img, startX: ev.clientX, startY: ev.clientY,
-             active: false, div: null};
+  if (ev.altKey) {
+    selDrag = {n: parseInt(img.dataset.page), img, startX: ev.clientX, startY: ev.clientY,
+               active: false, div: null};
+  } else {
+    panDrag = {startX: ev.clientX, startY: ev.clientY, lastX: ev.clientX, lastY: ev.clientY,
+               active: false};
+    ev.preventDefault();   // kein nativer Bild-Drag beim Ziehen
+  }
 }
 
 function clearFreeSel() {
@@ -1687,6 +1695,17 @@ function copyFreeSel() {
   clearFreeSel();
 }
 document.addEventListener('mousemove', (ev) => {
+  if (panDrag) {
+    const dx = ev.clientX - panDrag.startX, dy = ev.clientY - panDrag.startY;
+    if (!panDrag.active && Math.abs(dx) + Math.abs(dy) < 5) return;
+    panDrag.active = true;
+    const viewer = document.getElementById('viewer');
+    viewer.scrollLeft -= ev.clientX - panDrag.lastX;
+    viewer.scrollTop  -= ev.clientY - panDrag.lastY;
+    panDrag.lastX = ev.clientX; panDrag.lastY = ev.clientY;
+    document.body.classList.add('panning');
+    return;
+  }
   if (!selDrag) return;
   const dx = ev.clientX - selDrag.startX, dy = ev.clientY - selDrag.startY;
   if (!selDrag.active && Math.abs(dx) + Math.abs(dy) < 5) return;
@@ -1713,6 +1732,16 @@ document.addEventListener('mousemove', (ev) => {
   freeSel.sort((a, b) => (a._pdfRect[1] - b._pdfRect[1]) || (a._pdfRect[0] - b._pdfRect[0]));
 });
 document.addEventListener('mouseup', (ev) => {
+  if (panDrag) {
+    const wasActive = panDrag.active;
+    panDrag = null;
+    document.body.classList.remove('panning');
+    if (wasActive) {          // gezogen: nachfolgenden Klick (Zeilen-Kopieren) unterdruecken
+      lastWasDrag = true;
+      setTimeout(() => { lastWasDrag = false; }, 60);
+    }
+    return;
+  }
   if (!selDrag) return;
   const sd = selDrag;
   const wasActive = sd.active;
