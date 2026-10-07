@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.14.2 — Text-Modus: Bereich aufziehen statt nur Punkt klicken
+- **Mit gedrückter Maustaste den Textbereich aufziehen:** Im Text-Modus zeichnet
+  man jetzt den Kasten für den neuen Text direkt auf (Rahmen wie bei der
+  Freihand-Auswahl); der Editor öffnet sich exakt in diesem Bereich, und die
+  Annotation übernimmt die aufgezogene Größe (WYSIWYG — bei längerem Text wächst
+  der Kasten noch mit). Der Editor schrumpft beim Tippen nicht mehr auf eine
+  Zeile zusammen.
+- Ein stiller Klick behält das bisherige Verhalten (Standard-Kasten an der
+  Klickstelle, Breite passt sich dem Text an).
+
 ## v0.14.1 — Originaltext-Editor: Schrift erreichbar, Text verschiebbar
 - **Fix:** Ein Klick in die Schrift-Werkzeuge hat den Editor sofort committet und
   geschlossen (Blur-Committ ohne Ausnahme für die Werkzeugleiste) — deshalb wirkte
