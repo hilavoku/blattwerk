@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.14.1 — Originaltext-Editor: Schrift erreichbar, Text verschiebbar
+- **Fix:** Ein Klick in die Schrift-Werkzeuge hat den Editor sofort committet und
+  geschlossen (Blur-Committ ohne Ausnahme für die Werkzeugleiste) — deshalb wirkte
+  Schriftänderung „unmöglich". Jetzt bleibt der Editor offen, solange in der
+  Leiste gearbeitet wird (wie beim Freitext-Editor).
+- **Der geänderte Text wird jetzt zum verschiebbaren Objekt:** Nach dem Übernehmen
+  wird die Originalzeile wegredigiert und der neue Text als Freitext-Annotation
+  an derselben Stelle angelegt — greifen & ziehen, Schrift/Größe/Farbe später per
+  Doppelklick änderbar, Einbrennen beim Speichern wie bei jeder Annotation.
+  Strg+Z nimmt die Änderung mehrschrittig zurück (Objekt weg, Originalzeile zurück).
+- Reines Entfernen (Löschen im Editor) bleibt echte Redaction ohne Objekt.
+
 ## v0.14.0 — Die App heißt jetzt **Blattwerk**
 - Umbenennung an allen sichtbaren Stellen: Fenstertitel und Taskbar („Blattwerk –
   Datei.pdf"), Splash-Screen, Kopfzeile, HTML-Titel, Demodokument

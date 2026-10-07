@@ -382,7 +382,7 @@
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
       <b>Geschützte Signatur:</b> im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.<br>
       <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe). Enter beendet – zurück zu <b>Auswahl</b> (Pfeil oben).<br>
-      <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt.<br>
+      <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt. Danach ist der Text ein verschiebbares Objekt.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
@@ -1274,7 +1274,11 @@ async function startOriginalEdit(pageN, lineDiv) {
   const hoehe0 = (rect[3] - rect[1]) * k;
   const autoGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(hoehe0, ta.scrollHeight) + 'px'; };
   ta.addEventListener('input', autoGrow);
-  ta.addEventListener('blur', () => commitOriginalEdit());
+  ta.addEventListener('blur', (ev) => {
+    const to = ev.relatedTarget;
+    if (to && ['teFam', 'teStil', 'teSize', 'teColor'].includes(to.id)) return;   // Klick in die Werkzeugleiste: Editor bleibt offen
+    commitOriginalEdit();
+  });
   ta.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') { ev.stopPropagation(); cancelOriginalEdit(); }
     else if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); commitOriginalEdit(); }
@@ -1343,14 +1347,34 @@ async function commitOriginalEdit() {
                                .join('\n').replace(/\n{3,}/g, '\n\n').trim();
   const text = normalisiere(st.ta.value);   // Zeilenumbrueche bleiben erhalten
   const unveraendert = text === normalisiere(st.textAlt || '');
-  const fd = originalEditForm(st.page, st.rect, text);
+  const rect = st.rect.slice();
+  const pageN = st.page;
   teardownOriginalEdit();
   if (unveraendert) return;
-  const r = await fetch(`/api/text/replace/${cur.id}`, {method:'POST', body: fd});
-  if (r.ok) {
-    setDirty(true); refreshPage(st.page);
-    stat('Originaltext geändert – Speichern macht es dauerhaft, Strg+Z setzt zurück.', true);
-  } else stat('Textänderung fehlgeschlagen');
+  // 1) Originaltext wegredigieren ...
+  const r = await fetch(`/api/text/replace/${cur.id}`, {method:'POST', body: originalEditForm(pageN, rect, '')});
+  if (!r.ok) { stat('Textänderung fehlgeschlagen'); return; }
+  // 2) ... und den neuen Text als verschiebbares Objekt (Freitext-Annotation)
+  //    an derselben Stelle anlegen - Schrift aus der Werkzeugleiste.
+  if (text) {
+    const zeilen = text.split('\n').length;
+    const size = parseFloat(document.getElementById('teSize').value) || 11;
+    const font = document.getElementById('teFam').value + (document.getElementById('teStil').value || '');
+    const hx = document.getElementById('teColor').value;
+    const color = [1, 3, 5].map(i => (parseInt(hx.substr(i, 2), 16) / 255).toFixed(4)).join(',');
+    const hoehe = Math.max(rect[3] - rect[1], zeilen * size * 1.35);
+    const fd2 = new FormData();
+    fd2.append('page', pageN);
+    fd2.append('rect', JSON.stringify([rect[0], rect[1], rect[2], rect[1] + hoehe].map(v => Math.round(v * 10) / 10)));
+    fd2.append('text', text);
+    fd2.append('size', String(size));
+    fd2.append('font', font);
+    fd2.append('color', color);
+    const r2 = await fetch(`/api/annot/text/${cur.id}`, {method:'POST', body: fd2});
+    if (!r2.ok) { stat('Text gesetzt, aber das Objekt konnte nicht angelegt werden'); setDirty(true); refreshPage(pageN); return; }
+  }
+  setDirty(true); refreshPage(pageN);
+  stat('Text übernommen – jetzt verschiebbar: greifen & ziehen.', true);
 }
 
 /* ---------- Klick aufs Papier ---------- */
