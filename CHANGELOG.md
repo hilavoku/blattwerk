@@ -4,6 +4,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-08.
 
+## v0.14.7 — Bedienung: Mausrad für Größe/Abstand, bequeme Exits im Text-Modus
+- **Mausrad über den Feldern „Schriftgröße" und „Zeichenabstand"** ändert die
+  Werte (± 1 bzw. ± 0,25) — ohne das Feld anzuklicken; wirkt live auf Editor
+  und ausgewählte Texte.
+- **Text-Modus beenden:** Rechtsklick auf die Seite, Esc (schließt den Editor
+  mit) oder Klick neben ein offenes Textfeld — zusätzlich zu T/Auswahl.
+  Esc im Originaltext-Editor verwirft weiterhin die Änderung und beendet.
+- Der Freitext-Editor selbst erlaubt weiter Mehrzeilentippen über Enter
+  (Commit nur über Strg+Enter oder Klick neben dem Feld).
+
 ## v0.14.6 — Editier-Feld transparent: Hintergrund beim Tippen sehen
 - Das Eingabefeld (neuer Text wie Originaltext-Editor) ist jetzt **transparent** —
   beim Tippen sieht man das Papier bzw. das Formular darunter und kann Text,
