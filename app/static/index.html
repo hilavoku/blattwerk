@@ -95,6 +95,60 @@
   #sigUpBox { width:330px; }
   .checkerbg { background-image: conic-gradient(#c9ced6 25%, #ffffff 0 50%, #c9ced6 0 75%, #ffffff 0); background-size: 16px 16px; }
   #sigUpThr { width:100%; margin-top:4px; accent-color:var(--accent); }
+
+  /* ---------- Motion-Tokens (Konzept: MOTION-KONZEPT.md) ---------- */
+  :root {
+    --d1: 120ms; --d2: 180ms; --d3: 260ms; --d4: 380ms;
+    --e-standard: cubic-bezier(.2, 0, 0, 1);
+    --e-in: cubic-bezier(.3, 0, 1, 1);
+    --e-out: cubic-bezier(0, 0, 0, 1);
+    --e-pop: cubic-bezier(.34, 1.56, .64, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  }
+  @keyframes boxIn { from { opacity: 0; transform: scale(.94) translateY(6px); } }
+  @keyframes popIn { from { opacity: 0; transform: scale(.85); } }
+  @keyframes fadeOut { to { opacity: 0; transform: scale(.92); } }
+  @keyframes tileIn { from { opacity: 0; transform: translateY(-6px); } }
+  @keyframes statIn { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  @keyframes hitPulse { 0% { outline-offset: 4px; opacity: .35; } 100% { outline-offset: 0; opacity: 1; } }
+  @keyframes markIn { from { opacity: 0; transform: translateX(-8px); } }
+  @keyframes undoSpin { from { transform: rotate(-90deg); } }
+  @keyframes stempelIn { 0% { transform: scale(1.8); opacity: 0; } 55% { transform: scale(.95); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+  .tbtn, .sbtn, .nav { transition: background var(--d1) var(--e-standard), color var(--d1) var(--e-standard),
+                          border-color var(--d1) var(--e-standard), transform var(--d1) var(--e-standard),
+                          opacity var(--d1) var(--e-standard); }
+  .tbtn:active, .sbtn:active, .nav:active { transform: scale(.96); }
+  .miniBox, #renameBox, #saveBox { animation: boxIn var(--d2) var(--e-out); transform-origin: top left; }
+  #sigPanel { animation: boxIn var(--d2) var(--e-out); transform-origin: top left; }
+  .sigitem { animation: tileIn var(--d2) var(--e-out) both; animation-delay: calc(var(--i, 0) * 20ms);
+             transition: transform var(--d1) var(--e-standard), box-shadow var(--d1) var(--e-standard); }
+  .sigitem:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+  .sigitem.dragging { transform: scale(1.04) rotate(2deg); box-shadow: 0 8px 20px rgba(0,0,0,.45); }
+  .copyChip { animation: popIn var(--d2) var(--e-pop); }
+  #dirtyDot { animation: dotPulse 1.6s var(--e-standard) infinite; }
+  #statusMain.anim, #hitInfo.anim, .slide-in { animation: statIn var(--d2) var(--e-out); }
+  .okcheck { color: var(--ok); font-weight: 700; display: inline-block;
+             animation: popIn var(--d2) var(--e-pop); margin-right: 4px; }
+  .hit.active { animation: hitPulse .6s var(--e-out); }
+  .pagewrap img { transition: opacity 150ms var(--e-standard); }
+  .line.marked { animation: markIn var(--d2) var(--e-out); }
+  .thumb { transition: transform var(--d1) var(--e-standard), box-shadow var(--d1) var(--e-standard); }
+  .thumb:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,.4); }
+  .thumb.stagger { animation: tileIn var(--d3) var(--e-out) both; animation-delay: calc(var(--i, 0) * 30ms); }
+  .winput input { transition: border-color var(--d1) var(--e-standard); }
+  .undoSpin { animation: undoSpin var(--d2) var(--e-out); }
+  .stempel { position:fixed; z-index:500; width:36px; height:36px; border-radius:50%; background:var(--ok);
+             color:#08131c; font-size:20px; display:flex; align-items:center; justify-content:center;
+             box-shadow:0 6px 18px rgba(0,0,0,.4); animation: stempelIn .6s var(--e-pop) forwards; pointer-events:none; }
+  #modePill { position:absolute; top:0; left:0; background:var(--accent-dim); border-radius:8px; z-index:0; opacity:0;
+              transition: transform var(--d3) var(--e-standard), width var(--d3) var(--e-standard), opacity var(--d2); pointer-events:none; }
+  header { position: relative; }
+  header .tbtn { position: relative; z-index: 1; }
+  header .tbtn.active { background: transparent; }   /* die gleitende Pill liefert die Fläche */
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
   .siglock { width:72px; height:36px; flex:none; border-radius:5px; background:var(--chrome2); display:flex;
              align-items:center; justify-content:center; color:var(--muted); font-family:var(--icon); font-size:16px; }
   .searchwrap { display:flex; align-items:center; background:var(--chrome2); border:1px solid var(--border);
@@ -233,6 +287,7 @@
 </head>
 <body>
 <header id="topbar">
+  <div id="modePill"></div>
   <div class="brand"><div class="logo"><img src="/favicon.ico" alt=""></div><b>PDF-Werkstatt</b></div>
   <input type="file" id="file" accept=".pdf" style="display:none">
   <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
@@ -415,7 +470,39 @@ const FAM_PREFIX = {helv:['Helvetica,Arial,sans-serif','normal','normal'], hebo:
                     cour:['Courier,monospace','normal','normal'], cobo:['Courier,monospace','bold','normal'],
                     coit:['Courier,monospace','normal','italic'], cobi:['Courier,monospace','bold','italic']};
 
-function stat(msg, ok) { const s = document.getElementById('statusMain'); s.textContent = msg; s.className = ok ? 'ok' : ''; }
+function stat(msg, ok) {
+  const s = document.getElementById('statusMain');
+  s.textContent = '';
+  if (ok) { const chk = document.createElement('span'); chk.className = 'okcheck'; chk.textContent = '✔'; s.appendChild(chk); }
+  s.appendChild(document.createTextNode(msg));
+  s.className = ok ? 'ok' : '';
+  s.classList.remove('anim'); void s.offsetWidth; s.classList.add('anim');
+}
+function animEl(el) { if (!el) return; el.classList.remove('anim'); void el.offsetWidth; el.classList.add('anim'); }
+function stempel(btnId) {
+  const b = document.getElementById(btnId);
+  if (!b) return;
+  const r = b.getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'stempel'; d.textContent = '✔';
+  d.style.left = (r.left + r.width / 2 - 18) + 'px';
+  d.style.top = (r.top + r.height / 2 - 18) + 'px';
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 800);
+}
+function movePill() {
+  const pill = document.getElementById('modePill');
+  const aktiv = document.querySelector('header .tbtn.active');
+  if (!pill) return;
+  if (!aktiv) { pill.style.opacity = 0; return; }
+  const hr = pill.parentElement.getBoundingClientRect();
+  const r = aktiv.getBoundingClientRect();
+  pill.style.opacity = 1;
+  pill.style.width = r.width + 'px';
+  pill.style.height = r.height + 'px';
+  pill.style.transform = 'translateX(' + (r.left - hr.left) + 'px)';
+}
+window.addEventListener('resize', movePill);
 function setDirty(v) {
   document.getElementById('saveBtn').classList.toggle('dirty', v);
   document.getElementById('dirtyDot').style.display = v ? 'inline-block' : 'none';
@@ -441,6 +528,7 @@ function setMode(m) {
   document.getElementById('btnDelGo')?.remove();
   const aktiv = document.getElementById('btn' + (mode === 'normal' ? 'Normal' : {text:'Text',delete:'Del'}[mode] || ''));
   if (aktiv) aktiv.classList.add('active');
+  movePill();
   marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
   document.querySelectorAll('.pagewrap').forEach(w => {
     w.classList.remove('mode-sign','mode-text','mode-delete');
@@ -453,7 +541,7 @@ function setMode(m) {
   document.getElementById('delGoWrap')?.remove();
   if (mode === 'delete') {
     const b = document.createElement('button');
-    b.className = 'sbtn'; b.id = 'delGoWrap'; b.style.color = 'var(--danger)';
+    b.className = 'sbtn'; b.id = 'delGoWrap'; b.style.color = 'var(--danger)'; b.classList.add('slide-in');
     b.innerHTML = '<span class="i">&#xE74D;</span> Löschen ausführen (<span id="markCount">0</span>)';
     b.onclick = deleteMarked;
     document.querySelector('footer').insertBefore(b, document.getElementById('statusMain'));
@@ -529,7 +617,10 @@ function topVisiblePage() {
   });
   return best;
 }
-function jumpTo(n) { const el = document.getElementById('page' + n); if (el) el.scrollIntoView({behavior:'auto', block:'start'}); }
+function jumpTo(n) {
+  const el = document.getElementById('page' + n);
+  if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+}
 function updatePageIndicator() {
   currentPage = topVisiblePage();
   document.getElementById('pgInput').value = currentPage + 1;
@@ -656,7 +747,12 @@ function loadFresh(n, img, dpi) {
   // onload loeschen: der src-Wechsel darf buildPage nicht erneut feuern, sonst
   // verdoppeln sich die Overlays (Signatur-"Kopien" beim Zoomen). Die Overlays
   // stehen in PDF-Koordinaten und sind schon richtig positioniert.
-  pre.onload = () => { img.onload = null; img.src = src; img.dataset.renderedDpi = dpi; };
+  pre.onload = () => {
+    img.style.opacity = .45;                     // weiches Scharfstellen statt hartem Tausch
+    img.onload = () => { img.style.opacity = ''; };
+    img.src = src;
+    img.dataset.renderedDpi = dpi;
+  };
   pre.src = src;
 }
 
@@ -878,7 +974,9 @@ async function deleteAnnot(div) {
   const r = await fetch('/api/annot/delete/' + cur.id, {method:'POST', body: fd});
   if (r.ok) {
     const isSign = div._annot.type === 'sign';
-    selectAnnot(null); setDirty(true); reloadAnnots(pageN);
+    selectAnnot(null); setDirty(true);
+    div.classList.add('fade-out');               // erst ausblenden ...
+    setTimeout(async () => { await reloadAnnots(pageN); }, 170);   // ... dann Overlays neu bauen
     stat((isSign ? 'Signatur' : 'Text') + ' gelöscht – Strg+Z holt es zurück.', true);
   } else stat('Löschen fehlgeschlagen');
 }
@@ -1258,7 +1356,7 @@ async function placeSignature(n, x, y) {
     await reloadAnnots(n);
     setMode('normal');   // direkt weiterarbeiten: greifen/ziehen ohne Moduswechsel
     const nd = document.querySelector('#page' + n + ' .annot[data-xref="' + placed.xref + '"]');
-    if (nd) selectAnnot({div: nd});
+    if (nd) { nd.classList.add('pop-in'); selectAnnot({div: nd}); }
     stat('Signatur gesetzt – ziehen oder Werte oben ändern.', true);
   }
   else stat((await resp.json().catch(() => ({}))).detail || 'Signatur fehlgeschlagen');
@@ -1362,6 +1460,7 @@ async function runSearch(q) {
   const data = await r.json();
   hits = data.hits;
   document.getElementById('hitInfo').textContent = hits.length ? '0/' + hits.length : '0';
+  animEl(document.getElementById('hitInfo'));
   const byPage = {};
   for (const h of hits) (byPage[h.page] = byPage[h.page] || []).push(h.rect);
   for (const [pg, rects] of Object.entries(byPage)) {
@@ -1386,6 +1485,7 @@ function hitNav(d) {
   hitIdx = (hitIdx + d + hits.length) % hits.length;
   const h = hits[hitIdx];
   document.getElementById('hitInfo').textContent = (hitIdx+1) + '/' + hits.length;
+  animEl(document.getElementById('hitInfo'));
   const sel = document.querySelector(`#page${h.page} .hit[data-rect="${h.rect.join(',')}"]`);
   if (sel) { sel.classList.add('active'); sel.scrollIntoView({behavior:'smooth', block:'center'}); }
 }
@@ -1438,6 +1538,7 @@ async function saveDoc(flatten) {
   if (r.ok) {
     setDirty(false);
     const j = await r.json();
+    stempel('saveBtn');
     stat(j.flattened ? 'Gespeichert (eingebrannt): ' + j.path
                     : 'Gespeichert (beweglich): ' + j.path + ' – Signaturen/Texte bleiben änderbar', true);
     if (j.flattened) await reloadAllAnnotOverlays();   // Overlays sind jetzt Seiteninhalt
@@ -1483,6 +1584,7 @@ window.pwSaveasDone = function (ok, path) {
     setDirty(false);                       // gilt als gespeichert: neue Datei ist das Arbeitsdokument
     if (cur) cur.name = path.split(/[\\/]/).pop();
     stat('Gespeichert unter: ' + path + (saveasFlatten ? ' (eingebrannt)' : '') + ' – weiter gearbeitet wird in dieser Datei.', true);
+    stempel('saveAsBtn');
     if (saveasFlatten) reloadAllAnnotOverlays();
     saveasFlatten = 0;
   } else stat('Speichern unter fehlgeschlagen');
@@ -1543,9 +1645,11 @@ function buildSigPanel() {
     e.textContent = 'Noch keine Signaturen vorhanden.';
     p.appendChild(e);
   }
+  let kachelIdx = 0;
   for (const s of sigList) {
     const item = document.createElement('div');
     item.className = 'sigitem' + (s.file === sigSelected ? ' sel' : '');
+    item.style.setProperty('--i', kachelIdx++);
     const gesperrt = s.locked && !s.unlocked;
     if (gesperrt || (s.locked && s.unlocked)) {
       const lock = document.createElement('div');
@@ -1564,9 +1668,11 @@ function buildSigPanel() {
     if (!gesperrt) {
       item.addEventListener('dragstart', (ev) => {
         sigSelected = s.file; updateSigButton();
+        item.classList.add('dragging');
         ev.dataTransfer.setData('text/plain', s.file);
         ev.dataTransfer.effectAllowed = 'copy';
       });
+      item.addEventListener('dragend', () => item.classList.remove('dragging'));
       item.title = 'Klicken: auswählen – oder direkt aufs Papier ziehen';
     } else {
       item.title = 'Passwortgeschützt: erst entsperren (Klick), dann auswählbar und ziehbar';
@@ -1856,9 +1962,23 @@ document.addEventListener('keydown', (ev) => {
 
 /* ---------- Theme (hell/dunkel) ---------- */
 function toggleTheme() {
-  const light = document.body.classList.toggle('light');
-  setPref('theme', light ? 'light' : 'dark');
-  stat(light ? 'Helles Design aktiv.' : 'Dunkles Design aktiv.', true);
+  const wechsel = () => {
+    const light = document.body.classList.toggle('light');
+    setPref('theme', light ? 'light' : 'dark');
+    stat(light ? 'Helles Design aktiv.' : 'Dunkles Design aktiv.', true);
+  };
+  // Kreis-Reveal vom Theme-Knopf aus (View Transitions API; Fallback: sofortiger Wechsel)
+  if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const t = document.startViewTransition(wechsel);
+    t.ready.then(() => {
+      const r = document.getElementById('themeBtn').getBoundingClientRect();
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      const rad = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+      document.documentElement.animate(
+        { clipPath: ['circle(0px at ' + x + 'px ' + y + 'px)', 'circle(' + rad + 'px at ' + x + 'px ' + y + 'px)'] },
+        { duration: 380, easing: 'cubic-bezier(0, 0, 0, 1)', pseudoElement: '::view-transition-new(root)' });
+    });
+  } else wechsel();
 }
 
 /* ---------- Panels: Seitenvorschau & Seitenleiste (Seite + Ein-/Ausblenden) ---------- */
@@ -2015,6 +2135,8 @@ document.addEventListener('mouseup', (ev) => {
 /* ---------- Rückgängig ---------- */
 async function undoLast() {
   if (!cur) return;
+  const ic = document.querySelector('#undoBtn .i');
+  if (ic) { ic.classList.remove('undoSpin'); void ic.offsetWidth; ic.classList.add('undoSpin'); }
   const r = await fetch('/api/undo/' + cur.id, {method:'POST'});
   const j = await r.json();
   if (!j.undone) { stat('Nichts mehr rückgängig zu machen.'); return; }
@@ -2032,6 +2154,7 @@ function buildThumbs() {
   for (let n = 0; n < cur.pages; n++) {
     const t = document.createElement('div');
     t.className = 'thumb'; t.dataset.page = n;
+    if (n < 8) { t.classList.add('stagger'); t.style.setProperty('--i', n); }   // sanfter Einstieg
     const im = document.createElement('img');
     im.loading = 'lazy';
     im.src = `/api/page/${cur.id}/${n}?dpi=22&t=${Date.now()}`;
@@ -2088,6 +2211,8 @@ loadSignatures();
   if (prefs.thumbs === '0') setThumbsVisible(false);
   updatePanelIcons();
   document.getElementById('btnNormal').classList.add('active');   // Startwerkzeug
+  movePill();
+  new ResizeObserver(() => movePill()).observe(document.getElementById('topbar'));
   try { const r = await fetch('/api/current'); const d = await r.json(); if (d && d.id) openDoc(d); } catch (e) {}
   updatePageIndicator();
 })();

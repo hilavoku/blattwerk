@@ -2,6 +2,25 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.13.0 — Motion: die App bewegt sich (alle Stufen des Motion-Konzepts)
+- **Fundament:** Motion-Tokens (Dauern 120/180/260/380 ms, Kurven standard/in/out/
+  pop) als CSS-Variablen; `prefers-reduced-motion` schaltet alles ab; Knöpfe
+  federn beim Drücken (scale .96); Dialoge und das Signatur-Menü wachsen aus
+  ihrer Knopfposition, Kacheln staggern hinein; Kachel-Hover hebt an.
+- **Lebendiges Dokument:** Seitenwechsel scrollen weich statt zu springen; das
+  Scharfstellen nach dem Zoom crossfaded statt hart zu tauschen; platzierte
+  Signaturen poppen, gelöschte verblassen; Thumbnails und Dokumentseiten
+  staggern beim Öffnen ein; Thumbnails heben sich beim Hover; Treffer zählen
+  und pulsieren; der Copy-Chip poppt.
+- **Signature Moments:** der aktive Werkzeughintergrund **gleitet als Pill**
+  zwischen Auswahl/Text/Löschen; nach erfolgreichem Speichern **stempelt** ein
+  Häkchen auf den Speichern-Knopf; Hell/Dunkel wechselt als **wachsender Kreis**
+  vom Theme-Knopf aus (View Transitions API, Feature-Detect); Statusmeldungen
+  mit Erfolgshäkchen; Löschen-ausführen slidet in die Fußleiste; Rückgängig-
+  Icon dreht kurz rückwärts.
+- Konzept: `MOTION-KONZEPT.md` (Tokens, Inventar, Regeln — u. a. nur transform/
+  opacity animieren, nichts länger als 500 ms, Reduced Motion respektieren).
+
 ## v0.12.10 — Originaltext-Editor: neue Zeilen und Schriftwechsel
 - **Umschalt+Enter fügt eine neue Zeile ein** (Enter übernimmt weiterhin sofort).
   Der ersetzte Text wird mehrzeilig als echter Seiteninhalt eingesetzt, Folgezeilen
