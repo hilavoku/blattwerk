@@ -2,6 +2,17 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.14.3 — Eingebettete Bilder verschieben
+- **Grafiken im PDF bewegen:** Eingebettete Bilder (Logos, Fotos) werden im
+  normalen Modus als greifbare Objekte angezeigt (gestrichelter Rahmen beim
+  Hovern) — anklicken, ziehen, fertig. Die alte Stelle wird weiß überdeckt, das
+  Bild an der neuen Stelle wieder eingesetzt (gleiche eingebettete Grafik per
+  xref, keine Re-Qualitätseinbuße). Strg+Z schiebt zurück.
+- Neue Endpunkte: `/api/imageinfo` (Platzierungen je Seite) und `/api/image/move`.
+  Ganzseitenbilder (Scans) und Inline-Bilder bleiben bewusst fix.
+- Grenzen: Die alte Bildstelle bleibt in der Datei erhalten (nur weiß überdeckt);
+  bei erneutem Verschieben nach Neuladen wird die neue Platzierung gegriffen.
+
 ## v0.14.2 — Text-Modus: Bereich aufziehen statt nur Punkt klicken
 - **Mit gedrückter Maustaste den Textbereich aufziehen:** Im Text-Modus zeichnet
   man jetzt den Kasten für den neuen Text direkt auf (Rahmen wie bei der

@@ -329,6 +329,46 @@ def hasannots(did: str):
     return {"any": False}
 
 
+@app.get("/api/imageinfo/{did}/{page}")
+def image_info(did: str, page: int):
+    """Eingebettete Bilder der Seite mit Platzierungsrechteck und xref.
+    Ganzseitenbilder (Scans) und Inline-Bilder werden nicht gemeldet."""
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    pg = d[page]
+    pw, ph = pg.rect.width, pg.rect.height
+    bilder = []
+    for inf in pg.get_image_info(xrefs=True):
+        if inf.get("xref", 0) <= 0:
+            continue                                   # Inline-Bild: nicht per xref verschiebbar
+        b = inf["bbox"]
+        if (b[2] - b[0]) * (b[3] - b[1]) > 0.9 * pw * ph:
+            continue                                   # Ganzseitenbild (Scan): nicht verschiebbar
+        bilder.append({"bbox": [round(v, 1) for v in b], "xref": inf["xref"]})
+    return {"page_w": pw, "bilder": bilder}
+
+
+@app.post("/api/image/move/{did}")
+async def image_move(did: str, page: int = Form(...), xref: int = Form(...),
+                     alt: str = Form(...), neu: str = Form(...)):
+    """Bild verschieben: alte Platzierung weiss ueberdecken, Bild an der neuen
+    Stelle wieder einsetzen (gleiche eingebettete Grafik per xref, kein Re-Embedding)."""
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    if xref <= 0:
+        raise HTTPException(400, "Dieses Bild ist nicht verschiebbar")
+    alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
+    neu_r = pymupdf.Rect(*[float(v) for v in json.loads(neu)])
+    pg = d[page]
+    pg.draw_rect(alt_r, color=None, fill=(1, 1, 1), overlay=True)
+    pg.insert_image(neu_r, xref=xref)
+    push_undo(did, {"op": "image-move", "page": page, "xref": xref,
+                    "alt": list(alt_r), "neu": list(neu_r)})
+    return {"ok": True}
+
+
 @app.post("/api/save/{did}")
 def save(did: str, flatten: int = 0):
     d = _doc(did)
@@ -1055,6 +1095,10 @@ def undo(did: str):
         a.update()
         d.xref_set_key(a.xref, "NM",
                        f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]})")
+    elif op == "image-move":
+        o = e
+        pg.draw_rect(pymupdf.Rect(*o["neu"]), color=None, fill=(1, 1, 1), overlay=True)
+        pg.insert_image(pymupdf.Rect(*o["alt"]), xref=o["xref"])
     elif op == "text-replace":
         o = e
         o0 = o["origin"]

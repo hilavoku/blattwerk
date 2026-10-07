@@ -182,7 +182,12 @@
   .line:hover { background:var(--linehover); outline:1px solid var(--linehover-outline); }
   .line.copied { background:rgba(76,201,126,.45) !important; }
   .line.marked { background:rgba(229,83,75,.4) !important; outline:1px solid var(--danger); }
-  .mode-sign .line, .mode-text .line, .mode-delete .winput, .mode-delete .annot { pointer-events:none; }
+  .mode-sign .line, .mode-text .line, .mode-sign .imgobj, .mode-text .imgobj,
+  .mode-delete .winput, .mode-delete .annot, .mode-delete .imgobj { pointer-events:none; }
+  .imgobj { position:absolute; z-index:1; cursor:move; border:1px dashed transparent; border-radius:2px;
+            transition: border-color var(--d1) var(--e-standard), background var(--d1) var(--e-standard); }
+  .imgobj:hover { border-color: var(--sel-border); }
+  .imgobj.imgsel { border:1px dashed var(--accent); background: rgba(255,255,255,.55); }
   .hit { position:absolute; z-index:2; background:rgba(255,213,0,.35); outline:1px solid rgba(255,213,0,.8); border-radius:2px; pointer-events:none; }
   .hit.active { background:rgba(255,150,0,.5); outline:2px solid #ff9600; }
   .annot { position:absolute; z-index:5; cursor:move; }
@@ -385,6 +390,7 @@
       <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt. Danach ist der Text ein verschiebbares Objekt.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
+      <b>Bild:</b> eingebettete Grafiken anklicken und ziehen – die alte Stelle wird weiß überdeckt (Scans bleiben fix).<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
       Alles wird erst mit <b>Speichern</b> dauerhaft.
     </p>
@@ -614,13 +620,13 @@ function makePageEl(n) {
 function pageUrl(n) { return `/api/page/${cur.id}/${n}?dpi=${Math.round(BASE_DPI*zoom)}&t=${Date.now()}`; }
 function buildPage(img) {
   img._gen = (img._gen || 0) + 1;   // noch laufende Overlay-Bauten aelterer Durchlaeufe entwerten
-  img.parentElement.querySelectorAll('.line,.annot,.winput,.seldrag').forEach(e => e.remove());
-  addLines(img); addAnnots(img); addWidgets(img);
+  img.parentElement.querySelectorAll('.line,.annot,.winput,.seldrag,.imgobj').forEach(e => e.remove());
+  addLines(img); addAnnots(img); addWidgets(img); addImageInfos(img);
 }
 function refreshPage(n) {
   const img = document.querySelector('#page' + n + ' img');
   if (!img) return;
-  img.parentElement.querySelectorAll('.line,.annot,.winput,.hit,.seldrag').forEach(e => e.remove());
+  img.parentElement.querySelectorAll('.line,.annot,.winput,.hit,.seldrag,.imgobj').forEach(e => e.remove());
   img.onload = () => buildPage(img);
   img.dataset.renderedDpi = Math.round(BASE_DPI * zoom);
   img.src = pageUrl(n);
@@ -666,7 +672,7 @@ function resizeWrap(w) {
   const k = kOfZoom();
   img.style.width = (parseFloat(img.dataset.pageW) * k) + 'px';   // altes Raster bleibt sichtbar, wird gestretcht
   img.dataset.k = k;
-  w.querySelectorAll('.line,.annot,.winput,.hit,.seldrag').forEach(el => reposition(el, k));
+  w.querySelectorAll('.line,.annot,.winput,.hit,.seldrag,.imgobj').forEach(el => reposition(el, k));
 }
 
 function applyZoom(z, focus) {
@@ -1651,6 +1657,62 @@ window.pwSaveasDone = async function (ok, path) {
 };
 function downloadDoc() { if (cur) location.href = '/api/download/' + cur.id; }
 function openDemo() { fetch('/api/demo').then(r => r.json()).then(openDoc); }
+
+/* ---------- Eingebettete Bilder: greifen und verschieben ---------- */
+async function addImageInfos(img) {
+  const n = img.dataset.page;
+  const gen = img._gen;
+  const r = await fetch(`/api/imageinfo/${cur.id}/${n}`);
+  if (!r.ok || img._gen !== gen) return;
+  const daten = await r.json();
+  if (img._gen !== gen) return;
+  const k2 = img.clientWidth / daten.page_w;
+  const wrap = img.parentElement;
+  let idx = 0;
+  for (const inf of daten.bilder) {
+    const d = document.createElement('div');
+    d.className = 'imgobj';
+    d._pdfRect = inf.bbox.slice();
+    d._imgbox = inf.bbox.slice();
+    d._xref = inf.xref;
+    d.title = 'Bild – greifen und ziehen zum Verschieben';
+    positionRect(d, inf.bbox, k2);
+    d.addEventListener('mousedown', (ev) => startImageDrag(ev, d, n, k2));
+    wrap.appendChild(d);
+    idx++;
+  }
+}
+function startImageDrag(ev, div, pageN, k) {
+  if (mode !== 'normal' || ev.button !== 0) return;
+  ev.preventDefault(); ev.stopPropagation();
+  div.classList.add('imgsel');
+  const box = div._pdfRect.slice();
+  const sx = ev.clientX, sy = ev.clientY;
+  const bewege = (ev2) => {
+    const dx = (ev2.clientX - sx) / k, dy = (ev2.clientY - sy) / k;
+    div._neu = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
+    positionRect(div, div._neu, k);
+  };
+  const hoch = async (ev2) => {
+    document.removeEventListener('mousemove', bewege);
+    document.removeEventListener('mouseup', hoch);
+    div.classList.remove('imgsel');
+    if (Math.abs(ev2.clientX - sx) + Math.abs(ev2.clientY - sy) < 5) return;   // stiller Klick
+    const neu = div._neu || box;
+    div._pdfRect = neu.slice(); div._imgbox = neu.slice();
+    const fd = new FormData();
+    fd.append('page', pageN); fd.append('xref', div._xref);
+    fd.append('alt', JSON.stringify(box.map(v => Math.round(v * 10) / 10)));
+    fd.append('neu', JSON.stringify(neu.map(v => Math.round(v * 10) / 10)));
+    const r = await fetch(`/api/image/move/${cur.id}`, {method:'POST', body: fd});
+    if (r.ok) {
+      setDirty(true); refreshPage(pageN);
+      stat('Bild verschoben – Speichern macht es dauerhaft.', true);
+    } else stat('Verschieben fehlgeschlagen');
+  };
+  document.addEventListener('mousemove', bewege);
+  document.addEventListener('mouseup', hoch);
+}
 
 /* ---------- Signaturen: Galerie mit Vorschau, Umbenennen, Loeschen ---------- */
 let sigSelected = '';
