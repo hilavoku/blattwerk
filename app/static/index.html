@@ -92,10 +92,6 @@
                                   border-radius:6px; padding:7px 9px; font-size:13px; outline:none; }
   .miniBox input[type=password]:focus { border-color:var(--accent-dim); }
   .miniBox label.chk { display:flex; align-items:center; gap:7px; margin-top:10px; font-size:12px; color:var(--muted); }
-  #sigPwRow { margin-top:6px; }
-  #sigPwRow input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;
-                    padding:6px 8px; font-size:12px; outline:none; }
-  #sigPwRow input:focus { border-color:var(--accent-dim); }
   .siglock { width:72px; height:36px; flex:none; border-radius:5px; background:var(--chrome2); display:flex;
              align-items:center; justify-content:center; color:var(--muted); font-family:var(--icon); font-size:16px; }
   .searchwrap { display:flex; align-items:center; background:var(--chrome2); border:1px solid var(--border);
@@ -311,7 +307,7 @@
     <p class="muted">
       <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
       <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
-      <b>Signatur:</b> im Menü „Signatur…" auswählen oder direkt aus der Liste aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Signaturen mit Schloss fragen beim Platzieren nach dem Passwort.<br>
+      <b>Signatur:</b> im Menü „Signatur…" auswählen oder direkt aus der Liste aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Passwort beim Hochladen angeben oder nachträglich über das Schloss-Symbol an der Kachel.<br>
       <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
@@ -374,6 +370,16 @@
   <div class="row">
     <button id="pwOk" class="prim">Entsperren</button>
     <button id="pwCancel">Abbrechen</button>
+  </div>
+</div>
+<div id="sigPwdBox" class="miniBox" style="display:none">
+  <div><b id="sigPwdTitle">Passwort</b></div>
+  <p class="muted" style="margin:8px 0 0">Setzt oder ändert das Passwort dieser Signatur
+  (Datei wird verschlüsselt gespeichert). Leer = Schutz entfernen.</p>
+  <div style="margin-top:9px"><input type="password" id="sigPwdInput" placeholder="Neues Passwort (leer = Schutz entfernen)"></div>
+  <div class="row">
+    <button id="sigPwdOk" class="prim">Übernehmen</button>
+    <button id="sigPwdCancel">Abbrechen</button>
   </div>
 </div>
 
@@ -1494,7 +1500,28 @@ function toggleSigPanel(ev) {
 function buildSigPanel() {
   const p = document.getElementById('sigPanel');
   p.innerHTML = '';
-  if (!sigList.length) {
+  if (sigPending) {
+    // Gewaehltes Bild wartet auf Hochladen - Passwort direkt hier eingeben
+    const row = document.createElement('div');
+    row.className = 'sigitem';
+    const nm = document.createElement('div'); nm.className = 'nm';
+    nm.textContent = sigPending.name; nm.style.flex = '1'; nm.style.margin = '0';
+    const inp = document.createElement('input');
+    inp.type = 'password'; inp.id = 'sigUpPwd'; inp.placeholder = 'Passwort (optional)';
+    inp.style.cssText = 'width:130px; flex:none; margin:0 6px;';
+    const ok = document.createElement('button'); ok.className = 'sbtn'; ok.textContent = 'Hochladen';
+    ok.onclick = () => uploadPending(inp.value);
+    const cancel = document.createElement('button'); cancel.className = 'sbtn'; cancel.textContent = 'Abbrechen';
+    cancel.onclick = () => { sigPending = null; buildSigPanel(); };
+    row.appendChild(nm); row.appendChild(inp); row.appendChild(ok); row.appendChild(cancel);
+    p.appendChild(row);
+    const hinweis = document.createElement('div');
+    hinweis.className = 'muted';
+    hinweis.style.cssText = 'padding:0 6px 6px; font-size:11px;';
+    hinweis.textContent = 'Mit Passwort wird die Signatur verschlüsselt gespeichert (Schloss-Symbol).';
+    p.appendChild(hinweis);
+  }
+  if (!sigList.length && !sigPending) {
     const e = document.createElement('div'); e.className = 'muted'; e.style.padding = '6px';
     e.textContent = 'Noch keine Signaturen vorhanden.';
     p.appendChild(e);
@@ -1531,6 +1558,14 @@ function buildSigPanel() {
     const act = document.createElement('div'); act.className = 'act';
     const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = 'Umbenennen';
     ren.onclick = (ev) => { ev.stopPropagation(); openRename(s.file); };
+    const pwd = document.createElement('button'); pwd.innerHTML = '&#xE72E;';
+    if (gesperrt) {
+      pwd.title = 'Erst entsperren (Klick auf die Kachel)';
+      pwd.onclick = (ev) => { ev.stopPropagation(); openPwBox(s.file); };
+    } else {
+      pwd.title = s.locked ? 'Passwort ändern oder entfernen' : 'Passwort vergeben (verschlüsselt die Signatur)';
+      pwd.onclick = (ev) => { ev.stopPropagation(); openSigPwd(s.file); };
+    }
     const del = document.createElement('button'); del.className = 'del'; del.innerHTML = '&#xE74D;'; del.title = 'Löschen';
     del.onclick = async (ev) => {
       ev.stopPropagation();
@@ -1541,7 +1576,7 @@ function buildSigPanel() {
       await reloadAllAnnotOverlays();
       stat('Signatur gelöscht.', true);
     };
-    act.appendChild(ren); act.appendChild(del);
+    act.appendChild(ren); act.appendChild(pwd); act.appendChild(del);
     item.appendChild(nm); item.appendChild(act);
     item.onclick = () => {
       if (s.locked && !s.unlocked) { openPwBox(s.file); return; }   // erst Passwort
@@ -1556,14 +1591,10 @@ function buildSigPanel() {
   add.innerHTML = '<span class="i" style="font-family:var(--icon)">&#xE710;</span> Neue Signatur hochladen (Hintergrund wird transparent)';
   add.onclick = () => document.getElementById('sigFile').click();
   p.appendChild(add);
-  const pwRow = document.createElement('div');
-  pwRow.id = 'sigPwRow';
-  pwRow.innerHTML = '<input type="password" id="sigPw" placeholder="Passwort (optional) – verschlüsselt die als nächstes hochgeladene Signatur">';
-  p.appendChild(pwRow);
   const hint = document.createElement('div');
   hint.className = 'muted';
   hint.style.cssText = 'padding:2px 6px 4px; font-size:11px; line-height:1.4;';
-  hint.textContent = 'Signaturen mit Schloss verlangen beim Platzieren das Passwort – entsperren gilt bis Programmende.';
+  hint.textContent = 'Signaturen mit Schloss verlangen beim Platzieren das Passwort – entsperren gilt bis Programmende. Schloss-Knopf an der Kachel: Passwort setzen/ändern.';
   p.appendChild(hint);
 }
 
@@ -1602,9 +1633,46 @@ async function tryUnlock() {
 }
 document.getElementById('pwOk').addEventListener('click', tryUnlock);
 document.getElementById('pwInput').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') tryUnlock(); });
+
+/* Passwort setzen / aendern / entfernen (Schloss-Knopf an der Kachel) */
+let sigPwdTarget = '';
+function openSigPwd(file) {
+  sigPwdTarget = file;
+  const box = document.getElementById('sigPwdBox');
+  document.getElementById('sigPwdTitle').textContent = 'Passwort: ' + prettySig(file);
+  document.getElementById('sigPwdInput').value = '';
+  box.style.display = 'block';
+  const btn = document.getElementById('sigBtn').getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 316, btn.left)) + 'px';
+  box.style.top = Math.min(window.innerHeight - 220, btn.bottom + 6) + 'px';
+  document.getElementById('sigPwdInput').focus();
+}
+document.getElementById('sigPwdCancel').addEventListener('click', () => document.getElementById('sigPwdBox').style.display = 'none');
+async function applySigPwd() {
+  if (!sigPwdTarget) return;
+  const pw = document.getElementById('sigPwdInput').value;
+  const fd = new FormData(); fd.append('fname', sigPwdTarget); fd.append('new_password', pw);
+  const r = await fetch('/api/signature/password', {method:'POST', body: fd});
+  if (!r.ok) {
+    stat((await r.json().catch(() => ({}))).detail || 'Passwort konnte nicht gesetzt werden');
+    return;
+  }
+  const j = await r.json();
+  if (sigSelected === sigPwdTarget) sigSelected = j.file;
+  const geschuetzt = j.file.endsWith('.pwdsig');
+  sigPwdTarget = '';
+  document.getElementById('sigPwdBox').style.display = 'none';
+  await loadSignatures(true);
+  if (cur) await reloadAllAnnotOverlays();   // Dateiname kann gewechselt haben
+  setDirty(true);
+  stat(geschuetzt ? 'Passwort gesetzt – Signatur ist jetzt verschlüsselt (bis Programmende entsperrt).' : 'Passwortschutz entfernt.', true);
+}
+document.getElementById('sigPwdOk').addEventListener('click', applySigPwd);
+document.getElementById('sigPwdInput').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') applySigPwd(); });
 document.addEventListener('click', (ev) => {
   const p = document.getElementById('sigPanel');
-  if (p.style.display === 'block' && !p.contains(ev.target) && ev.target.id !== 'sigBtn' && !document.getElementById('sigBtn').contains(ev.target)) {
+  if (p.style.display === 'block' && !p.contains(ev.target) && ev.target.id !== 'sigBtn' && !document.getElementById('sigBtn').contains(ev.target)
+      && !(ev.target.closest && ev.target.closest('.miniBox, #renameBox'))) {   // Klicks in den schwebenden Dialogen schliessen das Panel nicht
     p.style.display = 'none';
   }
 });
@@ -1643,23 +1711,29 @@ async function reloadAllAnnotOverlays() {
   if (!cur) return;
   for (let n = 0; n < cur.pages; n++) await reloadAnnots(n);
 }
-document.getElementById('sigFile').addEventListener('change', async (ev) => {
-  const f = ev.target.files[0]; if (!f) return;
-  const fd = new FormData(); fd.append('file', f); fd.append('remove_bg', '1');
-  const pwFeld = document.getElementById('sigPw');
-  if (pwFeld && pwFeld.value) fd.append('password', pwFeld.value);
+let sigPending = null;   // gewaehltes Bild, wartet im Panel auf "Hochladen"
+document.getElementById('sigFile').addEventListener('change', (ev) => {
+  const f = ev.target.files[0];
+  ev.target.value = '';
+  if (!f) return;
+  sigPending = f;
+  buildSigPanel();
+  const inp = document.getElementById('sigUpPwd');
+  if (inp) inp.focus();
+});
+async function uploadPending(password) {
+  if (!sigPending) return;
+  const fd = new FormData(); fd.append('file', sigPending); fd.append('remove_bg', '1');
+  if (password) fd.append('password', password);
   stat('Signatur wird verarbeitet …');
   const r = await fetch('/api/signature/upload', {method:'POST', body: fd});
+  const j = await r.json().catch(() => ({}));
+  sigPending = null;
   if (r.ok) {
-    if (pwFeld) pwFeld.value = '';
-    await loadSignatures();
-    const j = await r.json();
-    if (j.file && j.file.endsWith('.pwdsig')) stat('Geschützte Signatur hinzugefügt (verschlüsselt gespeichert).', true);
-    else stat('Signatur hinzugefügt.', true);
-  }
-  else stat('Upload fehlgeschlagen');
-  ev.target.value = '';
-});
+    await loadSignatures(true);
+    stat(j.file && j.file.endsWith('.pwdsig') ? 'Geschützte Signatur hinzugefügt (verschlüsselt gespeichert).' : 'Signatur hinzugefügt.', true);
+  } else stat(j.detail || 'Upload fehlgeschlagen');
+}
 
 /* ---------- Drag&Drop / Clipboard / Tasten ---------- */
 const viewer = document.getElementById('viewer');

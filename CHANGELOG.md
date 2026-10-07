@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.7 — Signatur-Menü: Passwort beim Hochladen & Schloss-Knopf
+- **Passwort direkt beim Hochladen:** Nach der Bildauswahl erscheint im Menü
+  eine Zeile mit Passwortfeld und „Hochladen" — wer will, verschlüsselt die neue
+  Signatur sofort. Das lose Passwortfeld am Menüende ist entfallen.
+- **Schloss-Knopf an jeder Kachel** (neben Umbenennen/Löschen): Passwort
+  nachträglich setzen, ändern oder – bei leerem Feld – den Schutz entfernen. Der
+  Server verschlüsselt die Signatur um bzw. legt sie wieder ungeschützt ab;
+  bestehende Platzierungen folgen dem neuen Dateinamen. Gesperrte Kacheln
+  führen zunächst zum Entsperren-Dialog.
+- Fix: Klicks in den schwebenden Dialogen (Entsperren/Passwort/Umbenennen)
+  schlossen das Signatur-Menü im Hintergrund und ließen dessen Kacheln veraltet.
+
 ## v0.12.6 — Griff der Seitenleiste wandert mit
 - Fix: Beim Verschieben der Lesezeichen-Leiste auf die linke Seite blieb der
   Ein-/Ausklapp-Griff fälschlich am rechten Fensterrand (in v0.12.3 war nur der

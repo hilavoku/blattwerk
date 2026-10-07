@@ -506,6 +506,43 @@ async def signature_unlock(fname: str = Form(...), password: str = Form(...)):
     return {"ok": True, "file": fname}
 
 
+@app.post("/api/signature/password")
+async def signature_password(fname: str = Form(...), new_password: str = Form("")):
+    """Passwort nachtraeglich setzen, aendern oder (leer) den Schutz entfernen."""
+    fname = os.path.basename(fname)
+    path = os.path.join(SIGN_DIR, fname)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Signatur nicht gefunden")
+    basis = fname[:-7] if fname.lower().endswith(".pwdsig") else os.path.splitext(fname)[0]
+    if _sig_gesperrt(fname):
+        png = sig_unlocked.get(fname)
+        if png is None:
+            raise HTTPException(401, "Signatur ist gesperrt – erst entsperren")
+        if new_password:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(_sig_verschluesseln(png, new_password))
+            return {"ok": True, "file": fname}
+        # Schutz entfernen: entschlüsselte Bytes als normale .png ablegen
+        os.remove(path)
+        ziel = os.path.join(SIGN_DIR, basis + ".png")
+        with open(ziel, "wb") as f:
+            f.write(png)
+        sig_unlocked.pop(fname, None)
+        _alle_stamp_verweise_umbenennen(fname, basis + ".png")
+        return {"ok": True, "file": basis + ".png"}
+    if not new_password:
+        raise HTTPException(400, "Keine Änderung: die Signatur ist nicht geschützt")
+    with open(path, "rb") as f:
+        png = f.read()
+    ziel = os.path.join(SIGN_DIR, basis + ".pwdsig")
+    with open(ziel, "w", encoding="utf-8") as f:
+        f.write(_sig_verschluesseln(png, new_password))
+    os.remove(path)
+    sig_unlocked[basis + ".pwdsig"] = png   # soeben gesetzt: sofort entsperrt
+    _alle_stamp_verweise_umbenennen(fname, basis + ".pwdsig")
+    return {"ok": True, "file": basis + ".pwdsig"}
+
+
 @app.post("/api/signature/upload")
 async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("1"),
                            password: str = Form("")):
