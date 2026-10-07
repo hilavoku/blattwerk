@@ -820,31 +820,55 @@ def textspan(did: str, n: int, x0: float, y0: float, x1: float, y1: float):
     return _span_in_rect(d[n], [x0, y0, x1, y1]) or {}
 
 
+def _text_mehrzeilig_einfuegen(pg, origin, text, size, alias, farbe):
+    """Text mit evtl. Zeilenumbruechen als echten Seiteninhalt einsetzen;
+    Folgezeilen rutschen um size * 1.25 unter die Basislinie."""
+    zeilenhoehe = size * 1.25
+    for i, zeile in enumerate(text.split("\n")):
+        if zeile:
+            pg.insert_text((origin[0], origin[1] + i * zeilenhoehe), zeile,
+                           fontsize=size, fontname=alias, color=farbe)
+
+
 @app.post("/api/text/replace/{did}")
-async def text_replace(did: str, page: int = Form(...), rect: str = Form(...), text: str = Form("")):
+async def text_replace(did: str, page: int = Form(...), rect: str = Form(...), text: str = Form(""),
+                       size: str = Form(""), font: str = Form(""), color: str = Form("")):
     """Originaltext im Bereich ersetzen (kein Bildtext): alten Text tilgen (Redaction),
-    den neuen mit uebernommener Schrift als echten Seiteninhalt einsetzen.
+    den neuen als echten Seiteninhalt einsetzen - mehrzeilig moeglich; Groesse, Schrift
+    und Farbe optional uebersteuerbar (0-1-Farbwerte, 4-Zeichen-Alias wie 'hebo').
     Leerer Text = nur entfernen."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
     r = pymupdf.Rect(*[float(v) for v in json.loads(rect)])
-    text = " ".join(text.split())          # ersetzt wird zeilenweise
+    text = text.replace("\r\n", "\n")
     pg = d[page]
     info = _span_in_rect(pg, r) or {}
-    size = float(info.get("size") or 11.0)
+    size_w = float(info.get("size") or 11.0)
     farbe = tuple((info.get("color") or [0, 0, 0])[i] / 255 for i in range(3))
     alias = info.get("alias") or "helv"
-    origin = tuple(info.get("origin") or (r.x0, r.y1 - size * 0.25))
+    if font and font in FONTS:
+        alias = font
+    try:
+        if float(size or 0) > 0:
+            size_w = float(size)
+    except ValueError:
+        pass
+    if color:
+        try:
+            farbe = tuple(float(c) for c in color.split(","))
+        except ValueError:
+            pass
+    origin = tuple(info.get("origin") or (r.x0, r.y1 - size_w * 0.25))
     text_alt = " ".join(pg.get_text("text", clip=r).split())
     pg.add_redact_annot(r)
     pg.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
-    if text:
-        pg.insert_text(origin, text, fontsize=size, fontname=alias, color=farbe)
+    if text.strip():
+        _text_mehrzeilig_einfuegen(pg, origin, text, size_w, alias, farbe)
     push_undo(did, {"op": "text-replace", "page": page, "rect": list(r),
                     "text_alt": text_alt, "text_neu": text, "origin": list(origin),
-                    "size": size, "color": list(farbe), "font": alias})
-    return {"ok": True, "size": size, "font": alias}
+                    "size": size_w, "color": list(farbe), "font": alias})
+    return {"ok": True, "size": size_w, "font": alias}
 
 
 FONTS = {"helv": "Helvetica", "hebo": "Helvetica Fett", "heit": "Helvetica Kursiv", "hebi": "Helvetica Fett-Kursiv",
@@ -1032,17 +1056,19 @@ def undo(did: str):
     elif op == "text-replace":
         o = e
         o0 = o["origin"]
-        breite_neu = pymupdf.get_text_length(o["text_neu"], fontsize=o["size"],
-                                             fontname=o["font"]) if o["text_neu"] else 0
+        neu_zeilen = (o["text_neu"] or "").split("\n") if o["text_neu"] else []
+        breite_neu = max([pymupdf.get_text_length(z, fontsize=o["size"], fontname=o["font"])
+                          for z in neu_zeilen], default=0)
+        hoehe_neu = len(neu_zeilen) * o["size"] * 1.25
         fl = pymupdf.Rect(min(o["rect"][0], o0[0]),
                           min(o["rect"][1], o0[1] - o["size"]),
                           max(o["rect"][2], o0[0] + breite_neu),
-                          max(o["rect"][3], o0[1] + o["size"] * 0.3))
+                          max(o["rect"][3], o0[1] + hoehe_neu + o["size"] * 0.3))
         pg.add_redact_annot(fl)              # neuen Text tilgen ...
         pg.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
         if o["text_alt"]:                    # ... und Original zurueckschreiben
-            pg.insert_text(tuple(o0), o["text_alt"], fontsize=o["size"],
-                           fontname=o["font"], color=tuple(o["color"]))
+            _text_mehrzeilig_einfuegen(pg, tuple(o0), o["text_alt"], o["size"],
+                                       o["font"], tuple(o["color"]))
     elif op == "field":
         for w in pg.widgets():
             if w.field_name == e["name"]:

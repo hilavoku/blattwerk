@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.10 — Originaltext-Editor: neue Zeilen und Schriftwechsel
+- **Umschalt+Enter fügt eine neue Zeile ein** (Enter übernimmt weiterhin sofort).
+  Der ersetzte Text wird mehrzeilig als echter Seiteninhalt eingesetzt, Folgezeilen
+  rücken entsprechend tiefer; auch Strg+Z stellt mehrzeilig zurück.
+- **Schrift änderbar:** Die Werkzeugleiste (Familie, Stil, Größe, Farbe) ist mit
+  dem Originaltext-Editor verbunden — sie zeigt beim Öffnen die ermittelte Schrift
+  der Zeile und übernimmt Änderungen sofort in Vorschau und Ergebnis.
+- Server: `/api/text/replace` nimmt optional `size`/`font`/`color` (Übersteuerung
+  der Zeilenschrift) und setzt mehrzeiligen Text; Undo berücksichtigt die Zeilen.
+
 ## v0.12.9 — Signatur-Upload mit Vorschau und Transparenz-Regler
 - **Vorschaudialog beim Hochladen:** Bild gewählt → Dialog mit Titel, Vorschau
   auf **Schachbrettmuster** (wie aus Bildprogrammen bekannt — das Muster zeigt,
