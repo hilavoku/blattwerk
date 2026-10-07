@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.6 — Griff der Seitenleiste wandert mit
+- Fix: Beim Verschieben der Lesezeichen-Leiste auf die linke Seite blieb der
+  Ein-/Ausklapp-Griff fälschlich am rechten Fensterrand (in v0.12.3 war nur der
+  Leiste selbst die neue Position zugewiesen worden, nicht dem Griff). Jetzt
+  sitzt der Griff immer direkt zwischen Leiste und Dokument.
+
 ## v0.12.5 — Signaturen per Drag & Drop aufs Papier ziehen
 - **Direkt aus der Liste ziehen:** Kachel im „Signatur…"-Menü anfassen, aufs
   Dokument ziehen, loslassen — die Signatur landet genau an der Stelle (das

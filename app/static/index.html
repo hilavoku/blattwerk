@@ -149,6 +149,7 @@
   aside { width:292px; background:var(--chrome); border-left:1px solid var(--border); overflow:auto; padding:14px; flex:none; order:12;
           transition:width .18s ease, padding .18s ease; }
   main.sb-left aside { order:2; border-left:none; border-right:1px solid var(--border); }
+  main.sb-left #sbHandle { order:3; }   /* Griff wandert mit: zwischen Leiste und Dokument */
   main.sb-collapsed aside { width:0; padding:0; border-width:0; }
   .sbtools, .thumbtools { display:flex; justify-content:flex-end; gap:2px; margin:-4px -8px 6px; }
   .sbtools button, .thumbtools button { background:transparent; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon);
