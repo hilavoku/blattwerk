@@ -1,6 +1,18 @@
 # PDF-Werkstatt — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-08.
+
+## v0.14.4 — Zeichenabstand (Spacing) für Text
+- **Neues Werkzeugleisten-Feld „Zeichenabstand"** (Punkte, auch negativ für
+  engere Texte): wirkt live in der Editor-Vorschau und auf neue und bearbeitete
+  Text-Annotationen.
+- Umsetzung: bei Spacing ≠ 0 erzeugt der Server einen eigenen Appearance-Stream
+  für die Annotation (PDF-Operator `Tc`); der Spacing-Wert wandert in den
+  NM-Marker (5. Feld) und bleibt damit bei Verschieben, Bearbeiten, Undo und
+  „Speichern unter" erhalten.
+- **Einbrennen:** Gespacete Freitexte werden vor dem Einbrennen zeichenweise als
+  echter Seiteninhalt eingesetzt (Zeichenabstand bleibt exakt erhalten), danach
+  wie üblich gebaked.
 
 ## v0.14.3 — Eingebettete Bilder verschieben
 - **Grafiken im PDF bewegen:** Eingebettete Bilder (Logos, Fotos) werden im
