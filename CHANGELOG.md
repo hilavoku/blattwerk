@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.9 — Signatur-Upload mit Vorschau und Transparenz-Regler
+- **Vorschaudialog beim Hochladen:** Bild gewählt → Dialog mit Titel, Vorschau
+  auf **Schachbrettmuster** (wie aus Bildprogrammen bekannt — das Muster zeigt,
+  wo der Hintergrund entfernt wurde), Passwortfeld und Schwellwert-Regler.
+- **Transparenz einstellbar:** Der Regler (0–255, Standard 232, 0 = aus) steuert,
+  ab welcher Helligkeit Weiß durchsichtig wird. Die Vorschau rechnet live und
+  immer vom Originalbild neu; der Upload übernimmt exakt den eingestellten Wert.
+  Serverseitig nimmt `/api/signature/upload` dafür den Parameter `threshold`.
+
 ## v0.12.8 — Symbolleiste schlanker: Signatur-Klickmodus entfällt
 - Der Werkzeugknopf „Signatur" (Klick-Platzierung) ist entfernt — Signaturen
   werden ausschließlich per **Drag & Drop aus dem „Signatur…"-Menü** aufs Papier

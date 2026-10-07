@@ -92,6 +92,9 @@
                                   border-radius:6px; padding:7px 9px; font-size:13px; outline:none; }
   .miniBox input[type=password]:focus { border-color:var(--accent-dim); }
   .miniBox label.chk { display:flex; align-items:center; gap:7px; margin-top:10px; font-size:12px; color:var(--muted); }
+  #sigUpBox { width:330px; }
+  .checkerbg { background-image: conic-gradient(#c9ced6 25%, #ffffff 0 50%, #c9ced6 0 75%, #ffffff 0); background-size: 16px 16px; }
+  #sigUpThr { width:100%; margin-top:4px; accent-color:var(--accent); }
   .siglock { width:72px; height:36px; flex:none; border-radius:5px; background:var(--chrome2); display:flex;
              align-items:center; justify-content:center; color:var(--muted); font-family:var(--icon); font-size:16px; }
   .searchwrap { display:flex; align-items:center; background:var(--chrome2); border:1px solid var(--border);
@@ -306,7 +309,7 @@
     <p class="muted">
       <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
       <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
-      <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Passwort beim Hochladen angeben oder nachträglich über das Schloss-Symbol an der Kachel.<br>
+      <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.<br>
       <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
@@ -379,6 +382,19 @@
   <div class="row">
     <button id="sigPwdOk" class="prim">Übernehmen</button>
     <button id="sigPwdCancel">Abbrechen</button>
+  </div>
+</div>
+<div id="sigUpBox" class="miniBox" style="display:none">
+  <div><b id="sigUpTitle">Signatur hochladen</b></div>
+  <div id="sigUpPrev" class="checkerbg" style="margin-top:8px; border:1px solid var(--border); border-radius:6px; padding:6px; text-align:center; min-height:70px;">
+    <img id="sigUpImg" alt="Signatur-Vorschau" style="max-width:100%; max-height:110px;">
+  </div>
+  <div style="margin-top:8px; font-size:11px;">Hintergrund entfernen — Schwellwert: <b id="sigUpThrVal" style="color:var(--text)">232</b> <span id="sigUpThrAus" class="muted"></span></div>
+  <input type="range" id="sigUpThr" min="0" max="255" value="232">
+  <div style="margin-top:6px"><input type="password" id="sigUpPwd" placeholder="Passwort (optional) – verschlüsselt die Signatur"></div>
+  <div class="row">
+    <button id="sigUpOk" class="prim">Hochladen</button>
+    <button id="sigUpCancel">Abbrechen</button>
   </div>
 </div>
 
@@ -1495,28 +1511,7 @@ function toggleSigPanel(ev) {
 function buildSigPanel() {
   const p = document.getElementById('sigPanel');
   p.innerHTML = '';
-  if (sigPending) {
-    // Gewaehltes Bild wartet auf Hochladen - Passwort direkt hier eingeben
-    const row = document.createElement('div');
-    row.className = 'sigitem';
-    const nm = document.createElement('div'); nm.className = 'nm';
-    nm.textContent = sigPending.name; nm.style.flex = '1'; nm.style.margin = '0';
-    const inp = document.createElement('input');
-    inp.type = 'password'; inp.id = 'sigUpPwd'; inp.placeholder = 'Passwort (optional)';
-    inp.style.cssText = 'width:130px; flex:none; margin:0 6px;';
-    const ok = document.createElement('button'); ok.className = 'sbtn'; ok.textContent = 'Hochladen';
-    ok.onclick = () => uploadPending(inp.value);
-    const cancel = document.createElement('button'); cancel.className = 'sbtn'; cancel.textContent = 'Abbrechen';
-    cancel.onclick = () => { sigPending = null; buildSigPanel(); };
-    row.appendChild(nm); row.appendChild(inp); row.appendChild(ok); row.appendChild(cancel);
-    p.appendChild(row);
-    const hinweis = document.createElement('div');
-    hinweis.className = 'muted';
-    hinweis.style.cssText = 'padding:0 6px 6px; font-size:11px;';
-    hinweis.textContent = 'Mit Passwort wird die Signatur verschlüsselt gespeichert (Schloss-Symbol).';
-    p.appendChild(hinweis);
-  }
-  if (!sigList.length && !sigPending) {
+  if (!sigList.length) {
     const e = document.createElement('div'); e.className = 'muted'; e.style.padding = '6px';
     e.textContent = 'Noch keine Signaturen vorhanden.';
     p.appendChild(e);
@@ -1706,29 +1701,82 @@ async function reloadAllAnnotOverlays() {
   if (!cur) return;
   for (let n = 0; n < cur.pages; n++) await reloadAnnots(n);
 }
-let sigPending = null;   // gewaehltes Bild, wartet im Panel auf "Hochladen"
+let sigPending = null;      // gewaehltes Bild, wartet im Vorschau-Dialog auf "Hochladen"
+let sigUpOrig = null;       // unbearbeitetes Original - Quelle fuer jede Vorschau-Neuberechnung
+let sigUpOrigUrl = '';
 document.getElementById('sigFile').addEventListener('change', (ev) => {
   const f = ev.target.files[0];
   ev.target.value = '';
   if (!f) return;
   sigPending = f;
-  buildSigPanel();
-  const inp = document.getElementById('sigUpPwd');
-  if (inp) inp.focus();
+  openSigUploadDialog();
 });
-async function uploadPending(password) {
+
+/* Vorschau-Dialog: Schachbrett zeigt den entfernten Hintergrund,
+   der Schwellwert steuert, wie viel Weiss durchsichtig wird. */
+function openSigUploadDialog() {
+  document.getElementById('sigUpTitle').textContent = 'Signatur hochladen: ' + sigPending.name;
+  document.getElementById('sigUpPwd').value = '';
+  const thr = document.getElementById('sigUpThr');
+  thr.value = 232;
+  document.getElementById('sigUpThrVal').textContent = '232';
+  document.getElementById('sigUpThrAus').textContent = '';
+  document.getElementById('sigUpImg').removeAttribute('src');
+  if (sigUpOrigUrl) URL.revokeObjectURL(sigUpOrigUrl);
+  sigUpOrigUrl = URL.createObjectURL(sigPending);
+  sigUpOrig = new Image();
+  sigUpOrig.onload = () => renderSigPreview();
+  sigUpOrig.src = sigUpOrigUrl;
+  const box = document.getElementById('sigUpBox');
+  box.style.display = 'block';
+  const btn = document.getElementById('sigBtn').getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 350, btn.left)) + 'px';
+  box.style.top = Math.min(window.innerHeight - 380, btn.bottom + 6) + 'px';
+}
+function renderSigPreview() {
+  const thr = parseInt(document.getElementById('sigUpThr').value, 10) || 0;
+  document.getElementById('sigUpThrVal').textContent = String(thr);
+  document.getElementById('sigUpThrAus').textContent = thr > 0 ? '' : '(aus)';
+  if (!sigUpOrig || !sigUpOrig.naturalWidth) return;
+  const c = document.createElement('canvas');
+  c.width = sigUpOrig.naturalWidth; c.height = sigUpOrig.naturalHeight;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(sigUpOrig, 0, 0);
+  if (thr > 0) {
+    const daten = ctx.getImageData(0, 0, c.width, c.height);
+    const d = daten.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] > thr && d[i+1] > thr && d[i+2] > thr && d[i+3] > 0) d[i+3] = 0;
+    }
+    ctx.putImageData(daten, 0, 0);
+  }
+  document.getElementById('sigUpImg').src = c.toDataURL('image/png');
+}
+document.getElementById('sigUpThr').addEventListener('input', () => requestAnimationFrame(renderSigPreview));
+document.getElementById('sigUpCancel').addEventListener('click', () => {
+  sigPending = null;
+  document.getElementById('sigUpBox').style.display = 'none';
+});
+async function uploadPending() {
   if (!sigPending) return;
-  const fd = new FormData(); fd.append('file', sigPending); fd.append('remove_bg', '1');
-  if (password) fd.append('password', password);
+  const fd = new FormData();
+  fd.append('file', sigPending);
+  fd.append('remove_bg', '1');
+  fd.append('threshold', document.getElementById('sigUpThr').value);
+  const pw = document.getElementById('sigUpPwd').value;
+  if (pw) fd.append('password', pw);
   stat('Signatur wird verarbeitet …');
   const r = await fetch('/api/signature/upload', {method:'POST', body: fd});
   const j = await r.json().catch(() => ({}));
+  document.getElementById('sigUpBox').style.display = 'none';
   sigPending = null;
   if (r.ok) {
     await loadSignatures(true);
     stat(j.file && j.file.endsWith('.pwdsig') ? 'Geschützte Signatur hinzugefügt (verschlüsselt gespeichert).' : 'Signatur hinzugefügt.', true);
   } else stat(j.detail || 'Upload fehlgeschlagen');
 }
+document.getElementById('sigUpOk').addEventListener('click', uploadPending);
+document.getElementById('sigUpPwd').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') uploadPending(); });
 
 /* ---------- Drag&Drop / Clipboard / Tasten ---------- */
 const viewer = document.getElementById('viewer');

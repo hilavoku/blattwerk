@@ -392,8 +392,8 @@ def download(did: str):
 
 # ---------- Signaturen ----------
 
-def _entferne_weissen_hintergrund(img):
-    """Macht nahezu weisse Pixel transparent (wie PDFgears Signatur-Trick). Im RAM."""
+def _entferne_weissen_hintergrund(img, schwellwert: int = 232):
+    """Macht Pixel oberhalb des Schwellwerts transparent (wie PDFgears Signatur-Trick). Im RAM."""
     from PIL import Image
     img = img.convert("RGBA")
     px = img.load()
@@ -401,7 +401,7 @@ def _entferne_weissen_hintergrund(img):
     for y in range(h):
         for x in range(w):
             r, g, b, a = px[x, y]
-            if r > 232 and g > 232 and b > 232 and a > 0:
+            if r > schwellwert and g > schwellwert and b > schwellwert and a > 0:
                 px[x, y] = (r, g, b, 0)
     return img
 
@@ -545,7 +545,7 @@ async def signature_password(fname: str = Form(...), new_password: str = Form(""
 
 @app.post("/api/signature/upload")
 async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("1"),
-                           password: str = Form("")):
+                           password: str = Form(""), threshold: str = Form("232")):
     from PIL import Image
     import io as _io
     name = os.path.splitext(os.path.basename(file.filename or "Signatur"))[0]
@@ -555,9 +555,13 @@ async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("
         img = Image.open(_io.BytesIO(roh))
     except Exception:
         raise HTTPException(400, "Keine Bilddatei")
-    if remove_bg == "1":
+    try:
+        schwelle = int(threshold)
+    except (TypeError, ValueError):
+        schwelle = 232
+    if remove_bg == "1" and schwelle > 0:
         try:
-            img = _entferne_weissen_hintergrund(img)
+            img = _entferne_weissen_hintergrund(img, schwelle)
         except Exception:
             pass  # ohne Hintergrund-Entfernung weiterbenutzen
     buf = _io.BytesIO()
