@@ -1,6 +1,20 @@
 # PDF-Werkstatt — Changelog
 
+# Blattwerk — Changelog
+
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-08.
+
+## v0.14.5 — Fix: Schriftänderung wirkt jetzt auf angeklickte Texte (und Fett/Kursiv überall)
+- **Die Werkzeugleiste wirkt live auf angeklickte Text-Annotationen:** Text
+  anklicken, Schrift/Familie/Stil/Größe/Farbe/Abstand oben ändern — sofort
+  übernommen, Selektion bleibt erhalten. Vorher reagierte die Leiste nur während
+  des Editors (und ein Klick in die Leiste schloss den Doppelklick-Editor nicht).
+- **Fix: Fett/Kursiv bei Times und Courier schlug still auf Helvetica zurück** —
+  die Alias-Bildung 'tirob'/'courb' war ungültig (richtig: tibo/cobo); jetzt
+  systematische Alias-Tabelle im Client und Rück-Aufsplitten beim Editor-Öffnen
+  (Fett-Texte zeigen Familie+Stil korrekt in der Leiste).
+- Der Editor-Pfad (Doppelklick) bleibt unverändert; auch dort gilt die
+  korrekte Alias-Bildung jetzt beim Übernehmen.
 
 ## v0.14.4 — Zeichenabstand (Spacing) für Text
 - **Neues Werkzeugleisten-Feld „Zeichenabstand"** (Punkte, auch negativ für

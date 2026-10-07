@@ -1132,7 +1132,14 @@ document.addEventListener('mouseup', async () => {
 /* ---------- Text-Inline-Eingabe: direkt auf dem Papier ---------- */
 let inline = null;   // {xref, page, ta, delBtn, rect}
 
-function currentFontAlias() { return document.getElementById('teFam').value + document.getElementById('teStil').value; }
+function currentFontAlias() {
+  // Familie + Stil zu gueltigem 4-Zeichen-Alias zusammenbauen (konsistent mit
+  // FONTS/FAM_PREFIX: helv, hebo, heit, hebi, tiro, tibo ... cour, coit, cobi)
+  const f = document.getElementById('teFam').value;
+  const base = ({ helv: 'he', tiro: 'ti', cour: 'co' })[f] || 'he';
+  const suffix = ({ '': '', b: 'bo', i: 'it', bi: 'bi' })[document.getElementById('teStil').value] || '';
+  return suffix ? base + suffix : f;
+}
 
 function applyFormatTo(ta, sizePt) {
   const k = parseFloat(ta.dataset.k) || 1;
@@ -1143,6 +1150,40 @@ function applyFormatTo(ta, sizePt) {
   const hex = document.getElementById('teColor').value;
   ta.style.color = hex;
 }
+
+/* Werkzeugleisten-Aenderungen sofort auf die SELEKTIERTE Text-Annotation anwenden
+   (wie in ueblichen PDF-Programmen: Objekt anklicken, Schrift oben aendern). */
+let applySelTimer = null;
+function applyToolbarToSelected() {
+  if (inline || origEdit) return;                       // Editor offen: der committet selbst
+  if (!selAnnot || !selAnnot.div || !cur) return;
+  const a = selAnnot.div._annot;
+  if (!a || a.type !== 'text') return;
+  clearTimeout(applySelTimer);
+  applySelTimer = setTimeout(async () => {
+    const hex = document.getElementById('teColor').value;
+    const fd = new FormData();
+    fd.append('page', selAnnot.div.dataset.page);
+    fd.append('rect', JSON.stringify(a.rect.map(v => Math.round(v * 10) / 10)));
+    fd.append('text', a.text || '');
+    fd.append('size', document.getElementById('teSize').value || '11');
+    fd.append('font', currentFontAlias());
+    fd.append('color', [1, 3, 5].map(i => (parseInt(hex.substr(i, 2), 16) / 255).toFixed(4)).join(','));
+    fd.append('spacing', document.getElementById('teAbstand').value || '0');
+    fd.append('xref', a.xref);
+    const r = await fetch('/api/annot/text/' + cur.id, {method: 'POST', body: fd});
+    if (r.ok) {
+      setDirty(true);
+      const j = await r.json().catch(() => ({}));
+      await reloadAnnots(parseInt(selAnnot.div.dataset.page));
+      const nd = document.querySelector('.annot[data-xref="' + (j.xref || a.xref) + '"]');
+      if (nd) selectAnnot({div: nd});
+    }
+  }, 250);
+}
+['teFam', 'teStil', 'teSize', 'teAbstand', 'teColor'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyToolbarToSelected);
+});
 
 function startInlineEdit(pageN, pdfX, pdfY, existing, vorgabe) {
   commitInline(true);
@@ -1160,8 +1201,12 @@ function startInlineEdit(pageN, pdfX, pdfY, existing, vorgabe) {
   ta.spellcheck = false;
   // Toolbar auf vorhandene Eigenschaften stellen
   if (existing) {
-    document.getElementById('teFam').value = (existing.font || 'helv').slice(0, 4);
-    document.getElementById('teStil').value = (existing.font || 'helv').slice(4) || '';
+    const fsMap = { helv: ['helv', ''], hebo: ['helv', 'b'], heit: ['helv', 'i'], hebi: ['helv', 'bi'],
+                    tiro: ['tiro', ''], tibo: ['tiro', 'b'], tiit: ['tiro', 'i'], tibi: ['tiro', 'bi'],
+                    cour: ['cour', ''], cobo: ['cour', 'b'], coit: ['cour', 'i'], cobi: ['cour', 'bi'] };
+    const [famOpt, stilOpt] = fsMap[(existing.font || 'helv').slice(0, 4)] || ['helv', ''];
+    document.getElementById('teFam').value = famOpt;
+    document.getElementById('teStil').value = stilOpt;
     document.getElementById('teSize').value = Math.round(existing.size || 11);
     document.getElementById('teAbstand').value = (existing.spacing || 0);
     const c = existing.color || [0, 0, 0];
