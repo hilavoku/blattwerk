@@ -237,13 +237,12 @@
   <button class="tbtn" id="saveAsBtn" onclick="saveasClick()" title="Kopie an anderem Ort speichern" disabled><span class="i">&#xE8C8;</span><span class="lbl">Speichern unter</span></button>
   <button class="tbtn" id="prBtn" onclick="printDoc()" title="Drucken (mit Signaturen, Texten und Formulareinträgen)" disabled><span class="i">&#xE749;</span></button>
   <div class="sep"></div>
-  <button class="tbtn" id="sigBtn" onclick="toggleSigPanel(event)" title="Signatur wählen / verwalten">
+  <button class="tbtn" id="sigBtn" onclick="toggleSigPanel(event)" title="Signaturen verwalten – Kachel aufs Papier ziehen">
     <img id="sigCurImg" alt=""><span id="sigCurName">Signatur…</span><span class="i">&#xE70D;</span>
   </button>
   <div id="sigPanel"></div>
   <input type="file" id="sigFile" accept=".png,.jpg,.jpeg" style="display:none">
   <button class="tbtn" id="btnNormal" onclick="setMode('normal')" title="Auswahl & Verschieben – beendet Text-/Löschen-Modus (Esc)"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M2.5 1 L2.5 14.4 L5.6 11.5 L7.5 15.7 L9.6 14.8 L7.7 10.7 L11.7 10.7 Z" fill="currentColor"/></svg><span class="lbl">Auswahl</span></button>
-  <button class="tbtn" id="btnSign" onclick="setMode('sign')" title="Signatur wählen, dann aufs Papier klicken"><svg width="17" height="15" viewBox="0 0 20 16" style="flex:none"><path d="M2 9.5c2.6 0 3.4-6.5 5.6-6.5 2.1 0 1.8 6.5 3.9 6.5 1.9 0 2.6-5 4.3-5 1.3 0 1.7 2.5 2.2 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 13.5h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><span class="lbl">Signatur</span></button>
   <button class="tbtn" id="btnText" onclick="setMode('text')" title="Aufs Papier klicken und direkt tippen"><span style="font-weight:600">T</span><span class="lbl">Text</span></button>
   <button class="tbtn" id="btnDel" onclick="setMode('delete')" title="Original-Text entfernen"><span class="i">&#xE74D;</span><span class="lbl">Löschen</span></button>
   <button class="tbtn" id="undoBtn" onclick="undoLast()" title="Rückgängig (Strg+Z)" disabled><span class="i">&#xE7A7;</span><span class="lbl">Rückgängig</span></button>
@@ -307,7 +306,7 @@
     <p class="muted">
       <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
       <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
-      <b>Signatur:</b> im Menü „Signatur…" auswählen oder direkt aus der Liste aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Passwort beim Hochladen angeben oder nachträglich über das Schloss-Symbol an der Kachel.<br>
+      <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Passwort beim Hochladen angeben oder nachträglich über das Schloss-Symbol an der Kachel.<br>
       <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
@@ -421,11 +420,11 @@ function setPref(key, value) {
 
 /* ---------- Modi ---------- */
 function setMode(m) {
-  if (m === 'sign' && !sigSelected) { stat('Bitte zuerst eine Signatur auswählen (Knopf oben).'); return; }
   mode = (mode === m) ? 'normal' : m;
-  ['btnNormal','btnSign','btnText','btnDel'].forEach(id => document.getElementById(id).classList.remove('active'));
+  ['btnNormal','btnText','btnDel'].forEach(id => { const b = document.getElementById(id); if (b) b.classList.remove('active'); });
   document.getElementById('btnDelGo')?.remove();
-  document.getElementById('btn' + (mode === 'normal' ? 'Normal' : {sign:'Sign',text:'Text',delete:'Del'}[mode])).classList.add('active');
+  const aktiv = document.getElementById('btn' + (mode === 'normal' ? 'Normal' : {text:'Text',delete:'Del'}[mode] || ''));
+  if (aktiv) aktiv.classList.add('active');
   marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
   document.querySelectorAll('.pagewrap').forEach(w => {
     w.classList.remove('mode-sign','mode-text','mode-delete');
@@ -1198,14 +1197,10 @@ async function commitOriginalEdit() {
 
 /* ---------- Klick aufs Papier ---------- */
 async function pageClick(ev, img, n) {
-  if (mode !== 'sign' && mode !== 'text') return;
+  if (mode !== 'text') return;   // Signaturen laufen nur noch ueber Drag & Drop
   const k = parseFloat(img.dataset.k);
   const x = ev.offsetX / k, y = ev.offsetY / k;
-  if (mode === 'sign') {
-    await placeSignature(n, x, y);
-  } else {
-    startInlineEdit(n, x, y, null);
-  }
+  startInlineEdit(n, x, y, null);
 }
 
 /* Signatur setzen - gemeinsam fuer Klick im Signatur-Modus und Drag & Drop */

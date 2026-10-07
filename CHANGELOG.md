@@ -2,6 +2,13 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.8 — Symbolleiste schlanker: Signatur-Klickmodus entfällt
+- Der Werkzeugknopf „Signatur" (Klick-Platzierung) ist entfernt — Signaturen
+  werden ausschließlich per **Drag & Drop aus dem „Signatur…"-Menü** aufs Papier
+  gezogen (seit v0.12.5). Die Leiste zeigt jetzt: Auswahl · Text · Löschen.
+- Der Signatur-Menü-Knopf behält seine Verwaltungsfunktion (Hochladen,
+  Umbenennen, Passwort, Löschen, Vorschau). Kurzhilfe und Tooltip angepasst.
+
 ## v0.12.7 — Signatur-Menü: Passwort beim Hochladen & Schloss-Knopf
 - **Passwort direkt beim Hochladen:** Nach der Bildauswahl erscheint im Menü
   eine Zeile mit Passwortfeld und „Hochladen" — wer will, verschlüsselt die neue
