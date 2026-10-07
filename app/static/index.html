@@ -500,9 +500,14 @@ function movePill() {
   pill.style.opacity = 1;
   pill.style.width = r.width + 'px';
   pill.style.height = r.height + 'px';
+  pill.style.top = (r.top - hr.top) + 'px';   // vertikal exakt auf den Knopf
   pill.style.transform = 'translateX(' + (r.left - hr.left) + 'px)';
 }
 window.addEventListener('resize', movePill);
+['btnNormal', 'btnText', 'btnDel'].forEach(id => {
+  const b = document.getElementById(id);
+  if (b) new ResizeObserver(() => movePill()).observe(b);   // Beschriftung an/aus: Knöpfe schrumpfen -> Pill folgt
+});
 function setDirty(v) {
   document.getElementById('saveBtn').classList.toggle('dirty', v);
   document.getElementById('dirtyDot').style.display = v ? 'inline-block' : 'none';

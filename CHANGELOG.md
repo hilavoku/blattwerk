@@ -2,6 +2,13 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.13.1 — Fix: Modus-Pill sitzt exakt, auch nach Größenwechseln
+- Die gleitende Werkzeug-Pill war vertikal statisch verankert und maß ihre
+  Position nur einmal — sobald die Knopfbeschriftungen verschwanden (schmales
+  Fenster), saß sie verschoben und in alter Größe. Jetzt: vertikale Position
+  dynamisch, und die drei Modus-Knöpfe werden per ResizeObserver beobachtet —
+  die Pill folgt jeder Größenänderung pixelgenau.
+
 ## v0.13.0 — Motion: die App bewegt sich (alle Stufen des Motion-Konzepts)
 - **Fundament:** Motion-Tokens (Dauern 120/180/260/380 ms, Kurven standard/in/out/
   pop) als CSS-Variablen; `prefers-reduced-motion` schaltet alles ab; Knöpfe
