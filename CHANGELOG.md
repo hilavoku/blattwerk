@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.3 — Seitenvorschau: einklappen und Seite wählen
+- Die Seitenvorschau lässt sich jetzt wie die Lesezeichen-Leiste **am Rand ein-
+  und ausklappen** (neuer Griff neben der Spalte; der „Seiten"-Knopf unten wirkt
+  weiterhin, beide steuern denselben Zustand).
+- **Beide Bereiche sind frei positionierbar:** Seitenvorschau und Lesezeichen-
+  Leiste haben je einen Pfeilknopf („auf die andere Seite verschieben") — so sind
+  z. B. beide Bereiche links oder beide rechts möglich. Auch das wird gespeichert
+  (wie Theme und Einklapp-Zustand, über `/api/prefs`).
+- Technik: Layout über flex-`order` statt `row-reverse` (dafür waren die Bereiche
+  zwangsläufig auf gegenüberliegenden Seiten). Alte Einstellung „Seitenleiste
+  links" wird beim ersten Start automatisch auf das neue Modell übertragen.
+
 ## v0.12.2 — Ziehen verschiebt die Seite, Kopieren per Alt+Ziehen
 - **Ziehen mit der Maustaste auf dem Papier schiebt jetzt die Ansicht** (Pan,
   Hand-Cursor beim Ziehen) — vorher wurde dabei die Kopier-Auswahl aufgezogen.

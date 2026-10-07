@@ -142,20 +142,20 @@
                   font-size:inherit; padding:1px 3px; border-radius:1px; }
   .winput input:focus { outline:2px solid var(--accent); background:white; }
 
-  /* ---------- Sidebar ---------- */
-  aside { width:292px; background:var(--chrome); border-left:1px solid var(--border); overflow:auto; padding:14px; flex:none;
+  /* ---------- Panels: Seitenvorschau & Seitenleiste (Seite unabhaengig waehlbar) ---------- */
+  #viewer { order:10; }
+  aside { width:292px; background:var(--chrome); border-left:1px solid var(--border); overflow:auto; padding:14px; flex:none; order:12;
           transition:width .18s ease, padding .18s ease; }
-  main.side-left { flex-direction:row-reverse; }
-  main.side-left aside { border-left:none; border-right:1px solid var(--border); }
+  main.sb-left aside { order:2; border-left:none; border-right:1px solid var(--border); }
   main.sb-collapsed aside { width:0; padding:0; border-width:0; }
-  .sbtools { display:flex; justify-content:flex-end; gap:2px; margin:-4px -8px 6px; }
-  .sbtools button { background:transparent; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon);
+  .sbtools, .thumbtools { display:flex; justify-content:flex-end; gap:2px; margin:-4px -8px 6px; }
+  .sbtools button, .thumbtools button { background:transparent; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon);
                     font-size:13px; padding:3px 7px; border-radius:5px; }
-  .sbtools button:hover { background:var(--hover); color:var(--text); }
-  .sbHandle { width:18px; flex:none; align-self:flex-start; margin:26px 3px 0; padding:10px 2px;
+  .sbtools button:hover, .thumbtools button:hover { background:var(--hover); color:var(--text); }
+  .panelHandle { width:18px; flex:none; align-self:flex-start; margin:26px 3px 0; padding:10px 2px;
               background:var(--chrome); border:1px solid var(--border); border-radius:7px;
               color:var(--muted); cursor:pointer; font-family:var(--icon); font-size:12px; line-height:1; }
-  .sbHandle:hover { color:var(--text); background:var(--hover); border-color:var(--accent-dim); }
+  .panelHandle:hover { color:var(--text); background:var(--hover); border-color:var(--accent-dim); }
   aside h3 { font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:16px 0 8px; font-weight:600; }
   .toc a { display:block; padding:4px 8px; color:var(--text); text-decoration:none; border-radius:5px; font-size:12.5px; cursor:pointer;
            line-height:1.35; }
@@ -199,8 +199,14 @@
   .line.linesel { background:rgba(76,140,255,.32) !important; outline:1px solid rgba(76,140,255,.7); }
   .copyChip { position:fixed; z-index:210; background:var(--accent); color:#0b1620; border:none; border-radius:6px;
               padding:6px 12px; cursor:pointer; font-size:12.5px; font-weight:600; box-shadow:0 4px 16px rgba(0,0,0,.4); }
-  #thumbrail { width:174px; overflow:auto; background:var(--chrome); border-right:1px solid var(--border); padding:10px 8px; flex:none; }
-  main.thumbs-off #thumbrail { display:none; }
+  #thumbrail { width:174px; overflow:hidden; background:var(--chrome); border-right:1px solid var(--border); padding:10px 8px; flex:none;
+               order:0; display:flex; flex-direction:column; transition:width .18s ease, padding .18s ease; }
+  #thumbList { overflow:auto; flex:1; min-height:0; }
+  #thumbHandle { order:1; }
+  #sbHandle { order:11; }
+  main.thumbs-right #thumbrail { order:14; border-right:none; border-left:1px solid var(--border); }
+  main.thumbs-right #thumbHandle { order:13; }
+  main.thumbs-collapsed #thumbrail { width:0; padding:0; border-width:0; }
   .thumb { margin-bottom:10px; cursor:pointer; text-align:center; }
   .thumb img { width:100%; background:white; border:1px solid var(--border); border-radius:3px; display:block; }
   .thumb.cur img { outline:2px solid var(--accent); }
@@ -280,12 +286,18 @@
 </header>
 
 <main>
-  <div id="thumbrail"></div>
+  <div id="thumbrail">
+    <div class="thumbtools">
+      <button id="thumbSideBtn" onclick="toggleThumbSide()" title="Seitenvorschau auf die andere Seite verschieben">&#xE76C;</button>
+    </div>
+    <div id="thumbList"></div>
+  </div>
+  <button class="panelHandle" id="thumbHandle" onclick="toggleThumbs()" title="Seitenvorschau ein-/ausklappen">&#xE76B;</button>
   <div id="viewer"></div>
-  <button class="sbHandle" id="sbHandle" onclick="toggleSb()" title="Seitenleiste ein-/ausklappen">&#xE76C;</button>
+  <button class="panelHandle" id="sbHandle" onclick="toggleSb()" title="Seitenleiste ein-/ausklappen">&#xE76C;</button>
   <aside>
     <div class="sbtools">
-      <button onclick="toggleSide()" id="sbSideBtn" title="Seitenleiste auf die andere Seite verschieben">&#xE76B;</button>
+      <button onclick="toggleSbSide()" id="sbSideBtn" title="Seitenleiste auf die andere Seite verschieben">&#xE76B;</button>
     </div>
     <h3>Lesezeichen</h3>
     <div id="toc" class="muted">Kein Dokument geöffnet.</div>
@@ -303,6 +315,7 @@
       <b>Text:</b> aufs Papier klicken, direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe).<br>
       <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen, Enter.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
+      <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
       Alles wird erst mit <b>Speichern</b> dauerhaft.
     </p>
@@ -1636,31 +1649,50 @@ function toggleTheme() {
   stat(light ? 'Helles Design aktiv.' : 'Dunkles Design aktiv.', true);
 }
 
-/* ---------- Seitenleiste: Seite + Ein-/Ausblenden ---------- */
-function updateSbIcons() {
-  const left = document.querySelector('main').classList.contains('side-left');
-  document.getElementById('sbSideBtn').innerHTML = left ? '&#xE76C;' : '&#xE76B;';
-  const hidden = document.querySelector('main').classList.contains('sb-collapsed');
+/* ---------- Panels: Seitenvorschau & Seitenleiste (Seite + Ein-/Ausblenden) ---------- */
+function updatePanelIcons() {
+  const main = document.querySelector('main');
+  const sbLeft = main.classList.contains('sb-left');
+  const sbHidden = main.classList.contains('sb-collapsed');
+  document.getElementById('sbSideBtn').innerHTML = sbLeft ? '&#xE76C;' : '&#xE76B;';
   // Pfeil zeigt in die Richtung, in die die Leiste beim Klick wandert
-  const expand = hidden;
-  document.getElementById('sbHandle').innerHTML =
-    (left ? (expand ? '&#xE76C;' : '&#xE76B;') : (expand ? '&#xE76B;' : '&#xE76C;'));
+  document.getElementById('sbHandle').innerHTML = (sbLeft === sbHidden) ? '&#xE76C;' : '&#xE76B;';
+  const thRight = main.classList.contains('thumbs-right');
+  const thHidden = main.classList.contains('thumbs-collapsed');
+  document.getElementById('thumbSideBtn').innerHTML = thRight ? '&#xE76B;' : '&#xE76C;';
+  document.getElementById('thumbHandle').innerHTML = (thRight === thHidden) ? '&#xE76B;' : '&#xE76C;';
 }
-function setSide(side) {
-  document.querySelector('main').classList.toggle('side-left', side === 'left');
-  setPref('side', side);
-  updateSbIcons();
+function setSbSide(side) {
+  document.querySelector('main').classList.toggle('sb-left', side === 'left');
+  setPref('sbSide', side);
+  updatePanelIcons();
 }
-function toggleSide() {
-  setSide(document.querySelector('main').classList.contains('side-left') ? 'right' : 'left');
+function toggleSbSide() {
+  setSbSide(document.querySelector('main').classList.contains('sb-left') ? 'right' : 'left');
 }
 function setSbVisible(v) {
   document.querySelector('main').classList.toggle('sb-collapsed', !v);
   setPref('sb', v ? '1' : '0');
-  updateSbIcons();
+  updatePanelIcons();
 }
 function toggleSb() {
   setSbVisible(document.querySelector('main').classList.contains('sb-collapsed'));
+}
+function setThumbSide(side) {
+  document.querySelector('main').classList.toggle('thumbs-right', side === 'right');
+  setPref('thumbSide', side);
+  updatePanelIcons();
+}
+function toggleThumbSide() {
+  setThumbSide(document.querySelector('main').classList.contains('thumbs-right') ? 'left' : 'right');
+}
+function setThumbsVisible(v) {
+  document.querySelector('main').classList.toggle('thumbs-collapsed', !v);
+  setPref('thumbs', v ? '1' : '0');
+  updatePanelIcons();
+}
+function toggleThumbs() {
+  setThumbsVisible(document.querySelector('main').classList.contains('thumbs-collapsed'));
 }
 
 /* ---------- Papier-Drag: ziehen verschiebt die Seite, Alt+Ziehen wählt Text ---------- */
@@ -1783,7 +1815,7 @@ async function undoLast() {
 
 /* ---------- Miniaturen ---------- */
 function buildThumbs() {
-  const rail = document.getElementById('thumbrail');
+  const rail = document.getElementById('thumbList');
   rail.innerHTML = '';
   for (let n = 0; n < cur.pages; n++) {
     const t = document.createElement('div');
@@ -1796,10 +1828,6 @@ function buildThumbs() {
     t.onclick = () => jumpTo(n);
     rail.appendChild(t);
   }
-}
-function toggleThumbs() {
-  const off = document.querySelector('main').classList.toggle('thumbs-off');
-  setPref('thumbs', off ? '0' : '1');
 }
 
 /* ---------- Start ---------- */
@@ -1840,10 +1868,13 @@ loadSignatures();
 (async () => {
   await loadPrefs();                      // Einstellungen zuerst (Theme, Leisten) ...
   if (prefs.theme === 'light') document.body.classList.add('light');
-  if (prefs.side === 'left') setSide('left');
+  // alte Gesammt-Seitenwahl (vor v0.12.3) auf die neuen Einzelprefs mappen
+  if (prefs.sbSide === 'left') setSbSide('left');
+  else if (prefs.side === 'left') { setSbSide('left'); setThumbSide('right'); }
+  if (prefs.thumbSide === 'right') setThumbSide('right');
   if (prefs.sb === '0') setSbVisible(false);
-  if (prefs.thumbs === '0') document.querySelector('main').classList.add('thumbs-off');
-  updateSbIcons();
+  if (prefs.thumbs === '0') setThumbsVisible(false);
+  updatePanelIcons();
   try { const r = await fetch('/api/current'); const d = await r.json(); if (d && d.id) openDoc(d); } catch (e) {}
   updatePageIndicator();
 })();
