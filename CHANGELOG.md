@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.12.1 — Zoom hält den Mauspunkt fest
+- **Strg+Mausrad zoomt auf den Punkt unterm Cursor** (vorher lief das Bild immer
+  zur oberen linken Ecke der Seite). Nach dem Zoom bleibt derselbe Dokumentpunkt
+  unter der Maus — rein- und rauszoomend, horizontal wie vertikal.
+- Die +/−-Knöpfe der Zoomleiste zoomen jetzt auf die **Bildschirmmitte** statt
+  zur Seitenoberkante (wie Browser/Word).
+- Am Zoomlimit (30–400 %) ruckt es nicht mehr: überschüssige Radschläge
+  verschieben die Ansicht nicht (vorher konnte der Anker-Ausgleich scrollen).
+- Technik: `applyZoom` nimmt optional einen Fokus (Seite unterm Punkt + Anteil
+  rx/ry); die Scroll-Korrektur läuft gebündelt in einem rAF, bei schnellen
+  Radschlägen gewinnt der letzte Anker.
+
 ## v0.12 — Originaltext editieren (wie PDFgear, nur echter Text)
 - **Doppelklick auf eine Textzeile** (echter Text, kein Scan-Bild) öffnet ein
   Eingabefeld direkt über dem Text, mit übernommener Schriftgröße/-farbe/-art
