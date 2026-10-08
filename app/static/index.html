@@ -1553,6 +1553,35 @@ async function commitOriginalEdit() {
   const pageN = st.page;
   const zeilen = st.zeilen || [{rect, text: st.textAlt || ''}];
   if (unveraendert) return;
+  // Spalteninhalt erkennen: ueberlappen sich Zeilen vertikal (tabellarischer
+  // Block - Datum links, Beschreibung Mitte, Betrag rechts sind EIGENE Zeilen
+  // auf gleicher Hoehe), wuerde ein Sammelobjekt das Spaltenlayout zerstoeren.
+  // Dann zeilenweise ersetzen: nur geaenderte Zeilen an ihrer eigenen Position,
+  // unveraenderte Zeilen bleiben voellig unberuehrt.
+  let spalten = false;
+  for (let i = 0; i < zeilen.length && !spalten; i++) {
+    for (let j = i + 1; j < zeilen.length; j++) {
+      const a = zeilen[i].rect, b = zeilen[j].rect;
+      const ueberlapp = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+      const minH = Math.min(a[3] - a[1], b[3] - b[1]);
+      if (minH > 0 && ueberlapp > 0.4 * minH) { spalten = true; break; }
+    }
+  }
+  if (spalten) {
+    const neuZeilen = text.split('\n');
+    for (let i = 0; i < zeilen.length; i++) {
+      const alt = normalisiere(zeilen[i].text || '');
+      let neu = i < neuZeilen.length ? neuZeilen[i] : '';
+      if (i === zeilen.length - 1 && neuZeilen.length > zeilen.length)
+        neu = neuZeilen.slice(i).join('\n');   // ueberzaehlige neue Zeilen an die letzte haengen
+      if (neu === alt) continue;               // unveraendert: Zeile nicht anfassen
+      const rf = await fetch(`/api/text/replace/${cur.id}`, {method:'POST', body: originalEditForm(pageN, zeilen[i].rect, neu)});
+      if (!rf.ok) { stat('Textänderung fehlgeschlagen (Zeile ' + (i + 1) + ')'); setDirty(true); refreshPage(pageN); return; }
+    }
+    setDirty(true); refreshPage(pageN);
+    stat('Zeilenweise übernommen – jede Zeile bleibt an ihrer Stelle.', true);
+    return;
+  }
   // 1) Alle beteiligten Originalzeilen wegredigieren - EIN Undo-Eintrag,
   //    der JEDE Zeile an ihrer eigenen Position zurueckstellt ...
   const r = await fetch(`/api/text/blockreplace/${cur.id}`, {method:'POST', body: originalEditBlockForm(pageN, zeilen)});

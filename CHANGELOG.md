@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.2 — Tabellen/Spalten beim Bearbeiten nicht mehr zerstört
+- Mehrfach-Auswahlen mit **Spalteninhalt** (Datum links, Beschreibung Mitte,
+  Betrag rechts sind im PDF eigene Zeilen auf gleicher Höhe) wurden beim
+  Übernehmen zu einem fließenden Textblock zusammengezogen — das Spaltenlayout
+  war hinüber. Jetzt erkennt Blattwerk überlappende Zeilen und ersetzt
+  **zeilenweise an der jeweiligen Originalposition**: Unveränderte Zeilen
+  bleiben völlig unberührt, geänderte landen exakt dort, wo ihre Originalzeile
+  lag (Spalten-x und Zeilen-y). Absatz-Blöcke (Zeilen untereinander) nutzen
+  weiterhin das verschiebbare Sammelobjekt mit erhaltenem Zeilenraster.
+
 ## v0.17.1 — Originaltext-Editor voll deckend (Doppeltext sicher ausgeschlossen)
 - Der deckende Hintergrund des Originaltext-Editors (v0.17.0) war mit 96 %
   fast deckend — Restdurchschein des alten Texts ist jetzt sicher
