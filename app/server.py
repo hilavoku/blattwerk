@@ -268,6 +268,7 @@ def text(did: str, n: int):
             "x1": max(w[2] for w in ws),
             "y1": max(w[3] for w in ws),
             "t": " ".join(w[4] for w in ws),
+            "b": key[0],
         })
     return {"page_w": d[n].rect.width, "page_h": d[n].rect.height, "lines": out}
 

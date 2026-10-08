@@ -190,6 +190,10 @@
   .imgobj.imgsel { border:1px dashed var(--accent); background: rgba(255,255,255,.55); }
   .hit { position:absolute; z-index:2; background:rgba(255,213,0,.35); outline:1px solid rgba(255,213,0,.8); border-radius:2px; pointer-events:none; }
   .hit.active { background:rgba(255,150,0,.5); outline:2px solid #ff9600; }
+  .line.blockhover { background: var(--linehover); }
+  .line.origmark { background: var(--linesel-fill) !important; outline: 1px solid var(--linesel-outline); }
+  .line.origmark.blockhover { background: var(--linesel-fill) !important; }
+  .hit.active { animation: hitPulse .6s var(--e-out); }
   .annot { position:absolute; z-index:5; cursor:move; }
   .mode-sign .annot, .mode-text .annot { cursor:default; }
   #viewer.sigdrop { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -804,15 +808,30 @@ async function addLines(img) {
     d.className = 'line';
     d._pdfRect = [ln.x0, ln.y0, ln.x1, ln.y1];
     d._text = ln.t;
+    d.dataset.b = (ln.b === undefined ? -1 : ln.b);
     d.dataset.rect = [ln.x0, ln.y0, ln.x1, ln.y1].join(',');
     positionRect(d, [ln.x0, ln.y0, ln.x1, ln.y1], k);
     d.title = ln.t;
     d.addEventListener('mousedown', (ev) => paperDragStart(ev, img));
-    d.addEventListener('dblclick', (ev) => { ev.stopPropagation(); if (mode === 'normal') startOriginalEdit(n, d); });
+    d.addEventListener('mouseenter', () => blockHover(img, d.dataset.b, true));
+    d.addEventListener('mouseleave', () => blockHover(img, d.dataset.b, false));
+    d.addEventListener('dblclick', (ev) => {
+      ev.stopPropagation();
+      if (mode !== 'normal') return;
+      const markiert = origMarkAufSeite(img);
+      const divs = markiert.length ? markiert : blockZeilen(img, d.dataset.b);
+      startOriginalEdit(n, divs);
+    });
     d.onclick = async (ev) => {
       ev.stopPropagation();
       if (lastWasDrag) return;   // Drag-Ende, kein Klick
       if (ev.detail > 1) return; // Doppelklick = editieren, nicht kopieren
+      if (ev.shiftKey) {         // Umschalt+Klick: Zeile zum gemeinsamen Editieren sammeln
+        d.classList.toggle('origmark');
+        stat(d.classList.contains('origmark') ? 'Zeile gesammelt – Doppelklick auf eine gesammelte Zeile bearbeitet alle.' :
+             'Zeile aus der Sammlung entfernt.');
+        return;
+      }
       if (mode === 'delete') {
         d.classList.toggle('marked');
         if (d.classList.contains('marked')) marked.push({page: n, rect: d.dataset.rect.split(',').map(Number)});
@@ -829,6 +848,15 @@ async function addLines(img) {
     };
     wrap.appendChild(d);
   }
+}
+function blockZeilen(img, b) {
+  return [...img.parentElement.querySelectorAll(`.line[data-b="${b}"]`)];
+}
+function origMarkAufSeite(img) {
+  return [...img.parentElement.querySelectorAll('.line.origmark')];
+}
+function blockHover(img, b, an) {
+  img.parentElement.querySelectorAll(`.line[data-b="${b}"]`).forEach(x => x.classList.toggle('blockhover', an));
 }
 function positionRect(d, rect, k) {
   d.style.left = (rect[0]*k)+'px'; d.style.top = (rect[1]*k)+'px';
@@ -1331,10 +1359,21 @@ async function reloadAnnots(n) {
 /* ---------- Originaltext editieren (Doppelklick auf echte Textzeilen, kein Bildtext) ---------- */
 let origEdit = null;   // {page, rect, textAlt, ta, delBtn}
 
-async function startOriginalEdit(pageN, lineDiv) {
+async function startOriginalEdit(pageN, lineDivs) {
   commitInline(true);
   cancelOriginalEdit();
-  const rect = lineDiv._pdfRect.slice();
+  if (!Array.isArray(lineDivs)) lineDivs = [lineDivs];
+  // Umfassendes Rechteck ueber alle Zeilen + Texte zusammenfuehren
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  const texte = [];
+  for (const d of lineDivs) {
+    const r = d._pdfRect;
+    x0 = Math.min(x0, r[0]); y0 = Math.min(y0, r[1]);
+    x1 = Math.max(x1, r[2]); y1 = Math.max(y1, r[3]);
+    texte.push(d._text || '');
+  }
+  const rect = [x0, y0, x1, y1];
+  const text = texte.join('\n');
   const img = document.querySelector('#page' + pageN + ' img');
   if (!img || !img.dataset.k) return;
   const k = parseFloat(img.dataset.k);
@@ -1347,7 +1386,7 @@ async function startOriginalEdit(pageN, lineDiv) {
   const ta = document.createElement('textarea');
   ta.className = 'inlineEdit';
   ta.dataset.k = k;
-  ta.value = lineDiv._text || '';
+  ta.value = text;
   ta.spellcheck = false;
   const [ff, fw, fs] = FAM_PREFIX[probe.alias] || FAM_PREFIX.helv;
   ta.style.fontFamily = ff; ta.style.fontWeight = fw; ta.style.fontStyle = fs;

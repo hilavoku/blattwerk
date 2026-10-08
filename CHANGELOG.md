@@ -1,8 +1,16 @@
-# PDF-Werkstatt — Changelog
-
 # Blattwerk — Changelog
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-08.
+
+## v0.15.0 — Textblöcke: Hover, Block-Editor, Zeilen sammeln
+- **Block- Hover:** Originaltext-Zeilen werden serverseitig zu Blöcken gruppiert
+  (Absätze) — fährt man mit der Maus über eine Zeile, leuchtet der ganze Block.
+- **Doppelklick bearbeitet den ganzen Block:** Der Editor öffnet mit allen Zeilen
+  des Blocks als mehrzeiligem Text; nach dem Übernehmen ist der ganze Block ein
+  verschiebbares Objekt (Schrift, Größe, Farbe, Abstand wie gewohnt änderbar).
+- **Umschalt+Klick sammelt Zeilen:** Mehrere einzelne Zeilen markieren und dann
+  per Doppelklick auf eine der Markierten gemeinsam bearbeiten.
+- Server: `/api/text` liefert je Zeile die Blocknummer (`b`, aus PyMuPDF-Blocks).
 
 ## v0.14.7 — Bedienung: Mausrad für Größe/Abstand, bequeme Exits im Text-Modus
 - **Mausrad über den Feldern „Schriftgröße" und „Zeichenabstand"** ändert die
