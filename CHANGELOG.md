@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.1 — Originaltext-Editor voll deckend (Doppeltext sicher ausgeschlossen)
+- Der deckende Hintergrund des Originaltext-Editors (v0.17.0) war mit 96 %
+  fast deckend — Restdurchschein des alten Texts ist jetzt sicher
+  ausgeschlossen (voll opak). Hinweis: Die Ansicht zeigt den Fix erst nach
+  einem App-Neustart.
+
 ## v0.17.0 — Mehrzeiligen Originaltext positionsgetreu bearbeiten
 - **Zeilenpositionen bleiben erhalten:** Beim Bearbeiten mehrzeiliger
   Originaltexte (Block-Doppelklick oder Umschalt+Klick-Sammlung) übernimmt der
