@@ -23,7 +23,7 @@
          display:flex; flex-direction:column; overflow:hidden; font-size:13px; }
 
   /* ---------- Toolbar ---------- */
-  header { display:flex; gap:4px; align-items:center; padding:6px 10px; background:var(--chrome);
+  header { display:flex; gap:4px; align-items:center; padding:9px 10px; background:var(--chrome);
            border-bottom:1px solid var(--border); flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
   header.wrap { flex-wrap:wrap; overflow-x:visible; row-gap:5px; }
   header.compact .tbtn .lbl { display:none; }
@@ -34,9 +34,14 @@
   header.slim .fmtbar select { max-width:110px; }
   .tbtn .lbl { white-space:nowrap; }
   header::-webkit-scrollbar { height:0; }
-  .brand { display:flex; align-items:center; gap:8px; margin-right:8px; user-select:none; }
-  .brand .logo { width:26px; height:26px; border-radius:6px; overflow:hidden; flex:none; }
+  .brand { display:flex; align-items:center; gap:9px; margin-right:10px; user-select:none; cursor:default; }
+  .brand .logo { width:30px; height:30px; border-radius:7px; overflow:hidden; flex:none;
+                 box-shadow:0 0 0 1px rgba(255,255,255,.12); }
   .brand .logo img { width:100%; height:100%; display:block; }
+  .brand .name { font-weight:600; font-size:14px; letter-spacing:.2px; }
+  .griff { width:6px; height:26px; align-self:center; flex:none; margin:0 4px; opacity:.6;
+           background-image: radial-gradient(circle, var(--muted) 1px, transparent 1.3px);
+           background-size: 3px 5px; background-position: center; }
   .brand b { font-size:13.5px; font-weight:600; white-space:nowrap; }
   .tbtn { display:inline-flex; align-items:center; gap:6px; background:transparent; color:var(--text);
           border:1px solid transparent; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:12.5px; white-space:nowrap; }
@@ -316,6 +321,9 @@
 <body>
 <header id="topbar">
   <div id="modePill"></div>
+  <div class="griff" title="Ziehen verschiebt das Fenster"></div>
+  <div class="brand"><div class="logo"><img src="/favicon.ico" alt=""></div><span class="name">Blattwerk</span></div>
+  <div class="griff"></div>
   <input type="file" id="file" accept=".pdf" style="display:none">
   <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
   <button class="tbtn save" id="saveBtn" onclick="saveDoc()" title="Speichern (Strg+S)"><span class="i">&#xE74E;</span><span class="lbl">Speichern</span></button>
@@ -402,7 +410,7 @@
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
       <b>Geschützte Signatur:</b> im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.<br>
-      <b>Text:</b> Bereich mit gedrückter Maustaste aufziehen oder Punkt anklicken – direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe, Abstand oben änderbar). Beenden: Esc, Rechtsklick oder Klick neben das Textfeld.<br>
+      <b>Text:</b> Bereich mit gedrückter Maustaste aufziehen oder Punkt anklicken – direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe, Abstand oben änderbar). Beenden: Esc, Rechtsklick oder Klick neben das Feld. Kopfzeile: Griffe/Logo ziehen verschiebt das Fenster, Doppelklick max/min.<br>
       <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt. Danach ist der Text ein verschiebbares Objekt.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
