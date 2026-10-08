@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.16.8 — Design-Knopf fix oben rechts neben den Fenstertasten
+- Der Design-Umschalter (Sonne/Mond) wanderte beim Umbrechen der Leiste mit
+  in Folgezeilen. Er sitzt jetzt in der fixen Zone der ersten Zeile, direkt
+  links neben Minimieren — bei jeder Fensterbreite. Der Leisteninhalt hält
+  rechts entsprechend mehr Abstand.
+
 ## v0.16.7 — Rand-Verlauf als nahtloser Umlauf
 - Der Schwarz-Rot-Gold-Verlauf lief je Seite einzeln und sprang an zwei Ecken
   von Gold auf Schwarz. Jetzt läuft er als geschlossener Umlauf ums Fenster:

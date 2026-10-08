@@ -30,7 +30,7 @@
   header { position:relative; display:flex; padding:0; background:var(--chrome);
            border-bottom:1px solid var(--border); }
   .kopfzeile { flex:1; min-width:0; display:flex; gap:4px; align-items:center;
-               padding:9px 152px 9px 10px; flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
+               padding:9px 200px 9px 10px; flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
   header.wrap .kopfzeile { flex-wrap:wrap; overflow-x:visible; row-gap:5px; }
   header.compact .tbtn .lbl { display:none; }
   header.compact .tbtn { padding:6px 8px; }
@@ -113,8 +113,14 @@
   .checkerbg { background-image: conic-gradient(#c9ced6 25%, #ffffff 0 50%, #c9ced6 0 75%, #ffffff 0); background-size: 16px 16px; }
   #sigUpThr { width:100%; margin-top:4px; accent-color:var(--accent); }
 
-  .fensterkn { display:flex; position:absolute; top:0; right:0; height:48px; z-index:3;
-               background:var(--chrome); }   /* absolut oben rechts: bleibt IMMER in der ersten Zeile */
+  /* Fixe Zone oben rechts: Design-Knopf + Fenstertasten bleiben IMMER in der
+     ersten Zeile (der Leisteninhalt bricht bei engen Fenstern um). */
+  .fensterzone { display:flex; position:absolute; top:0; right:0; height:48px; z-index:3;
+                 background:var(--chrome); }
+  .fensterzone .tbtn { align-self:stretch; height:auto; padding:0 11px; border:none;
+                       border-radius:0; background:transparent; }
+  .fensterzone .tbtn:hover { background:var(--hover); }
+  .fensterkn { display:flex; height:100%; }
   .fensterkn button { width:44px; height:100%; border:none; background:transparent; color:var(--text); cursor:default;
                       display:flex; align-items:center; justify-content:center; padding:0; }
   .fensterkn button:hover { background:var(--hover); }
@@ -185,7 +191,7 @@
   .searchwrap .hits { color:var(--muted); font-size:11.5px; min-width:44px; text-align:center; }
   .searchwrap .nav { background:none; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon); font-size:12px; padding:2px; }
   .searchwrap .nav:hover { color:var(--text); }
-  .spacer { flex:1; }
+  .spacer { flex:1; }   /* ungenutzt seit v0.16.8 (Theme-Knopf in der fixen Zone) */
 
   /* ---------- Hauptbereich ---------- */
   main { flex:1; display:flex; min-height:0; }
@@ -382,10 +388,10 @@
     <button class="nav" onclick="hitNav(-1)" title="Vorheriger Treffer">&#xE76B;</button>
     <button class="nav" onclick="hitNav(1)" title="Nächster Treffer">&#xE76C;</button>
   </div>
-  <div class="spacer"></div>
-  <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
   </div>
-  <div class="fensterkn">
+  <div class="fensterzone">
+    <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
+    <div class="fensterkn">
     <button id="knMin" title="Minimieren" onclick="window.chrome?.webview?.postMessage('fenster|min')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg></button>
     <button id="knMax" title="Maximieren / Wiederherstellen" onclick="window.chrome?.webview?.postMessage('fenster|max')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5h9v9h-9z" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
     <button id="knZu" title="Blattwerk schließen" onclick="window.chrome?.webview?.postMessage('fenster|zu')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1.1"/></svg></button>
@@ -1027,11 +1033,11 @@ window.addEventListener('blur', hideCtxMenu);
 const kopfleiste = document.querySelector('header');
 kopfleiste.addEventListener('mousedown', (ev) => {
   if (ev.button !== 0) return;
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterkn')) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterzone')) return;
   window.chrome?.webview?.postMessage('fenster|drag');
 });
 kopfleiste.addEventListener('dblclick', (ev) => {
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, .fensterkn')) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, .fensterzone')) return;
   window.chrome?.webview?.postMessage('fenster|max');
 });
 window.pwMaximiert = (max) => {
