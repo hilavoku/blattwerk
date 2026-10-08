@@ -65,7 +65,8 @@
   #sigBtn img { max-height:22px; max-width:70px; background:white; border-radius:3px; padding:1px; vertical-align:middle; }
   #sigBtn img:empty { display:none; }
   #sigPanel { position:fixed; z-index:300; background:var(--chrome); border:1px solid var(--border); border-radius:10px;
-              box-shadow:0 12px 40px rgba(0,0,0,.65); padding:10px; display:none; width:340px; max-height:70vh; overflow:auto; }
+              box-shadow:0 12px 40px rgba(0,0,0,.65); padding:10px; display:none; width:340px; max-height:70vh; overflow:auto;
+              user-select:none; }   /* kein Textauswahl-Drag: Klicks auf Beschriftungen muessen als Klick durchgehen */
   .sigitem { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
   .sigitem:hover { background:var(--hover); }
   .sigitem.sel { border-color:var(--accent); background:var(--accent-dim); }
@@ -80,7 +81,7 @@
             border:1px dashed var(--border); border-radius:8px; color:var(--muted); cursor:pointer; font-size:12.5px; }
   .sigadd:hover { color:var(--accent); border-color:var(--accent-dim); }
   #renameBox { position:fixed; z-index:400; background:var(--chrome); border:1px solid var(--accent); border-radius:10px;
-               padding:12px; display:none; width:280px; box-shadow:0 12px 40px rgba(0,0,0,.65); }
+               padding:12px; display:none; width:280px; box-shadow:0 12px 40px rgba(0,0,0,.65); user-select:none; }
   #renameBox input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px;
                      padding:7px 9px; font-size:13px; outline:none; }
   #renameBox input:focus { border-color:var(--accent-dim); }
@@ -99,7 +100,7 @@
   #ctxMenu button.danger { color:var(--danger); }
   #ctxMenu button.danger:hover { background:rgba(229,83,75,.14); }
   .miniBox { position:fixed; z-index:400; background:var(--chrome); border:1px solid var(--border); border-radius:10px;
-             padding:12px; display:none; width:300px; box-shadow:0 12px 40px rgba(0,0,0,.65); }
+             padding:12px; display:none; width:300px; box-shadow:0 12px 40px rgba(0,0,0,.65); user-select:none; }
   .miniBox .row { display:flex; gap:8px; margin-top:10px; }
   .miniBox button { flex:1; padding:6px 0; border-radius:6px; border:1px solid var(--border); background:var(--chrome2);
                     color:var(--text); cursor:pointer; font-size:12.5px; }

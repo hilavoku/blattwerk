@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.6 — Fix: Klicks auf Panel-Texte schlagen nicht mehr fehl
+- Klicks auf die Beschriftungen im Signatur-Panel (z. B. „Neue Signatur
+  hochladen") konnten wirkungslos bleiben: Die Panel-Texte waren
+  auswählbar, und ein Klick mit minimaler Mausbewegung startete eine
+  Textauswahl — nach einer Auswahl erzeugt Windows kein Klick-Ereignis
+  mehr, der Knopf feuerte nie. Panels und Dialoge (Signatur, Umbenennen,
+  Mini-Dialoge) sind jetzt nicht mehr textselektierbar; Klicks gehen
+  immer als Klicks durch. (Aufzeichnung des Nutzer-Klicks zeigte:
+  Drücken+Bewegen kamen an, das Loslassen wurde von der Auswahl geschluckt.)
+
 ## v0.17.5 — Originaltext-Editor bricht Zeilen nicht mehr zu früh um
 - Das Editierfenster war durch Innenabstand und Rahmen etwas schmaler als der
   Original-Block, und die Bildschirm-Schrift fällt minimal breiter aus als der
