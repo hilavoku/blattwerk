@@ -23,9 +23,15 @@
          display:flex; flex-direction:column; overflow:hidden; font-size:13px; }
 
   /* ---------- Toolbar ---------- */
-  header { display:flex; gap:4px; align-items:center; padding:9px 10px; background:var(--chrome);
-           border-bottom:1px solid var(--border); flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
-  header.wrap { flex-wrap:wrap; overflow-x:visible; row-gap:5px; }
+  /* Kopfzeile = Titelleiste des Rahmenlos-Fensters. Die Fenstertasten sind
+     ABSOLUT oben rechts verankert - sie bleiben immer in der ersten Zeile;
+     nur der Inhalt (.kopfzeile) bricht bei engen Fenstern in Folgewzeilen um
+     (rechts bleibt per Padding die Tastenzone frei: 132px Tasten + Rand). */
+  header { position:relative; display:flex; padding:0; background:var(--chrome);
+           border-bottom:1px solid var(--border); }
+  .kopfzeile { flex:1; min-width:0; display:flex; gap:4px; align-items:center;
+               padding:9px 152px 9px 10px; flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
+  header.wrap .kopfzeile { flex-wrap:wrap; overflow-x:visible; row-gap:5px; }
   header.compact .tbtn .lbl { display:none; }
   header.compact .tbtn { padding:6px 8px; }
   header.compact .searchwrap input { width:88px; }
@@ -33,7 +39,7 @@
   header.slim .tbtn { padding:5px 6px; }
   header.slim .fmtbar select { max-width:110px; }
   .tbtn .lbl { white-space:nowrap; }
-  header::-webkit-scrollbar { height:0; }
+  .kopfzeile::-webkit-scrollbar { height:0; }
   .brand { display:flex; align-items:center; gap:9px; margin-right:10px; user-select:none; cursor:default; }
   .brand .logo { width:30px; height:30px; border-radius:7px; overflow:hidden; flex:none;
                  box-shadow:0 0 0 1px rgba(255,255,255,.12); }
@@ -107,9 +113,9 @@
   .checkerbg { background-image: conic-gradient(#c9ced6 25%, #ffffff 0 50%, #c9ced6 0 75%, #ffffff 0); background-size: 16px 16px; }
   #sigUpThr { width:100%; margin-top:4px; accent-color:var(--accent); }
 
-  .fensterkn { display:flex; align-self:stretch; position:sticky; right:0; margin-left:auto;
-               background:var(--chrome); }   /* sticky: bleibt bei schmalen Fenstern immer oben rechts */
-  .fensterkn button { width:44px; border:none; background:transparent; color:var(--text); cursor:default;
+  .fensterkn { display:flex; position:absolute; top:0; right:0; height:48px; z-index:3;
+               background:var(--chrome); }   /* absolut oben rechts: bleibt IMMER in der ersten Zeile */
+  .fensterkn button { width:44px; height:100%; border:none; background:transparent; color:var(--text); cursor:default;
                       display:flex; align-items:center; justify-content:center; padding:0; }
   .fensterkn button:hover { background:var(--hover); }
   #knZu:hover { background:#e81123; color:#fff; }
@@ -322,6 +328,7 @@
 <body>
 <header id="topbar">
   <div id="modePill"></div>
+  <div class="kopfzeile">
   <div class="griff" title="Ziehen verschiebt das Fenster"></div>
   <div class="brand"><div class="logo"><img src="/favicon.ico" alt=""></div><span class="name">Blattwerk</span></div>
   <div class="griff"></div>
@@ -377,6 +384,7 @@
   </div>
   <div class="spacer"></div>
   <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
+  </div>
   <div class="fensterkn">
     <button id="knMin" title="Minimieren" onclick="window.chrome?.webview?.postMessage('fenster|min')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg></button>
     <button id="knMax" title="Maximieren / Wiederherstellen" onclick="window.chrome?.webview?.postMessage('fenster|max')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5h9v9h-9z" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
@@ -1019,11 +1027,11 @@ window.addEventListener('blur', hideCtxMenu);
 const kopfleiste = document.querySelector('header');
 kopfleiste.addEventListener('mousedown', (ev) => {
   if (ev.button !== 0) return;
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo')) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterkn')) return;
   window.chrome?.webview?.postMessage('fenster|drag');
 });
 kopfleiste.addEventListener('dblclick', (ev) => {
-  if (ev.target.closest('button, input, select, .fmtbar, .searchwrap, .hits')) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, .fensterkn')) return;
   window.chrome?.webview?.postMessage('fenster|max');
 });
 window.pwMaximiert = (max) => {
@@ -2495,11 +2503,13 @@ function buildThumbs() {
 }
 
 /* ---------- Start ---------- */
-/* Toolbar passt sich an: 1. Beschriftungen aus (nur Icons), 2. Marke aus, 3. zweite Reihe */
+/* Toolbar passt sich an: 1. Beschriftungen aus (nur Icons), 2. Marke aus, 3. zweite Reihe.
+   Gemessen wird die .kopfzeile (der Inhaltstraeger) - der Header selbst scrollt nicht. */
 function fitToolbar() {
   const h = document.getElementById('topbar');
   if (!h) return;
-  const eng = () => h.scrollWidth > h.clientWidth + 2;
+  const b = h.querySelector('.kopfzeile') || h;
+  const eng = () => b.scrollWidth > b.clientWidth + 2;
   h.classList.remove('compact', 'slim', 'wrap');
   if (!eng()) return;
   h.classList.add('compact');
@@ -2509,12 +2519,12 @@ function fitToolbar() {
   h.classList.add('wrap');   // letzte Stufe: zweite Reihe
 }
 window.addEventListener('resize', fitToolbar);
-document.getElementById('topbar').addEventListener('scroll', fitToolbar);
+document.querySelector('#topbar .kopfzeile').addEventListener('scroll', fitToolbar);
 // Start-Problem: Breitenaenderungen NACH dem Laden (Signatur-Vorschau im Knopf,
 // Schriftart-Wechsel) erwischen die fixen Timeouts nicht - deshalb ereignisbasiert
 // nachfuehren:
 const fitToolbarNach = () => requestAnimationFrame(fitToolbar);
-if (window.ResizeObserver) new ResizeObserver(fitToolbarNach).observe(document.getElementById('topbar'));
+if (window.ResizeObserver) new ResizeObserver(fitToolbarNach).observe(document.querySelector('#topbar .kopfzeile'));
 window.addEventListener('load', fitToolbarNach);
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitToolbarNach);
 document.getElementById('sigCurImg').addEventListener('load', fitToolbarNach);

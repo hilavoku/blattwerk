@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.16.4 — Fenstertasten IMMER oben rechts (auch bei Umbruch)
+- Die Tasten Minimieren/Maximieren/Schließen wanderten bei engen Fenstern
+  mit in die zweite Kopfzeilenzeile. Jetzt sind sie absolut oben rechts
+  verankert: Sie bleiben IMMER in der ersten Zeile, während der Rest der
+  Leiste bei Bedarf in Folgezeilen umbricht (die Tastenzone bleibt rechts
+  immer frei — kein Element läuft unter die Tasten).
+- Die Stufen der Leiste (Beschriftungen aus → Marke schlank → zweite Reihe)
+  wirken unverändert, messen aber jetzt den Inhaltsstreifen.
+
 ## v0.16.3 — Block-Editor: Undo stellt jede Zeile exakt wieder her
 - Nach der Block-Bearbeitung (v0.15.0) hingen die Zeilen nur als ein Objekt
   zusammen, und Undo setzte den gesamten Text an die Position der ersten
