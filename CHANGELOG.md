@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.5 — Originaltext-Editor bricht Zeilen nicht mehr zu früh um
+- Das Editierfenster war durch Innenabstand und Rahmen etwas schmaler als der
+  Original-Block, und die Bildschirm-Schrift fällt minimal breiter aus als der
+  PDF-Satz — jede Zeile brach darum einen Tick früher um, und beim Übernehmen
+  wurden aus diesen Sichtumbrüchen echte neue Zeilen („CR am Ende“).
+  Die Box ist jetzt so breit wie die **breiteste Originalzeile in genau der
+  eingestellten Bildschirm-Schrift** (kanvas-gemessen, + Sicherheitszuschlag):
+  Originalzeilen bleiben beim Tippen einzeilig, die Zeilenstruktur beim
+  Übernehmen stimmt mit dem Original überein.
+
 ## v0.17.4 — Fix: Knöpfe „tun nichts" (Klicks landen versetzt)
 - Auf Rechnern mit **Monitor-Mischbetrieb unterschiedlicher Skalierung**
   (z. B. Notebook 150 % + Zweitmonitor anders) landeten echte Mausklicks

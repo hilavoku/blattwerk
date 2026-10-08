@@ -1460,6 +1460,19 @@ async function startOriginalEdit(pageN, lineDivs) {
   ta.style.fontSize = (size * k) + 'px';
   ta.style.color = `rgb(${farbe.map(v => Math.round(v)).join(',')})`;
   positionRect(ta, rect, k);
+  // Breite: die breiteste Originalzeile muss UNGE BROCHEN in die Box passen.
+  // Die Box ist durch Padding+Rahmen schmaler als der Union und CSS-Satzmessung
+  // weicht minimal vom PDF ab - bricht eine Zeile zu frueh um, macht der Commit
+  // aus dem Umbruch echte neue Zeilen im Dokument (v0.17.5). Canvas misst den
+  // Satz in exakt derselben Schrift/Groesse wie die Textarea.
+  try {
+    const mess = document.createElement('canvas').getContext('2d');
+    mess.font = [fw, fs].filter(Boolean).join(' ') + ' ' + (size * k) + 'px ' + ff;
+    const breiteste = texte.reduce((m, t) => Math.max(m, mess.measureText(t).width), 0);
+    const wrapB = img.parentElement.clientWidth;
+    const soll = Math.ceil(Math.max((rect[2] - rect[0]) * k + 2, breiteste + 20));
+    ta.style.width = Math.min(soll, Math.max(wrapB - rect[0] * k - 2, 120)) + 'px';
+  } catch (e) {}
   const hoehe0 = (rect[3] - rect[1]) * k;
   const autoGrow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(hoehe0, ta.scrollHeight) + 'px'; };
   ta.addEventListener('input', autoGrow);
