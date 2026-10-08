@@ -2,6 +2,14 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.16.5 — Fensterrand rundum: oben geschlossen (und greifbar)
+- Der dunkle Fensterrand lief bisher nur unten/links/rechts — oben endete das
+  Fenster unsichtbar an der Bildschirmkante. Jetzt zieht sich die 6px-Leiste
+  rundum, auch über der Kopfzeile: Das Fenster ist oben klar abgegrenzt.
+- Die obere Kante ist zugleich Größengriff (wie unten/links/rechts): Ziehen
+  verändert die Fensterhöhe; die Ecken oben-links/oben-rechts ändern die
+  Größe diagonal. Maximiert bleibt das Fenster randlos über dem Bildschirm.
+
 ## v0.16.4 — Fenstertasten IMMER oben rechts (auch bei Umbruch)
 - Die Tasten Minimieren/Maximieren/Schließen wanderten bei engen Fenstern
   mit in die zweite Kopfzeilenzeile. Jetzt sind sie absolut oben rechts

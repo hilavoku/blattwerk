@@ -52,7 +52,7 @@ internal static class Program
             Font = new Font("Segoe UI", 9f),
             FormBorderStyle = FormBorderStyle.None,
             BackColor = System.Drawing.Color.FromArgb(23, 25, 29),
-            Padding = new Padding(6, 0, 6, 6)
+            Padding = new Padding(6, 6, 6, 6)
         };
 
         // Fenstergroesse/-position wiederherstellen (fenster.json neben der EXE)
@@ -84,10 +84,10 @@ internal static class Program
 
         form.Resize += (_, _) =>
         {
-            // Maximiert: randlos ueber den ganzen Bildschirm; sonst 6px-Groesse-Rand unten/links/rechts
+            // Maximiert: randlos ueber den ganzen Bildschirm; sonst 6px-Groesse-Rand rundum
             form.Padding = form.WindowState == FormWindowState.Maximized
                 ? Padding.Empty
-                : new Padding(6, 0, 6, 6);
+                : new Padding(6, 6, 6, 6);
         };
 
         form.Load += async (_, _) =>
@@ -334,7 +334,8 @@ internal static class Program
 internal sealed class HauptForm : Form
 {
     private const int WM_NCHITTEST = 0x84;
-    private const int HTLEFT = 10, HTRIGHT = 11, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+    private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13, HTTOPRIGHT = 14,
+                      HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
     private const int WM_NCLBUTTONDOWN = 0xA1;
     private const int HTCAPTION = 2;
 
@@ -376,9 +377,13 @@ internal sealed class HauptForm : Form
             var p = PointToClient(new Point(x, y));
             bool links = p.X <= Padding.Left;
             bool rechts = p.X >= ClientSize.Width - Padding.Right;
+            bool oben = p.Y <= Padding.Top;
             bool unten = p.Y >= ClientSize.Height - Padding.Bottom;
+            if (links && oben) { m.Result = (IntPtr)HTTOPLEFT; return; }
+            if (rechts && oben) { m.Result = (IntPtr)HTTOPRIGHT; return; }
             if (links && unten) { m.Result = (IntPtr)HTBOTTOMLEFT; return; }
             if (rechts && unten) { m.Result = (IntPtr)HTBOTTOMRIGHT; return; }
+            if (oben) { m.Result = (IntPtr)HTTOP; return; }
             if (links) { m.Result = (IntPtr)HTLEFT; return; }
             if (rechts) { m.Result = (IntPtr)HTRIGHT; return; }
             if (unten) { m.Result = (IntPtr)HTBOTTOM; return; }
