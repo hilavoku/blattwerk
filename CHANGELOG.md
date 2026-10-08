@@ -2,6 +2,21 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.0 — Mehrzeiligen Originaltext positionsgetreu bearbeiten
+- **Zeilenpositionen bleiben erhalten:** Beim Bearbeiten mehrzeiliger
+  Originaltexte (Block-Doppelklick oder Umschalt+Klick-Sammlung) übernimmt der
+  neue Text jetzt die **Baseline der ersten Zeile und den gemessenen
+  Zeilenabstand** des Originals — nicht mehr das starre 1,25-fache Raster.
+  Unveränderte Zeilen stehen nach dem Übernehmen auf Zehntel-Punkt exakt dort,
+  wo das Original stand; auch im gespeicherten PDF (Zeilenabstand wird im
+  NM-Marker geführt und gilt für Overlay, Appearance, Verschieben und Undo).
+- **Originaltext-Editor deckend:** Unter dem Eingabefeld steht beim
+  Originaltext der alte Text noch im Papier — das Feld hat deshalb jetzt einen
+  deckenden Papier-Hintergrund (vorher durchscheinend: „Buchstabenwald").
+  Neu eingetippter Text bleibt wie gewohnt transparent.
+- Längere Zeilen erweitern das Textobjekt jetzt nach Bedarf in der Breite
+  (zuvor wurde längerer Text an der Original-Blockbreite abgeschnitten).
+
 ## v0.16.10 — Fix: weiße Striche im Fensterrand nach dem Vergrößern weg
 - Beim Ziehen der Fensterkante blieben stellenweise kleine weiße vertikale
   Striche in der Verlaufszone stehen (das WebView2 malt während der

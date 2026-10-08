@@ -801,6 +801,7 @@ def annots(did: str, n: int):
                 "xref": a.xref, "type": "text", "rect": list(a.rect),
                 "text": (a.info.get("content") or "").rstrip("\n"),
                 "font": font, "size": size, "color": color, "spacing": spacing,
+                "leading": _txt_leading(name),
             })
         elif t == "Stamp":
             name = a.info.get("id", "") or ""
@@ -825,7 +826,8 @@ async def annot_move(did: str, page: int = Form(...), xref: int = Form(...), rec
         an.update()
         an.set_rect(r)   # update() kann das Rect zuruecksetzen -> danach final setzen
         sp = _txt_spacing(an.info.get("id", "") or "")
-        _freetext_ap_mit_abstand(d, an, pg.rect.height, sp)   # eigener AP bleibt erhalten (MuPDF-AP clippt Mehrzeiliges)
+        ld = _txt_leading(an.info.get("id", "") or "")
+        _freetext_ap_mit_abstand(d, an, pg.rect.height, sp, ld)   # eigener AP bleibt erhalten (MuPDF-AP clippt Mehrzeiliges)
     push_undo(did, {"op": "annot-move", "page": page, "xref": xref, "rect": old_rect,
                     "is_text": an.type[1] == "FreeText"})
     return {"ok": True}
@@ -1032,7 +1034,9 @@ async def text_blockreplace(did: str, page: int = Form(...), zeilen: str = Form(
                           "font": li_alias, "color": list(li_farbe)})
     pg.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
     push_undo(did, {"op": "origzeilen", "page": page, "zeilen": eintraege})
-    return {"ok": True, "n": len(eintraege)}
+    # zeilen mit zurueckgeben: Client leitet daraus Baseline + Zeilenabstand des
+    # Originals ab, damit der ersetzende Textblock am gleichen Raster steht.
+    return {"ok": True, "n": len(eintraege), "zeilen": eintraege}
 
 
 FONTS = {"helv": "Helvetica", "hebo": "Helvetica Fett", "heit": "Helvetica Kursiv", "hebi": "Helvetica Fett-Kursiv",
@@ -1508,6 +1512,7 @@ def annots(did: str, n: int):
                 "xref": a.xref, "type": "text", "rect": list(a.rect),
                 "text": (a.info.get("content") or "").rstrip("\n"),
                 "font": font, "size": size, "color": color, "spacing": spacing,
+                "leading": _txt_leading(name),
             })
         elif t == "Stamp":
             name = a.info.get("id", "") or ""
@@ -1532,7 +1537,8 @@ async def annot_move(did: str, page: int = Form(...), xref: int = Form(...), rec
         an.update()
         an.set_rect(r)   # update() kann das Rect zuruecksetzen -> danach final setzen
         sp = _txt_spacing(an.info.get("id", "") or "")
-        _freetext_ap_mit_abstand(d, an, pg.rect.height, sp)   # eigener AP bleibt erhalten (MuPDF-AP clippt Mehrzeiliges)
+        ld = _txt_leading(an.info.get("id", "") or "")
+        _freetext_ap_mit_abstand(d, an, pg.rect.height, sp, ld)   # eigener AP bleibt erhalten (MuPDF-AP clippt Mehrzeiliges)
     push_undo(did, {"op": "annot-move", "page": page, "xref": xref, "rect": old_rect,
                     "is_text": an.type[1] == "FreeText"})
     return {"ok": True}
@@ -1691,10 +1697,25 @@ def _txt_spacing(nm):
     return 0.0
 
 
-def _freetext_ap_mit_abstand(doc, an, page_h, spacing):
+def _txt_leading(nm):
+    """Zeilenabstand (pt) aus dem PDFW-TXT-NM-Marker (6. Feld; 0 = Standard
+    size * 1,25). Wird beim Bearbeiten von Originaltext gesetzt, damit der
+    ersetzende Textblock den Zeilenraster des Originals einhaelt."""
+    if nm.startswith("PDFW-TXT:"):
+        teile = nm.split(":", 5)
+        if len(teile) >= 6:
+            try:
+                return float(teile[5])
+            except ValueError:
+                pass
+    return 0.0
+
+
+def _freetext_ap_mit_abstand(doc, an, page_h, spacing, leading=0.0):
     """Ersetzt den Appearance-Stream einer Freitext-Annotation durch eine
-    Darstellung mit Zeichenabstand (PDF-Operator Tc, in Punkten).
-    Eigenschaften (Rect, Text, Schrift) kommen aus der Annotation selbst."""
+    Darstellung mit Zeichenabstand (PDF-Operator Tc, in Punkten) und
+    Zeilenabstand. Eigenschaften (Rect, Text, Schrift) kommen aus der
+    Annotation selbst; leading in pt (0 = size * 1,25)."""
     r = an.rect
     text = (an.info.get("content") or "").replace("\r\n", "\n")
     nm = an.info.get("id", "") or ""
@@ -1702,6 +1723,7 @@ def _freetext_ap_mit_abstand(doc, an, page_h, spacing):
     basefont = FONTS_AP.get(font, "Helvetica")
     color01 = tuple(c / 255 for c in color)
     fontx = _font_xref(doc, basefont)
+    zeilenhoehe = leading if leading > 0 else size * 1.25
     teile = [f"BT /F0 {size:.4g} Tf {color01[0]:.4g} {color01[1]:.4g} {color01[2]:.4g} rg"]
     if spacing:
         teile.append(f"{spacing:.4g} Tc")
@@ -1709,7 +1731,7 @@ def _freetext_ap_mit_abstand(doc, an, page_h, spacing):
     # BBox (kein Abschnitt), und die Lage passt zum HTML-Overlay (WYSIWYG).
     # Zeilen im 1,25-fachen Leading wie das Overlay.
     for i, zeile in enumerate(text.split("\n")):
-        baseline = (page_h - r.y0) - size * 0.9 - i * size * 1.25
+        baseline = (page_h - r.y0) - size * 0.9 - i * zeilenhoehe
         teile.append(f"1 0 0 1 {r.x0 + 2:.2f} {baseline:.2f} Tm {_pdf_string(zeile).decode('latin-1')} Tj")
     teile.append("ET")
     apx = doc.get_new_xref()
@@ -1722,9 +1744,11 @@ def _freetext_ap_mit_abstand(doc, an, page_h, spacing):
 @app.post("/api/annot/text/{did}")
 async def annot_text(did: str, page: int = Form(...), rect: str = Form(...), text: str = Form(""),
                      size: float = Form(11), font: str = Form("helv"), color: str = Form("0,0,0"),
-                     xref: int = Form(0), spacing: str = Form("0")):
+                     xref: int = Form(0), spacing: str = Form("0"), leading: str = Form("0")):
     """Freitext-Annotation anlegen oder (bei xref>0) mit neuen Eigenschaften neu erzeugen.
-    spacing = Zeichenabstand in Punkten (0 = normal; rendert ueber eigenen AP-Stream)."""
+    spacing = Zeichenabstand, leading = Zeilenabstand in Punkten (0 = Standard
+    size * 1,25; beim Ersetzen von Originaltext wird der gemessene Zeilenraster
+    des Originals uebergeben, damit die Zeilen an ihrer Position bleiben)."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
@@ -1734,11 +1758,16 @@ async def annot_text(did: str, page: int = Form(...), rect: str = Form(...), tex
         spacing_f = float(spacing or 0)
     except ValueError:
         spacing_f = 0.0
+    try:
+        leading_f = float(leading or 0)
+    except ValueError:
+        leading_f = 0.0
     r = pymupdf.Rect(*[float(v) for v in json.loads(rect)])
     col = tuple(float(c) for c in color.split(","))
     pg = d[page]
     o_font, o_size, o_color, o_text = "helv", 11.0, [0, 0, 0], ""
     o_spacing = 0.0
+    o_leading = 0.0
     if xref:
         old = pg.load_annot(xref)
         if old is not None:
@@ -1747,20 +1776,22 @@ async def annot_text(did: str, page: int = Form(...), rect: str = Form(...), tex
             o_font, o_size, o_color = _txt_props(old_nm)
             o_text = (old.info.get("content") or "").rstrip("\n")
             o_spacing = _txt_spacing(old_nm)
+            o_leading = _txt_leading(old_nm)
             pg.delete_annot(old)
     a = pg.add_freetext_annot(r, text, fontsize=float(size), fontname=font, text_color=col)
     a.update()
     # Eigenschaften im NM-Marker konservieren (PyMuPDF-Ruecklesen ist unzuverlaessig)
-    marker = f"PDFW-TXT:{font}:{size}:{col[0]},{col[1]},{col[2]}:{spacing_f}"
+    marker = f"PDFW-TXT:{font}:{size}:{col[0]},{col[1]},{col[2]}:{spacing_f}:{leading_f}"
     d.xref_set_key(a.xref, "NM", f"({marker})")
     # IMMER eigener Appearance-Stream: MuPDFs Freitext-AP rendert mehrzeilig mit
     # ~2,4-fachem Zeilenabstand und clippt Folgelinien an der BBox weg (4. Zeile
-    # unsichtbar). Unser AP nutzt 1,25-faches Leading wie das HTML-Overlay.
-    _freetext_ap_mit_abstand(d, a, pg.rect.height, spacing_f)
+    # unsichtbar). Unser AP nutzt das Leading aus dem Marker (Default 1,25).
+    _freetext_ap_mit_abstand(d, a, pg.rect.height, spacing_f, leading_f)
     if xref:
         push_undo(did, {"op": "text-restore", "page": page, "new_xref": a.xref,
                         "old": {"rect": list(r), "text": o_text, "font": o_font,
-                                "size": o_size, "color": o_color, "spacing": o_spacing}})
+                                "size": o_size, "color": o_color, "spacing": o_spacing,
+                                "leading": o_leading}})
     else:
         push_undo(did, {"op": "annot-delete", "page": page, "xref": a.xref})
     return {"ok": True, "xref": a.xref}
@@ -1875,9 +1906,10 @@ def undo(did: str):
                                   fontname=o["font"], text_color=tuple(o["color"]))
         a.update()
         sp = float(o.get("spacing") or 0)
+        ld = float(o.get("leading") or 0)
         d.xref_set_key(a.xref, "NM",
-                       f"(PDFW-TXT:{o['font']}:{o['size']}:{o['color'][0]},{o['color'][1]},{o['color'][2]}:{sp})")
-        _freetext_ap_mit_abstand(d, a, pg.rect.height, sp)   # immer eigener AP
+                       f"(PDFW-TXT:{o['font']}:{o['size']}:{o['color'][0]},{o['color'][1]},{o['color'][2]}:{sp}:{ld})")
+        _freetext_ap_mit_abstand(d, a, pg.rect.height, sp, ld)   # immer eigener AP
     elif op == "stamp-recreate":
         fname = os.path.basename(e.get("fname") or "")
         png = _sig_bytes(fname) if fname else None
@@ -1908,9 +1940,10 @@ def undo(did: str):
                                   fontname=e["font"], text_color=tuple(e["color"]))
         a.update()
         sp = float(e.get("spacing") or 0)
+        ld = float(e.get("leading") or 0)
         d.xref_set_key(a.xref, "NM",
-                       f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]}:{sp})")
-        _freetext_ap_mit_abstand(d, a, pg.rect.height, sp)   # immer eigener AP
+                       f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]}:{sp}:{ld})")
+        _freetext_ap_mit_abstand(d, a, pg.rect.height, sp, ld)   # immer eigener AP
     elif op == "image-move":
         o = e
         pg.draw_rect(pymupdf.Rect(*o["neu"]), color=None, fill=(1, 1, 1), overlay=True)
