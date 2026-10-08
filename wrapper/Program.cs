@@ -121,9 +121,8 @@ internal static class Program
                     }
                     else if (msg == "theme|light" || msg == "theme|dark")
                     {
-                        // Helles Theme: Fensterrand als Schwarz-Rot-Gold-Verlauf (Markenmotiv),
-                        // dunkles Theme: dunkler Rand wie bisher
-                        form.HellesTheme = msg == "theme|light";
+                        // Fensterrand ist seit v0.16.9 in beiden Designs der
+                        // Schwarz-Rot-Gold-Verlauf - Nachricht wird nur noch ignoriert
                     }
                     else if (msg != null && msg.StartsWith("saveas|"))
                     {
@@ -368,19 +367,6 @@ internal sealed class HauptForm : Form
             : FormWindowState.Maximized;
     }
 
-    /// <summary>Theme-Meldung der UI: true = heller Fensterrand als Schwarz-Rot-Gold.</summary>
-    public bool HellesTheme
-    {
-        get { return _hellesTheme; }
-        set
-        {
-            if (_hellesTheme == value) return;
-            _hellesTheme = value;
-            Invalidate();   // Randzone neu zeichnen
-        }
-    }
-    private bool _hellesTheme;
-
     // Markenfarben wie das Band ueber der Kopfzeile (index.html header::before)
     private static readonly Color RandSchwarz = Color.FromArgb(26, 26, 26);
     private static readonly Color RandRot = Color.FromArgb(221, 0, 0);
@@ -391,7 +377,7 @@ internal sealed class HauptForm : Form
         base.OnPaint(e);
         var g = e.Graphics;
         int b = Padding.Left;
-        if (!HellesTheme || b == 0) return;   // dunkles Theme oder maximiert: Rand bleibt dunkel
+        if (b == 0) return;   // maximiert: kein Rand
         // Verlaufskamm schwarz - rot - gold wie das CSS-Band (50% Rot). Der Rand
         // laeuft als NAHTLOSER Umlauf ums Fenster (an jeder Ecke treffen gleiche
         // Farben aufeinander): oben schwarz->gold, rechts gold->schwarz,

@@ -2,6 +2,11 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.16.9 — Schwarz-Rot-Gold-Rand jetzt in beiden Designs
+- Der Verlaufsrand (nahtloser Umlauf, v0.16.7) gehört nicht mehr nur zum
+  hellen Design — konsequenterweise trägt ihn jetzt auch das dunkle.
+  Maximiert bleibt das Fenster randlos wie gehabt.
+
 ## v0.16.8 — Design-Knopf fix oben rechts neben den Fenstertasten
 - Der Design-Umschalter (Sonne/Mond) wanderte beim Umbrechen der Leiste mit
   in Folgezeilen. Er sitzt jetzt in der fixen Zone der ersten Zeile, direkt
