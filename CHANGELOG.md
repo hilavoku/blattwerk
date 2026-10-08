@@ -2,6 +2,13 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.16.7 — Rand-Verlauf als nahtloser Umlauf
+- Der Schwarz-Rot-Gold-Verlauf lief je Seite einzeln und sprang an zwei Ecken
+  von Gold auf Schwarz. Jetzt läuft er als geschlossener Umlauf ums Fenster:
+  oben schwarz→gold, rechts gold→schwarz, unten (weiter im Uhrzeigersinn)
+  schwarz→gold, links gold→schwarz — an jeder Ecke treffen gleiche Farben
+  aufeinander, kein Sprung mehr.
+
 ## v0.16.6 — Heller Fensterrand: Schwarz-Rot-Gold statt Schwarz
 - Im hellen Design war der Fensterrand komplett schwarz — hart am hellen
   Fenster. Jetzt zeigt er dort den Marken-Verlauf **Schwarz → Rot → Gold**

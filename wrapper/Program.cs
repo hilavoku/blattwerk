@@ -392,20 +392,28 @@ internal sealed class HauptForm : Form
         var g = e.Graphics;
         int b = Padding.Left;
         if (!HellesTheme || b == 0) return;   // dunkles Theme oder maximiert: Rand bleibt dunkel
-        // Verlaufskamm schwarz - rot - gold, wie das CSS-Band (linear-gradient 50% Rot)
+        // Verlaufskamm schwarz - rot - gold wie das CSS-Band (50% Rot). Der Rand
+        // laeuft als NAHTLOSER Umlauf ums Fenster (an jeder Ecke treffen gleiche
+        // Farben aufeinander): oben schwarz->gold, rechts gold->schwarz,
+        // unten gold->schwarz (in Leserichtung), links schwarz->gold.
         var kamm = new ColorBlend
         {
             Positions = new float[] { 0f, 0.5f, 1f },
             Colors = new[] { RandSchwarz, RandRot, RandGold }
         };
+        var kammUmgekehrt = new ColorBlend
+        {
+            Positions = new float[] { 0f, 0.5f, 1f },
+            Colors = new[] { RandGold, RandRot, RandSchwarz }
+        };
         using (var po = new LinearGradientBrush(new Rectangle(0, 0, Width, b), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
         { po.InterpolationColors = kamm; g.FillRectangle(po, 0, 0, Width, b); }
-        using (var pu = new LinearGradientBrush(new Rectangle(0, Height - b, Width, b), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
-        { pu.InterpolationColors = kamm; g.FillRectangle(pu, 0, Height - b, Width, b); }
+        using (var pr = new LinearGradientBrush(new Rectangle(Width - b, 0, b, Height), RandGold, RandSchwarz, LinearGradientMode.Vertical))
+        { pr.InterpolationColors = kammUmgekehrt; g.FillRectangle(pr, Width - b, 0, b, Height); }
+        using (var pu = new LinearGradientBrush(new Rectangle(0, Height - b, Width, b), RandGold, RandSchwarz, LinearGradientMode.Horizontal))
+        { pu.InterpolationColors = kammUmgekehrt; g.FillRectangle(pu, 0, Height - b, Width, b); }
         using (var pl = new LinearGradientBrush(new Rectangle(0, 0, b, Height), RandSchwarz, RandGold, LinearGradientMode.Vertical))
         { pl.InterpolationColors = kamm; g.FillRectangle(pl, 0, 0, b, Height); }
-        using (var pr = new LinearGradientBrush(new Rectangle(Width - b, 0, b, Height), RandSchwarz, RandGold, LinearGradientMode.Vertical))
-        { pr.InterpolationColors = kamm; g.FillRectangle(pr, Width - b, 0, b, Height); }
     }
 
     protected override void OnLoad(EventArgs e)
