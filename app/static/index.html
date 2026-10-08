@@ -334,8 +334,8 @@
       <option value="i">kursiv</option>
       <option value="bi">fett+kursiv</option>
     </select>
-    <input type="number" id="teSize" value="11" min="6" max="72" title="Schriftgröße">
-    <input type="number" id="teAbstand" value="0" step="0.25" min="-2" max="40" title="Zeichenabstand (Spacing) in Punkten – auch negativ">
+    <input type="number" id="teSize" value="11" min="6" max="72" title="Schriftgröße (Mausrad darüber: ± 1)">
+    <input type="number" id="teAbstand" value="0" step="0.25" min="-2" max="40" title="Zeichenabstand (Spacing) in Punkten – auch negativ; Mausrad darüber: ± 0,25">
     <input type="color" id="teColor" value="#000000" title="Textfarbe">
   </div>
   <div class="sep"></div>
@@ -387,7 +387,7 @@
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
       <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
       <b>Geschützte Signatur:</b> im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.<br>
-      <b>Text:</b> Bereich mit gedrückter Maustaste aufziehen oder Punkt anklicken – direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe). Enter beendet – zurück zu <b>Auswahl</b> (Pfeil oben).<br>
+      <b>Text:</b> Bereich mit gedrückter Maustaste aufziehen oder Punkt anklicken – direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe, Abstand oben änderbar). Beenden: Esc, Rechtsklick oder Klick neben das Textfeld.<br>
       <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt. Danach ist der Text ein verschiebbares Objekt.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
@@ -968,6 +968,7 @@ document.addEventListener('click', (ev) => { if (!ctxMenu.contains(ev.target)) h
 document.addEventListener('scroll', hideCtxMenu, true);
 window.addEventListener('blur', hideCtxMenu);
 document.addEventListener('contextmenu', (ev) => {
+  if (mode === 'text' && !ev.target.closest('input, textarea')) { setMode('normal'); return; }   // Rechtsklick im Text-Modus: Modus beenden
   if (ev.target.closest('input, textarea')) return;   // natives Menü in Eingabefeldern erlauben
   ev.preventDefault();                                 // kein WebView2-Bildmenü ("Bild speichern" etc.)
   const div = ev.target.closest('.annot');
@@ -1141,6 +1142,22 @@ function currentFontAlias() {
   return suffix ? base + suffix : f;
 }
 
+/* Mausrad ueber Groesse/Abstand: Werte aendern, ohne das Feld anzuklicken */
+[['teSize', 1, 6, 72], ['teAbstand', 0.25, -2, 40]].forEach(([id, schritt, min, max]) => {
+  document.getElementById(id).addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    const el = document.getElementById(id);
+    const ist = parseFloat(el.value) || 0;
+    let neu = ist + (ev.deltaY < 0 ? schritt : -schritt);
+    neu = Math.max(min, Math.min(max, neu));
+    neu = Math.round(neu * 100) / 100;
+    if (neu === ist) return;
+    el.value = neu;
+    el.dispatchEvent(new Event('input', {bubbles: true}));
+    el.dispatchEvent(new Event('change', {bubbles: true}));
+  }, {passive: false});
+});
+
 function applyFormatTo(ta, sizePt) {
   const k = parseFloat(ta.dataset.k) || 1;
   const [ff, fw, fs] = FAM_PREFIX[currentFontAlias()] || FAM_PREFIX.helv;
@@ -1223,7 +1240,7 @@ function startInlineEdit(pageN, pdfX, pdfY, existing, vorgabe) {
     commitInline();
   });
   ta.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') { ev.stopPropagation(); cancelInline(); }
+    if (ev.key === 'Escape') { cancelInline(); }   // kein stopPropagation: Esc schliesst Editor UND beendet den Text-Modus
     else if (ev.key === 'Enter' && ev.ctrlKey) { ev.preventDefault(); commitInline(); }
   });
   // Live-Aenderung aus der Formatleiste
@@ -1346,7 +1363,7 @@ async function startOriginalEdit(pageN, lineDiv) {
     commitOriginalEdit();
   });
   ta.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape') { ev.stopPropagation(); cancelOriginalEdit(); }
+    if (ev.key === 'Escape') { cancelOriginalEdit(); }   // kein stopPropagation: Esc beendet auch den Modus
     else if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); commitOriginalEdit(); }
     // Shift+Enter = neue Zeile: Default (Zeilenumbruch im Textfeld) lassen wir zu
   });
