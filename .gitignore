@@ -2,6 +2,7 @@
 venv/
 paket/
 app/dist/
+app/build/
 wrapper/bin/
 wrapper/obj/
 *.WebView2/

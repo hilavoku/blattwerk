@@ -825,8 +825,7 @@ async def annot_move(did: str, page: int = Form(...), xref: int = Form(...), rec
         an.update()
         an.set_rect(r)   # update() kann das Rect zuruecksetzen -> danach final setzen
         sp = _txt_spacing(an.info.get("id", "") or "")
-        if sp:
-            _freetext_ap_mit_abstand(d, an, pg.rect.height, sp)   # Zeichenabstand bleibt erhalten
+        _freetext_ap_mit_abstand(d, an, pg.rect.height, sp)   # eigener AP bleibt erhalten (MuPDF-AP clippt Mehrzeiliges)
     push_undo(did, {"op": "annot-move", "page": page, "xref": xref, "rect": old_rect,
                     "is_text": an.type[1] == "FreeText"})
     return {"ok": True}
@@ -881,6 +880,50 @@ def _span_in_rect(pg, rect):
     return {"size": round(best["size"], 1),
             "color": [c >> 16 & 255, c >> 8 & 255, c & 255],
             "alias": alias, "origin": list(best["origin"])}
+
+def _zeile_in_rect(pg, rect):
+    """Zeile BESTIMMEN aus den eigenen Zeichen: nur Zeichen, deren Mitte im Rect
+    liegt (get_text(clip=) liefert bei engen Zeilenabstaenden sonst Woerter der
+    Nachbarzeilen mit, deren Boxen um die Font-Steige ueberlappen).
+    Liefert Text, Groesse, Farbe, Alias und die EXAKTE Basislinie des ersten
+    Zeichens - genau die, die insert_text fuer die Rueckrestoration braucht."""
+    rr = pymupdf.Rect(rect)
+    erstes = None
+    woerter, cur = [], []
+    for bl in pg.get_text("rawdict")["blocks"]:
+        for ln in bl.get("lines", []):
+            for sp in ln.get("spans", []):
+                for ch in sp.get("chars", []):
+                    bx = ch["bbox"]
+                    if not rr.contains(pymupdf.Point((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2)):
+                        continue
+                    if erstes is None:
+                        erstes = {"origin": list(ch["origin"]), "size": sp["size"],
+                                  "font": sp["font"], "color": sp["color"]}
+                    if ch["c"].strip():
+                        cur.append(ch["c"])
+                    elif cur:
+                        woerter.append("".join(cur))
+                        cur = []
+    if cur:
+        woerter.append("".join(cur))
+    if erstes is None:
+        return None
+    f = erstes["font"].lower()
+    fett = "bold" in f or "black" in f
+    kursiv = "italic" in f or "oblique" in f
+    if "times" in f:
+        alias = "tibo" if fett else ("tiit" if kursiv else "tiro")
+    elif "cour" in f:
+        alias = "cobo" if fett else ("coit" if kursiv else "cour")
+    else:
+        alias = "hebo" if fett else ("heit" if kursiv else "helv")
+    c = erstes["color"]
+    return {"text": " ".join(woerter), "size": round(erstes["size"], 1),
+            "color": [c >> 16 & 255, c >> 8 & 255, c & 255],
+            "alias": alias,
+            "origin": [round(erstes["origin"][0], 2), round(erstes["origin"][1], 2)]}
+
 
 
 @app.get("/api/textspan/{did}/{n}")
@@ -941,6 +984,55 @@ async def text_replace(did: str, page: int = Form(...), rect: str = Form(...), t
                     "text_alt": text_alt, "text_neu": text, "origin": list(origin),
                     "size": size_w, "color": list(farbe), "font": alias})
     return {"ok": True, "size": size_w, "font": alias}
+
+
+@app.post("/api/text/blockreplace/{did}")
+async def text_blockreplace(did: str, page: int = Form(...), zeilen: str = Form(...),
+                            size: str = Form(""), font: str = Form(""), color: str = Form("")):
+    """Mehrere Originaltext-Zeilen in einem Zug tilgen (Block-/Mehrfachauswahl im
+    Originaltext-Editor). EIN Undo-Eintrag, der JEDE Zeile an ihrer eigenen
+    Position wieder herstellt. zeilen = JSON-Liste [{"rect": [x0,y0,x1,y1]}, ...]."""
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    try:
+        liste = json.loads(zeilen)
+    except ValueError:
+        raise HTTPException(400, "zeilen muss eine JSON-Liste sein")
+    if not isinstance(liste, list) or not liste:
+        raise HTTPException(400, "mindestens eine Zeile noetig")
+    try:
+        size_tb = float(size or 0)
+    except ValueError:
+        size_tb = 0.0
+    farbe_tb = None
+    if color:
+        try:
+            farbe_tb = tuple(float(c) for c in color.split(","))
+        except ValueError:
+            pass
+    pg = d[page]
+    eintraege = []
+    for z in liste:
+        try:
+            r = pymupdf.Rect(*[float(v) for v in z["rect"]])
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(400, "je Zeile rect [x0,y0,x1,y1] noetig")
+        # Zeile ueber die EIGENEN Zeichen bestimmen - exakte Basislinie fuer das
+        # Undo (_span_in_rect wuerde bei engen Zeilen die Nachbarspanne liefern).
+        eigene = _zeile_in_rect(pg, r)
+        li_size = size_tb if size_tb > 0 else float((eigene or {}).get("size") or 11.0)
+        li_farbe = farbe_tb or tuple(((eigene or {}).get("color") or [0, 0, 0])[i] / 255 for i in range(3))
+        li_alias = font if font in FONTS else ((eigene or {}).get("alias") or "helv")
+        origin = tuple((eigene or {}).get("origin") or (r.x0, r.y1 - li_size * 0.25))
+        pg.add_redact_annot(r)
+        eintraege.append({"rect": [round(v, 1) for v in r],
+                          "origin": [round(origin[0], 2), round(origin[1], 2)],
+                          "text_alt": (eigene or {}).get("text", ""), "size": li_size,
+                          "font": li_alias, "color": list(li_farbe)})
+    pg.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
+    push_undo(did, {"op": "origzeilen", "page": page, "zeilen": eintraege})
+    return {"ok": True, "n": len(eintraege)}
 
 
 FONTS = {"helv": "Helvetica", "hebo": "Helvetica Fett", "heit": "Helvetica Kursiv", "hebi": "Helvetica Fett-Kursiv",
@@ -1440,8 +1532,7 @@ async def annot_move(did: str, page: int = Form(...), xref: int = Form(...), rec
         an.update()
         an.set_rect(r)   # update() kann das Rect zuruecksetzen -> danach final setzen
         sp = _txt_spacing(an.info.get("id", "") or "")
-        if sp:
-            _freetext_ap_mit_abstand(d, an, pg.rect.height, sp)   # Zeichenabstand bleibt erhalten
+        _freetext_ap_mit_abstand(d, an, pg.rect.height, sp)   # eigener AP bleibt erhalten (MuPDF-AP clippt Mehrzeiliges)
     push_undo(did, {"op": "annot-move", "page": page, "xref": xref, "rect": old_rect,
                     "is_text": an.type[1] == "FreeText"})
     return {"ok": True}
@@ -1610,17 +1701,19 @@ def _freetext_ap_mit_abstand(doc, an, page_h, spacing):
     font, size, color = _txt_props(nm)
     basefont = FONTS_AP.get(font, "Helvetica")
     color01 = tuple(c / 255 for c in color)
-    unten, oben = page_h - r.y1, page_h - r.y0   # BBox in PDF-Koordinaten (unten/up)
     fontx = _font_xref(doc, basefont)
     teile = [f"BT /F0 {size:.4g} Tf {color01[0]:.4g} {color01[1]:.4g} {color01[2]:.4g} rg"]
     if spacing:
         teile.append(f"{spacing:.4g} Tc")
+    # Baseline 0,9 * Groesse unter die Rect-Oberkante: Ascender bleiben in der
+    # BBox (kein Abschnitt), und die Lage passt zum HTML-Overlay (WYSIWYG).
+    # Zeilen im 1,25-fachen Leading wie das Overlay.
     for i, zeile in enumerate(text.split("\n")):
-        baseline = (page_h - r.y0) - 2.5 - size * 0.2 - i * size * 1.25
+        baseline = (page_h - r.y0) - size * 0.9 - i * size * 1.25
         teile.append(f"1 0 0 1 {r.x0 + 2:.2f} {baseline:.2f} Tm {_pdf_string(zeile).decode('latin-1')} Tj")
     teile.append("ET")
     apx = doc.get_new_xref()
-    doc.update_object(apx, f"<< /Type /XObject /Subtype /Form /BBox [{r.x0:.2f} {unten:.2f} {r.x1:.2f} {oben:.2f}] "
+    doc.update_object(apx, f"<< /Type /XObject /Subtype /Form /BBox [{r.x0:.2f} {page_h - r.y1:.2f} {r.x1:.2f} {page_h - r.y0:.2f}] "
                            f"/Resources << /Font << /F0 {fontx} 0 R >> >> >>")
     doc.update_stream(apx, ("q " + " ".join(teile) + " Q").encode("latin-1"), new=1)
     doc.xref_set_key(an.xref, "AP", f"<< /N {apx} 0 R >>")
@@ -1660,8 +1753,10 @@ async def annot_text(did: str, page: int = Form(...), rect: str = Form(...), tex
     # Eigenschaften im NM-Marker konservieren (PyMuPDF-Ruecklesen ist unzuverlaessig)
     marker = f"PDFW-TXT:{font}:{size}:{col[0]},{col[1]},{col[2]}:{spacing_f}"
     d.xref_set_key(a.xref, "NM", f"({marker})")
-    if spacing_f:
-        _freetext_ap_mit_abstand(d, a, pg.rect.height, spacing_f)
+    # IMMER eigener Appearance-Stream: MuPDFs Freitext-AP rendert mehrzeilig mit
+    # ~2,4-fachem Zeilenabstand und clippt Folgelinien an der BBox weg (4. Zeile
+    # unsichtbar). Unser AP nutzt 1,25-faches Leading wie das HTML-Overlay.
+    _freetext_ap_mit_abstand(d, a, pg.rect.height, spacing_f)
     if xref:
         push_undo(did, {"op": "text-restore", "page": page, "new_xref": a.xref,
                         "old": {"rect": list(r), "text": o_text, "font": o_font,
@@ -1782,8 +1877,7 @@ def undo(did: str):
         sp = float(o.get("spacing") or 0)
         d.xref_set_key(a.xref, "NM",
                        f"(PDFW-TXT:{o['font']}:{o['size']}:{o['color'][0]},{o['color'][1]},{o['color'][2]}:{sp})")
-        if sp:
-            _freetext_ap_mit_abstand(d, a, pg.rect.height, sp)
+        _freetext_ap_mit_abstand(d, a, pg.rect.height, sp)   # immer eigener AP
     elif op == "stamp-recreate":
         fname = os.path.basename(e.get("fname") or "")
         png = _sig_bytes(fname) if fname else None
@@ -1816,8 +1910,7 @@ def undo(did: str):
         sp = float(e.get("spacing") or 0)
         d.xref_set_key(a.xref, "NM",
                        f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]}:{sp})")
-        if sp:
-            _freetext_ap_mit_abstand(d, a, pg.rect.height, sp)
+        _freetext_ap_mit_abstand(d, a, pg.rect.height, sp)   # immer eigener AP
     elif op == "image-move":
         o = e
         pg.draw_rect(pymupdf.Rect(*o["neu"]), color=None, fill=(1, 1, 1), overlay=True)
@@ -1838,6 +1931,11 @@ def undo(did: str):
         if o["text_alt"]:                    # ... und Original zurueckschreiben
             _text_mehrzeilig_einfuegen(pg, tuple(o0), o["text_alt"], o["size"],
                                        o["font"], tuple(o["color"]))
+    elif op == "origzeilen":                 # Block-Redaction: JEDE Zeile an ihrer eigenen Position
+        for z in e["zeilen"]:
+            if z["text_alt"]:
+                _text_mehrzeilig_einfuegen(pg, tuple(z["origin"]), z["text_alt"],
+                                           z["size"], z["font"], tuple(z["color"]))
     elif op == "field":
         for w in pg.widgets():
             if w.field_name == e["name"]:

@@ -1,6 +1,37 @@
 # Blattwerk — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-08.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
+
+## v0.16.3 — Block-Editor: Undo stellt jede Zeile exakt wieder her
+- Nach der Block-Bearbeitung (v0.15.0) hingen die Zeilen nur als ein Objekt
+  zusammen, und Undo setzte den gesamten Text an die Position der ersten
+  Zeile. Jetzt tilgt der Server alle beteiligten Zeilen in einem Zug
+  (`/api/text/blockreplace`) — der EINE Undo-Eintrag („origzeilen") stellt
+  **JEDE Zeile an ihrer eigenen alten Position** wieder her: erst Strg+Z
+  nimmt das neue Textobjekt weg, das zweite Strg+Z holt alle Originalzeilen
+  unverrückt zurück. Die Zeilen-Rückrestoration nutzt die exakte Basislinie
+  aus dem Dokument (neuer Helfer `_zeile_in_rect`), nicht die einer
+  Nachbarzeile (dort irrte die alte Spannensuche bei engem Zeilenabstand).
+- Der Entfernen-Knopf im Editor geht denselben Weg (alle Zeilen, ein Undo).
+- **Mehrzeilige Textobjekte stimmen jetzt mit dem gespeicherten PDF überein:**
+  MuPDFs eigenes Freitext-Aussehen rendert Zeilen mit ~2,4-fachem Abstand und
+  schneidet Folgelinien an der Box ab (4. Zeile war nach dem Speichern weg).
+  Blattwerk setzt deshalb IMMER seinen eigenen Appearance-Stream (1,25-faches
+  Leading, Baseline wie das Overlay) — nicht mehr nur bei Zeichenabstand.
+- **Doppel-Commit gebunden:** Das Übernehmen mit Enter entfernte die Textarea,
+  deren blur-Handler startete den Commit sofort ein zweites Mal (Rennen:
+  verschwundene Annotationen, doppelte Redactions). Der Editor-Status wird
+  jetzt entzogen, bevor DOM-Knoten entfernt werden — gilt auch für den
+  Neutext-Editor.
+- Mehrzeilige Textobjekte zeigen ihre Zeilenumbrüche jetzt auch als Overlay.
+- Bekannt (bestehendes Verhalten, nicht neu): Redaction arbeitet wortgenau —
+  bei einzeln gesammelten Zeilen mit weniger als ~1,3 Zeilenabstand kann eine
+  dazwischenliegende Nachbarspalte mit entfernt werden (gilt seit v0.12 für
+  Einzeledits genauso). Ganze Blöcke sind nicht betroffen.
+
+## v0.16.2 — Fenstertasten sticky: bleiben bei schmalen Fenstern immer oben rechts sichtbar (opake Fläche)
+## v0.16.1 — Kopfzeile höher mit Logo/Name zurück und Grifffunken als sichtbare Zieh-Zonen; Fenstertasten rechts
+## v0.16.0 — Rahmenloses Fenster: Kopfzeile als Titelleiste (Ziehen/Doppelklick-Max), Fenstertasten min/max/zu über Wrapper-PostMessage, Resize-Ränder per WM_NCHITTEST, taskbar-sicheres MaximizedBounds
 
 ## v0.15.0 — Textblöcke: Hover, Block-Editor, Zeilen sammeln
 - **Block- Hover:** Originaltext-Zeilen werden serverseitig zu Blöcken gruppiert
