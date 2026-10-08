@@ -1,6 +1,7 @@
 using Microsoft.Web.WebView2.WinForms;
 using System.Diagnostics;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 
 namespace PdfWerkstatt;
@@ -40,7 +41,7 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
-        var form = new Form
+        var form = new HauptForm
         {
             Text = pdfPath != null
                 ? "Blattwerk - " + Path.GetFileName(pdfPath)
@@ -48,7 +49,10 @@ internal static class Program
             Width = 1450,
             Height = 940,
             StartPosition = FormStartPosition.CenterScreen,
-            Font = new Font("Segoe UI", 9f)
+            Font = new Font("Segoe UI", 9f),
+            FormBorderStyle = FormBorderStyle.None,
+            BackColor = System.Drawing.Color.FromArgb(23, 25, 29),
+            Padding = new Padding(6, 0, 6, 6)
         };
 
         // Fenstergroesse/-position wiederherstellen (fenster.json neben der EXE)
@@ -78,6 +82,14 @@ internal static class Program
         form.Controls.Add(webView);
         try { form.Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
+        form.Resize += (_, _) =>
+        {
+            // Maximiert: randlos ueber den ganzen Bildschirm; sonst 6px-Groesse-Rand unten/links/rechts
+            form.Padding = form.WindowState == FormWindowState.Maximized
+                ? Padding.Empty
+                : new Padding(6, 0, 6, 6);
+        };
+
         form.Load += async (_, _) =>
         {
             try
@@ -90,6 +102,22 @@ internal static class Program
                     var msg = e.TryGetWebMessageAsString();
                     if (msg == "dirty:1") dirty = true;
                     else if (msg == "dirty:0") dirty = false;
+                    else if (msg != null && msg.StartsWith("fenster|"))
+                    {
+                        // Eigene Titelleiste: Minimieren/Maximieren/Schliessen/Ziehen aus der Kopfzeile
+                        var befehl = msg.Substring(8);
+                        if (befehl == "min") form.WindowState = FormWindowState.Minimized;
+                        else if (befehl == "max") form.MaximierenWechseln();
+                        else if (befehl == "zu") form.Close();
+                        else if (befehl == "drag") form.Titelziehen();
+                        try
+                        {
+                            var maxed = form.WindowState == FormWindowState.Maximized;
+                            _ = webView.CoreWebView2.ExecuteScriptAsync(
+                                $"window.pwMaximiert && window.pwMaximiert({(maxed ? "true" : "false")});");
+                        }
+                        catch { /* UI evtl. nicht bereit */ }
+                    }
                     else if (msg != null && msg.StartsWith("saveas|"))
                     {
                         // "saveas|<docid>|<dateiname>|<flatten>" -> Systemdialog, dann speichern
@@ -298,5 +326,63 @@ internal static class Program
         int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         return port;
+    }
+}
+
+/// <summary>Rahmenloses Hauptfenster: die App-Kopfzeile ist die Titelleiste,
+/// die 6px-Raender links/rechts/unten sind Groesse-Anfasspunkte.</summary>
+internal sealed class HauptForm : Form
+{
+    private const int WM_NCHITTEST = 0x84;
+    private const int HTLEFT = 10, HTRIGHT = 11, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+    private const int WM_NCLBUTTONDOWN = 0xA1;
+    private const int HTCAPTION = 2;
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+
+    /// <summary>Ziehen der Kopfzeile an das System uebergeben (inkl. Snap an Bildschirmraender).</summary>
+    public void Titelziehen()
+    {
+        ReleaseCapture();
+        _ = SendMessage(Handle, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+    }
+
+    /// <summary>Maximieren/Wiederherstellen mit taskbar-sicherer Flaeche.</summary>
+    public void MaximierenWechseln()
+    {
+        MaximizedBounds = Screen.FromControl(this).WorkingArea;
+        WindowState = WindowState == FormWindowState.Maximized
+            ? FormWindowState.Normal
+            : FormWindowState.Maximized;
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        MaximizedBounds = Screen.FromControl(this).WorkingArea;   // taskbar-sicher
+        base.OnLoad(e);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        // Groesse-Raender nur im Normalzustand und nur wo das WebView2 nicht ueberdeckt
+        if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal && Padding.Left > 0)
+        {
+            int x = (short)(m.LParam.ToInt32() & 0xFFFF);
+            int y = (short)((m.LParam.ToInt32() >> 16) & 0xFFFF);
+            var p = PointToClient(new Point(x, y));
+            bool links = p.X <= Padding.Left;
+            bool rechts = p.X >= ClientSize.Width - Padding.Right;
+            bool unten = p.Y >= ClientSize.Height - Padding.Bottom;
+            if (links && unten) { m.Result = (IntPtr)HTBOTTOMLEFT; return; }
+            if (rechts && unten) { m.Result = (IntPtr)HTBOTTOMRIGHT; return; }
+            if (links) { m.Result = (IntPtr)HTLEFT; return; }
+            if (rechts) { m.Result = (IntPtr)HTRIGHT; return; }
+            if (unten) { m.Result = (IntPtr)HTBOTTOM; return; }
+        }
+        base.WndProc(ref m);
     }
 }

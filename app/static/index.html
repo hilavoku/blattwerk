@@ -102,6 +102,13 @@
   .checkerbg { background-image: conic-gradient(#c9ced6 25%, #ffffff 0 50%, #c9ced6 0 75%, #ffffff 0); background-size: 16px 16px; }
   #sigUpThr { width:100%; margin-top:4px; accent-color:var(--accent); }
 
+  .fensterkn { display:flex; align-self:stretch; margin-left:6px; }
+  .fensterkn button { width:44px; border:none; background:transparent; color:var(--text); cursor:default;
+                      display:flex; align-items:center; justify-content:center; padding:0; }
+  .fensterkn button:hover { background:var(--hover); }
+  #knZu:hover { background:#e81123; color:#fff; }
+  #knMin svg, #knMax svg, #knZu svg { pointer-events:none; }
+
   /* ---------- Motion-Tokens (Konzept: MOTION-KONZEPT.md) ---------- */
   :root {
     --d1: 120ms; --d2: 180ms; --d3: 260ms; --d4: 380ms;
@@ -361,6 +368,11 @@
   </div>
   <div class="spacer"></div>
   <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
+  <div class="fensterkn">
+    <button id="knMin" title="Minimieren" onclick="window.chrome?.webview?.postMessage('fenster|min')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg></button>
+    <button id="knMax" title="Maximieren / Wiederherstellen" onclick="window.chrome?.webview?.postMessage('fenster|max')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5h9v9h-9z" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
+    <button id="knZu" title="Blattwerk schließen" onclick="window.chrome?.webview?.postMessage('fenster|zu')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1.1"/></svg></button>
+  </div>
 </header>
 
 <main>
@@ -994,6 +1006,26 @@ function hideCtxMenu() { ctxMenu.style.display = 'none'; ctxMenu.innerHTML = '';
 document.addEventListener('click', (ev) => { if (!ctxMenu.contains(ev.target)) hideCtxMenu(); });
 document.addEventListener('scroll', hideCtxMenu, true);
 window.addEventListener('blur', hideCtxMenu);
+// Kopfzeile als Titelleiste des Rahmenlos-Fensters: ziehen (Wrapper), Doppelklick = max/min
+const kopfleiste = document.querySelector('header');
+kopfleiste.addEventListener('mousedown', (ev) => {
+  if (ev.button !== 0) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo')) return;
+  window.chrome?.webview?.postMessage('fenster|drag');
+});
+kopfleiste.addEventListener('dblclick', (ev) => {
+  if (ev.target.closest('button, input, select, .fmtbar, .searchwrap, .hits')) return;
+  window.chrome?.webview?.postMessage('fenster|max');
+});
+window.pwMaximiert = (max) => {
+  const kn = document.getElementById('knMax');
+  if (!kn) return;
+  kn.title = max ? 'Wiederherstellen' : 'Maximieren';
+  kn.innerHTML = max
+    ? '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 2.5h6.5V9H0z M2.5 0H9v6.5" fill="none" stroke="currentColor" stroke-width="1"/></svg>'
+    : '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5h9v9h-9z" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
+};
+
 document.addEventListener('contextmenu', (ev) => {
   if (mode === 'text' && !ev.target.closest('input, textarea')) { setMode('normal'); return; }   // Rechtsklick im Text-Modus: Modus beenden
   if (ev.target.closest('input, textarea')) return;   // natives Menü in Eingabefeldern erlauben
