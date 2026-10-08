@@ -18,3 +18,4 @@ tmp/
 # Laufzeit-Dateien der Entwicklung (Einstellungen, Fensterlage)
 einstellungen.json
 fenster.json
+uploads/
