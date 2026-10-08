@@ -402,6 +402,22 @@ internal sealed class HauptForm : Form
         { pl.InterpolationColors = kamm; g.FillRectangle(pl, 0, 0, b, Height); }
     }
 
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        // Groessenaenderung: Verlaufsrand STRECKENWEISE komplett neu zeichnen -
+        // Windows malt sonst nur die freigelegten Streifen, an den Grenzflaechen
+        // zum WebView2 bleiben weisse Reststriche stehen. Zweites Invalidate
+        // NACH dem Layout (falls das WebView2 den Rand zwischenzeitlich
+        // uebermalt hat) - nur mit fertigen Fensterhandle, sonst wuerfe
+        // BeginInvoke beim Start (fenster.json-Restore) die App wegwerfen.
+        Invalidate();
+        if (IsHandleCreated)
+        {
+            try { BeginInvoke((Action)(() => Invalidate())); } catch { }
+        }
+    }
+
     protected override void OnLoad(EventArgs e)
     {
         DoubleBuffered = true;   // randloses Fenster: Verlaufsrand ohne Flackern

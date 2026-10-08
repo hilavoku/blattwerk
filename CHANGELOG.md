@@ -2,6 +2,14 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.16.10 — Fix: weiße Striche im Fensterrand nach dem Vergrößern weg
+- Beim Ziehen der Fensterkante blieben stellenweise kleine weiße vertikale
+  Striche in der Verlaufszone stehen (das WebView2 malt während der
+  Größenänderung kurz über die Randzone, bevor die Form sie wieder
+  übermalt). Der Rand wird jetzt nach jedem Größenänderungsschritt
+  vollständig neu gezeichnet — sofort und nochmals nach dem Layout
+  (mit Handle-Schutz, sonst wäre die App beim Start weggeworfen worden).
+
 ## v0.16.9 — Schwarz-Rot-Gold-Rand jetzt in beiden Designs
 - Der Verlaufsrand (nahtloser Umlauf, v0.16.7) gehört nicht mehr nur zum
   hellen Design — konsequenterweise trägt ihn jetzt auch das dunkle.
