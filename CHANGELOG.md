@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.4 — Fix: Knöpfe „tun nichts" (Klicks landen versetzt)
+- Auf Rechnern mit **Monitor-Mischbetrieb unterschiedlicher Skalierung**
+  (z. B. Notebook 150 % + Zweitmonitor anders) landeten echte Mausklicks
+  um gut 200 px versetzt in der Seite — „Signatur…", Upload-Kachel usw.
+  schienen wirkungslos, obwohl der Code intakt war (programmatische Klicks
+  funktionierten; gemessen wurden die Eingaben an der falschen Stelle).
+  Ursache: Dem Fenster fehlte die Per-Monitor-DPI-Erkennung (lief nur
+  „system-aware"). Der Wrapper ist jetzt **PerMonitorV2** (empfohlene
+  Einstellung für WebView2) — Klicks treffen wieder exakt.
+
 ## v0.17.3 — Block-Markierung bleibt nach Zeilenersatz erhalten
 - Nach dem zeilenweisen Ersetzen (v0.17.2) bekam die neue Zeile eine eigene
   PDF-Blocknummer und leuchtete beim Überfahren nicht mehr mit dem Rest des
