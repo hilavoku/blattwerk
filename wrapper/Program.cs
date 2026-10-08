@@ -1,5 +1,6 @@
 using Microsoft.Web.WebView2.WinForms;
 using System.Diagnostics;
+using System.Drawing.Drawing2D;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -117,6 +118,12 @@ internal static class Program
                                 $"window.pwMaximiert && window.pwMaximiert({(maxed ? "true" : "false")});");
                         }
                         catch { /* UI evtl. nicht bereit */ }
+                    }
+                    else if (msg == "theme|light" || msg == "theme|dark")
+                    {
+                        // Helles Theme: Fensterrand als Schwarz-Rot-Gold-Verlauf (Markenmotiv),
+                        // dunkles Theme: dunkler Rand wie bisher
+                        form.HellesTheme = msg == "theme|light";
                     }
                     else if (msg != null && msg.StartsWith("saveas|"))
                     {
@@ -361,8 +368,49 @@ internal sealed class HauptForm : Form
             : FormWindowState.Maximized;
     }
 
+    /// <summary>Theme-Meldung der UI: true = heller Fensterrand als Schwarz-Rot-Gold.</summary>
+    public bool HellesTheme
+    {
+        get { return _hellesTheme; }
+        set
+        {
+            if (_hellesTheme == value) return;
+            _hellesTheme = value;
+            Invalidate();   // Randzone neu zeichnen
+        }
+    }
+    private bool _hellesTheme;
+
+    // Markenfarben wie das Band ueber der Kopfzeile (index.html header::before)
+    private static readonly Color RandSchwarz = Color.FromArgb(26, 26, 26);
+    private static readonly Color RandRot = Color.FromArgb(221, 0, 0);
+    private static readonly Color RandGold = Color.FromArgb(255, 204, 0);
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var g = e.Graphics;
+        int b = Padding.Left;
+        if (!HellesTheme || b == 0) return;   // dunkles Theme oder maximiert: Rand bleibt dunkel
+        // Verlaufskamm schwarz - rot - gold, wie das CSS-Band (linear-gradient 50% Rot)
+        var kamm = new ColorBlend
+        {
+            Positions = new float[] { 0f, 0.5f, 1f },
+            Colors = new[] { RandSchwarz, RandRot, RandGold }
+        };
+        using (var po = new LinearGradientBrush(new Rectangle(0, 0, Width, b), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
+        { po.InterpolationColors = kamm; g.FillRectangle(po, 0, 0, Width, b); }
+        using (var pu = new LinearGradientBrush(new Rectangle(0, Height - b, Width, b), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
+        { pu.InterpolationColors = kamm; g.FillRectangle(pu, 0, Height - b, Width, b); }
+        using (var pl = new LinearGradientBrush(new Rectangle(0, 0, b, Height), RandSchwarz, RandGold, LinearGradientMode.Vertical))
+        { pl.InterpolationColors = kamm; g.FillRectangle(pl, 0, 0, b, Height); }
+        using (var pr = new LinearGradientBrush(new Rectangle(Width - b, 0, b, Height), RandSchwarz, RandGold, LinearGradientMode.Vertical))
+        { pr.InterpolationColors = kamm; g.FillRectangle(pr, Width - b, 0, b, Height); }
+    }
+
     protected override void OnLoad(EventArgs e)
     {
+        DoubleBuffered = true;   // randloses Fenster: Verlaufsrand ohne Flackern
         MaximizedBounds = Screen.FromControl(this).WorkingArea;   // taskbar-sicher
         base.OnLoad(e);
     }

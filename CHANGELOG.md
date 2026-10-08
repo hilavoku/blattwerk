@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.16.6 — Heller Fensterrand: Schwarz-Rot-Gold statt Schwarz
+- Im hellen Design war der Fensterrand komplett schwarz — hart am hellen
+  Fenster. Jetzt zeigt er dort den Marken-Verlauf **Schwarz → Rot → Gold**
+  (wie Icon und Kopfzeilen-Band), rundum auf allen vier Seiten. Im dunklen
+  Design bleibt der Rand dunkel wie bisher.
+- Die UI meldet dem Fenster beim Start und bei jedem Designwechsel den
+  Theme-Zustand (`theme|light/dark` über den WebView2-Kanal); maximiert
+  bleibt das Fenster randlos.
+
 ## v0.16.5 — Fensterrand rundum: oben geschlossen (und greifbar)
 - Der dunkle Fensterrand lief bisher nur unten/links/rechts — oben endete das
   Fenster unsichtbar an der Bildschirmkante. Jetzt zieht sich die 6px-Leiste

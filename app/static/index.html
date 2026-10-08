@@ -2263,6 +2263,7 @@ function toggleTheme() {
   const wechsel = () => {
     const light = document.body.classList.toggle('light');
     setPref('theme', light ? 'light' : 'dark');
+    window.chrome?.webview?.postMessage('theme|' + (light ? 'light' : 'dark'));   // Wrapper: Fensterrand anpassen
     stat(light ? 'Helles Design aktiv.' : 'Dunkles Design aktiv.', true);
   };
   // Kreis-Reveal vom Theme-Knopf aus (View Transitions API; Fallback: sofortiger Wechsel)
@@ -2542,6 +2543,7 @@ loadSignatures();
 (async () => {
   await loadPrefs();                      // Einstellungen zuerst (Theme, Leisten) ...
   if (prefs.theme === 'light') document.body.classList.add('light');
+  window.chrome?.webview?.postMessage('theme|' + (document.body.classList.contains('light') ? 'light' : 'dark'));
   // alte Gesammt-Seitenwahl (vor v0.12.3) auf die neuen Einzelprefs mappen
   if (prefs.sbSide === 'left') setSbSide('left');
   else if (prefs.side === 'left') { setSbSide('left'); setThumbSide('right'); }
