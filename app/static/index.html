@@ -2014,6 +2014,21 @@ function toggleSigPanel(ev) {
   p.style.left = Math.min(window.innerWidth - 352, r.left) + 'px';
   p.style.top = (r.bottom + 6) + 'px';
 }
+/* Klick robust machen: manche Systeme schlucken das browser-generierte
+   click-Ereignis auf Nicht-Button-Flaechen (Textauswahl-/Zieherkennung),
+   obwohl Druecken und Loslassen ankommen (v0.17.7: Signatur-Kacheln).
+   Deshalb wirken diese Flaechen auf pointerdown+pointerup mit Nahbereich. */
+function klickRobust(el, aktion) {
+  el.addEventListener('pointerdown', () => { el._gedrueckt = true; });
+  el.addEventListener('pointerup', (ev) => {
+    if (!el._gedrueckt) return;
+    el._gedrueckt = false;
+    const r = el.getBoundingClientRect();
+    if (ev.clientX >= r.left - 14 && ev.clientX <= r.right + 14 &&
+        ev.clientY >= r.top - 14 && ev.clientY <= r.bottom + 14) aktion(ev);
+  });
+}
+
 function buildSigPanel() {
   const p = document.getElementById('sigPanel');
   p.innerHTML = '';
@@ -2078,18 +2093,20 @@ function buildSigPanel() {
     };
     act.appendChild(ren); act.appendChild(pwd); act.appendChild(del);
     item.appendChild(nm); item.appendChild(act);
-    item.onclick = () => {
+    klickRobust(item, () => {
       if (s.locked && !s.unlocked) { openPwBox(s.file); return; }   // erst Passwort
       sigSelected = s.file; updateSigButton();
       p.style.display = 'none';
       stat('Signatur gewählt: ' + prettySig(s.file), true);
-    };
+    });
     p.appendChild(item);
   }
   const add = document.createElement('div');
   add.className = 'sigadd';
   add.innerHTML = '<span class="i" style="font-family:var(--icon)">&#xE710;</span> Neue Signatur hochladen (Hintergrund wird transparent)';
-  add.onclick = () => document.getElementById('sigFile').click();
+  add.addEventListener('dragstart', (ev) => ev.preventDefault());   // keine Zieh- statt Klick-Erkennung
+  klickRobust(add, () => document.getElementById('sigFile').click());
+  add.onclick = () => document.getElementById('sigFile').click();   // Fallback, falls pointerup fehlt
   p.appendChild(add);
   const hint = document.createElement('div');
   hint.className = 'muted';

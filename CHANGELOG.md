@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.7 — Signatur-Kacheln klicken robust (unabhängig vom click-Ereignis)
+- Die Aufzeichnung echter Nutzer-Klicks zeigte: Auf den Signatur-Kacheln
+  („Neue Signatur hochladen", Kachel-Auswahl) kam Drücken und Bewegen an,
+  aber das browser-generierte Klick-Ereignis wurde auf manchen Systemen
+  systematisch geschluckt — die Kachel reagierte nie. Sie wirken jetzt auf
+  **Drücken + Loslassen** (Zeiger-Ereignisse mit Nahbereich), unabhängig
+  davon, ob das System dazwischen eine Auswahl-/Zieherkennung startet.
+  Das Ziehen der Kacheln aufs Papier bleibt unverändert.
+
 ## v0.17.6 — Fix: Klicks auf Panel-Texte schlagen nicht mehr fehl
 - Klicks auf die Beschriftungen im Signatur-Panel (z. B. „Neue Signatur
   hochladen") konnten wirkungslos bleiben: Die Panel-Texte waren

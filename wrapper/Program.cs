@@ -85,10 +85,20 @@ internal static class Program
 
         form.Resize += (_, _) =>
         {
-            // Maximiert: randlos ueber den ganzen Bildschirm; sonst 6px-Groesse-Rand rundum
+            // Maximiert: randlos ueber den Bildschirm; sonst 6px-Groesse-Rand rundum
             form.Padding = form.WindowState == FormWindowState.Maximized
                 ? Padding.Empty
                 : new Padding(6, 6, 6, 6);
+            WebViewAufInnenflaecheSetzen(form, webView);
+        };
+
+        form.Shown += (_, _) =>
+        {
+            // Nach dem ersten Anzeigen einmal explizit setzen: Beim Wiederherstellen
+            // der Groesse aus fenster.json skaliert das automatische Dock das
+            // WebView2 mit falscher DPI-Basis (Control dann nur CSS- statt
+            // physischer Groesse) - Klicks landen daneben (DPI-De-Sync).
+            WebViewAufInnenflaecheSetzen(form, webView);
         };
 
         form.Load += async (_, _) =>
@@ -332,6 +342,17 @@ internal static class Program
         int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
         return port;
+    }
+
+    /// <summary>WebView2 manuell auf die Clientflaeche abzueglich Rahmen setzen.
+    /// Umgeht den DPI-Skalier-Bug beim Wiederherstellen aus fenster.json, bei dem
+    /// das Dock-Fill-Control in CSS- statt physischer Groesse landet (Klick-De-Sync).</summary>
+    private static void WebViewAufInnenflaecheSetzen(Form form, WebView2 webView)
+    {
+        var p = form.Padding;
+        webView.Bounds = new Rectangle(p.Left, p.Top,
+            form.ClientSize.Width - p.Horizontal,
+            form.ClientSize.Height - p.Vertical);
     }
 }
 
