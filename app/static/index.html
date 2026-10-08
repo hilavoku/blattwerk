@@ -2105,8 +2105,18 @@ function buildSigPanel() {
   add.className = 'sigadd';
   add.innerHTML = '<span class="i" style="font-family:var(--icon)">&#xE710;</span> Neue Signatur hochladen (Hintergrund wird transparent)';
   add.addEventListener('dragstart', (ev) => ev.preventDefault());   // keine Zieh- statt Klick-Erkennung
-  klickRobust(add, () => document.getElementById('sigFile').click());
-  add.onclick = () => document.getElementById('sigFile').click();   // Fallback, falls pointerup fehlt
+  // Sofort-Aktivierung beim NIEDERDRUECKEN: pointerdown kam in jeder
+  // Nutzer-Aufzeichung zuverlaessig an, waehrend up/click auf manchen
+  // Systemen geschluckt wurden (v0.17.7). Debounce verhindert Doppel-Dialog.
+  let _sigfileZuletzt = 0;
+  const sigfileOeffnen = () => {
+    const jetzt = Date.now();
+    if (jetzt - _sigfileZuletzt < 1500) return;
+    _sigfileZuletzt = jetzt;
+    document.getElementById('sigFile').click();
+  };
+  add.addEventListener('pointerdown', sigfileOeffnen);
+  add.onclick = sigfileOeffnen;
   p.appendChild(add);
   const hint = document.createElement('div');
   hint.className = 'muted';

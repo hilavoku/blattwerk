@@ -2,6 +2,14 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.8 — Upload-Kachel löst beim Niederdrücken aus (nicht mehr schluckbar)
+- Die Nutzer-Aufzeichnungen zeigten: Das Niederdrücken (pointerdown) kam auf
+  der Signatur-Kachel **ausnahmslos** an, während Loslassen und Klick-Ereignis
+  auf dem betroffenen Notebook systematisch geschluckt wurden. Die Kachel
+  „Neue Signatur hochladen" startet den Dateidialog deshalb jetzt schon beim
+  Niederdrücken — mit Sperrzeit gegen Doppel-Dialoge. Der restliche Weg
+  (Vorschau → Hochladen) war bereits vollständig verifiziert.
+
 ## v0.17.7 — Signatur-Kacheln klicken robust (unabhängig vom click-Ereignis)
 - Die Aufzeichnung echter Nutzer-Klicks zeigte: Auf den Signatur-Kacheln
   („Neue Signatur hochladen", Kachel-Auswahl) kam Drücken und Bewegen an,
