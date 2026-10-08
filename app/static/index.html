@@ -1709,8 +1709,15 @@ sigDropViewer.addEventListener('drop', async (ev) => {
   const wr = img.getBoundingClientRect();
   sigSelected = file; updateSigButton();
   document.getElementById('sigPanel').style.display = 'none';
-  await placeSignature(parseInt(wrap.dataset.page),
-                       (ev.clientX - wr.left) / k, (ev.clientY - wr.top) / k);
+  const page = parseInt(wrap.dataset.page), px = (ev.clientX - wr.left) / k, py = (ev.clientY - wr.top) / k;
+  const eintrag = sigList.find(s => s.file === file);
+  if (eintrag && eintrag.locked && !eintrag.unlocked) {
+    // Geschuetzte Signatur aufs Papier gezogen: Passwort JETZT abfragen und
+    // die Platzierung nach erfolgreicher Entsperrung fertigstellen.
+    openPwBox(file, async () => { await placeSignature(page, px, py); });
+    return;
+  }
+  await placeSignature(page, px, py);
 });
 
 /* ---------- Formularfelder ---------- */
@@ -2056,20 +2063,18 @@ function buildSigPanel() {
       img.src = '/api/signature/file/' + encodeURIComponent(s.file);
       item.appendChild(img);
     }
-    // Ziehbare Kachel: direkt aus der Liste aufs Papier ziehen
-    item.draggable = !gesperrt;
-    if (!gesperrt) {
-      item.addEventListener('dragstart', (ev) => {
-        sigSelected = s.file; updateSigButton();
-        item.classList.add('dragging');
-        ev.dataTransfer.setData('text/plain', s.file);
-        ev.dataTransfer.effectAllowed = 'copy';
-      });
-      item.addEventListener('dragend', () => item.classList.remove('dragging'));
-      item.title = 'Klicken: auswählen – oder direkt aufs Papier ziehen';
-    } else {
-      item.title = 'Passwortgeschützt: erst entsperren (Klick), dann auswählbar und ziehbar';
-    }
+    // Ziehbare Kachel: direkt aus der Liste aufs Papier ziehen - AUCH gesperrte:
+    // Das Passwort wird beim Fallenlassen abgefragt (v0.17.11)
+    item.draggable = true;
+    item.addEventListener('dragstart', (ev) => {
+      sigSelected = s.file; updateSigButton();
+      item.classList.add('dragging');
+      ev.dataTransfer.setData('text/plain', s.file);
+      ev.dataTransfer.effectAllowed = 'copy';
+    });
+    item.addEventListener('dragend', () => item.classList.remove('dragging'));
+    item.title = gesperrt ? 'Passwortgeschützt – aufs Papier ziehen: Passwort wird beim Ablegen abgefragt'
+                          : 'Klicken: auswählen – oder direkt aufs Papier ziehen';
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = prettySig(s.file);
     const act = document.createElement('div'); act.className = 'act';
     const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = 'Umbenennen';
@@ -2128,8 +2133,10 @@ function buildSigPanel() {
 
 /* Entsperr-Dialog für passwortgeschützte Signaturen */
 let pwTarget = '';
-function openPwBox(file) {
+let pwNach = null;   // Fortsetzung nach erfolgreicher Entsperrung (z. B. Platzierung beim Drag&Drop)
+function openPwBox(file, danach) {
   pwTarget = file;
+  pwNach = danach || null;
   const box = document.getElementById('pwBox');
   document.getElementById('pwTitle').textContent = 'Entsperren: ' + prettySig(file);
   document.getElementById('pwInput').value = '';
@@ -2139,7 +2146,7 @@ function openPwBox(file) {
   box.style.top = Math.min(window.innerHeight - 220, btn.bottom + 6) + 'px';
   document.getElementById('pwInput').focus();
 }
-document.getElementById('pwCancel').addEventListener('click', () => document.getElementById('pwBox').style.display = 'none');
+document.getElementById('pwCancel').addEventListener('click', () => { document.getElementById('pwBox').style.display = 'none'; pwNach = null; });
 async function tryUnlock() {
   const pw = document.getElementById('pwInput').value;
   if (!pw || !pwTarget) return;
@@ -2153,6 +2160,8 @@ async function tryUnlock() {
     updateSigButton();
     stat('Signatur entsperrt (bis Programmende): ' + prettySig(pwTarget), true);
     pwTarget = '';
+    const danach = pwNach; pwNach = null;
+    if (danach) await danach();   // z. B. Platzierung nach Drag&Drop auf geschützte Signatur
   } else {
     stat((await r.json().catch(() => ({}))).detail || 'Falsches Passwort');
     const inp = document.getElementById('pwInput');

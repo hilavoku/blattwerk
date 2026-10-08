@@ -1,6 +1,14 @@
 # Blattwerk — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
+
+## v0.17.11 — Geschützte Signatur: Passwortabfrage direkt beim Ablegen
+- Passwortgeschützte Signaturen mussten erst im Menü entsperrt werden, bevor
+  sie aufs Papier gezogen werden konnten. Jetzt sind ihre Kacheln **direkt
+  ziehbar**: Beim Fallenlassen auf dem Papier erscheint die Passwortfrage —
+  mit richtigem Passwort wird die Platzierung sofort fertiggestellt, mit
+  falschem bleibt der Dialog offen. (Frisch hochgeladene sind weiterhin
+  sofort entsperrt, ohne Doppelabfrage.)
 
 ## v0.17.10 — Fix: Signatur-Kachel wieder aufs Papier ziehbar
 - Das Ziehen einer Signatur-Kachel aufs Papier verschob stattdessen das ganze
