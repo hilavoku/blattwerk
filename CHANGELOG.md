@@ -2,6 +2,14 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.10 — Fix: Signatur-Kachel wieder aufs Papier ziehbar
+- Das Ziehen einer Signatur-Kachel aufs Papier verschob stattdessen das ganze
+  Fenster: Das Signatur-Panel hängt im Kopfzeilen-Baum, und deren
+  Ziehen-Handler (Titelleiste des rahmenlosen Fensters) fing jeden Mausdruck
+  aus dem Panel mit. Panel und alle schwebenden Dialoge sind jetzt von der
+  Titel-Zieherkennung ausgenommen — Drag & Drop der Kacheln funktioniert
+  wieder, die Kopfzeile selbst zieht weiterhin das Fenster.
+
 ## v0.17.9 — Signatur beim Hochladen direkt benennen
 - Der Upload-Dialog hat ein **Namensfeld** (mit dem Dateinamen vorbelegt):
   Transparenz-Schwellwert, Passwort und jetzt auch der Name lassen sich in

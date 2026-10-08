@@ -1041,7 +1041,7 @@ window.addEventListener('blur', hideCtxMenu);
 const kopfleiste = document.querySelector('header');
 kopfleiste.addEventListener('mousedown', (ev) => {
   if (ev.button !== 0) return;
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterzone')) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterzone, #sigPanel, .miniBox, #renameBox, #ctxMenu')) return;   // Panel haengt im Kopfzeilen-Baum: Ziehen darf Kachel-Drag&Drop nicht fressen
   window.chrome?.webview?.postMessage('fenster|drag');
 });
 kopfleiste.addEventListener('dblclick', (ev) => {
