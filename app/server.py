@@ -270,6 +270,36 @@ def text(did: str, n: int):
             "t": " ".join(w[4] for w in ws),
             "b": key[0],
         })
+    # Zeilen NEU gruppieren: zusammengehörig ist, wer im selben PDF-Block steht
+    # ODER auf derselben Zeile liegt (y-Überlappung). Grund: ersetzte Zeilen
+    # (text/replace) sind neu eingesetzte Textobjekte mit eigener Blocknummer -
+    # optisch gehören sie weiterhin zu ihrer Tabellenzeile (Datum | Text | Betrag).
+    anz = len(out)
+    elter = list(range(anz))
+
+    def finde(i):
+        while elter[i] != i:
+            elter[i] = elter[elter[i]]
+            i = elter[i]
+        return i
+
+    for i in range(anz):
+        ri = out[i]
+        for j in range(i + 1, anz):
+            rj = out[j]
+            if ri["b"] == rj["b"]:
+                elter[finde(i)] = finde(j)
+                continue
+            ueberlapp = min(ri["y1"], rj["y1"]) - max(ri["y0"], rj["y0"])
+            minh = min(ri["y1"] - ri["y0"], rj["y1"] - rj["y0"])
+            if minh > 0 and ueberlapp > 0.4 * minh:
+                elter[finde(i)] = finde(j)
+    gruppen = {}
+    for i in range(anz):
+        gruppen.setdefault(finde(i), []).append(i)
+    for neue_nummer, (_, mitglieder) in enumerate(sorted(gruppen.items())):
+        for i in mitglieder:
+            out[i]["b"] = neue_nummer
     return {"page_w": d[n].rect.width, "page_h": d[n].rect.height, "lines": out}
 
 

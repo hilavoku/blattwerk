@@ -2,6 +2,14 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.3 — Block-Markierung bleibt nach Zeilenersatz erhalten
+- Nach dem zeilenweisen Ersetzen (v0.17.2) bekam die neue Zeile eine eigene
+  PDF-Blocknummer und leuchtete beim Überfahren nicht mehr mit dem Rest des
+  Blocks mit. Die Block-Gruppierung fasst jetzt zusammen, was zusammengehört:
+  gleicher PDF-Block **oder** gleiche Zeile (y-Überlappung) — ersetzte
+  Tabellen-Zeilen (Betrag/Datum) bleiben optisch Teil ihres Blocks, wie vor
+  der Bearbeitung.
+
 ## v0.17.2 — Tabellen/Spalten beim Bearbeiten nicht mehr zerstört
 - Mehrfach-Auswahlen mit **Spalteninhalt** (Datum links, Beschreibung Mitte,
   Betrag rechts sind im PDF eigene Zeilen auf gleicher Höhe) wurden beim
