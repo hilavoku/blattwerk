@@ -641,11 +641,13 @@ async def signature_password(fname: str = Form(...), new_password: str = Form(""
 
 @app.post("/api/signature/upload")
 async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("1"),
-                           password: str = Form(""), threshold: str = Form("232")):
+                           password: str = Form(""), threshold: str = Form("232"),
+                           name: str = Form("")):
     from PIL import Image
     import io as _io
-    name = os.path.splitext(os.path.basename(file.filename or "Signatur"))[0]
+    name = (name or "").strip() or os.path.splitext(os.path.basename(file.filename or "Signatur"))[0]
     name = "".join(c for c in name if c not in '\\/:*?"<>|') or "Signatur"
+    name = os.path.splitext(name)[0][:100] or "Signatur"
     roh = await file.read()
     try:
         img = Image.open(_io.BytesIO(roh))
@@ -1352,11 +1354,13 @@ async def signature_password(fname: str = Form(...), new_password: str = Form(""
 
 @app.post("/api/signature/upload")
 async def signature_upload(file: UploadFile = File(...), remove_bg: str = Form("1"),
-                           password: str = Form(""), threshold: str = Form("232")):
+                           password: str = Form(""), threshold: str = Form("232"),
+                           name: str = Form("")):
     from PIL import Image
     import io as _io
-    name = os.path.splitext(os.path.basename(file.filename or "Signatur"))[0]
+    name = (name or "").strip() or os.path.splitext(os.path.basename(file.filename or "Signatur"))[0]
     name = "".join(c for c in name if c not in '\\/:*?"<>|') or "Signatur"
+    name = os.path.splitext(name)[0][:100] or "Signatur"
     roh = await file.read()
     try:
         img = Image.open(_io.BytesIO(roh))

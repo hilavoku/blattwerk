@@ -2,6 +2,13 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-07.
 
+## v0.17.9 — Signatur beim Hochladen direkt benennen
+- Der Upload-Dialog hat ein **Namensfeld** (mit dem Dateinamen vorbelegt):
+  Transparenz-Schwellwert, Passwort und jetzt auch der Name lassen sich in
+  einem Durchgang festlegen — das nachträgliche Umbenennen entfällt.
+  Ungültige Zeichen werden automatisch aus dem Namen entfernt, Enter im
+  Namensfeld lädt ebenso hoch wie der Knopf.
+
 ## v0.17.8 — Upload-Kachel löst beim Niederdrücken aus (nicht mehr schluckbar)
 - Die Nutzer-Aufzeichnungen zeigten: Das Niederdrücken (pointerdown) kam auf
   der Signatur-Kachel **ausnahmslos** an, während Loslassen und Klick-Ereignis

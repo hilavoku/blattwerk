@@ -509,6 +509,7 @@
   </div>
   <div style="margin-top:8px; font-size:11px;">Hintergrund entfernen — Schwellwert: <b id="sigUpThrVal" style="color:var(--text)">232</b> <span id="sigUpThrAus" class="muted"></span></div>
   <input type="range" id="sigUpThr" min="0" max="255" value="232">
+  <div style="margin-top:6px"><input type="text" id="sigUpName" placeholder="Name der Signatur" style="width:100%"></div>
   <div style="margin-top:6px"><input type="password" id="sigUpPwd" placeholder="Passwort (optional) – verschlüsselt die Signatur"></div>
   <div class="row">
     <button id="sigUpOk" class="prim">Hochladen</button>
@@ -2253,6 +2254,7 @@ document.getElementById('sigFile').addEventListener('change', (ev) => {
    der Schwellwert steuert, wie viel Weiss durchsichtig wird. */
 function openSigUploadDialog() {
   document.getElementById('sigUpTitle').textContent = 'Signatur hochladen: ' + sigPending.name;
+  document.getElementById('sigUpName').value = prettySig(sigPending.name);   // Dateiname als Namensvorschlag
   document.getElementById('sigUpPwd').value = '';
   const thr = document.getElementById('sigUpThr');
   thr.value = 232;
@@ -2300,6 +2302,8 @@ async function uploadPending() {
   fd.append('file', sigPending);
   fd.append('remove_bg', '1');
   fd.append('threshold', document.getElementById('sigUpThr').value);
+  const eigenName = document.getElementById('sigUpName').value.trim();
+  if (eigenName) fd.append('name', eigenName);   // eigener Name statt Dateiname
   const pw = document.getElementById('sigUpPwd').value;
   if (pw) fd.append('password', pw);
   stat('Signatur wird verarbeitet …');
@@ -2313,6 +2317,7 @@ async function uploadPending() {
   } else stat(j.detail || 'Upload fehlgeschlagen');
 }
 document.getElementById('sigUpOk').addEventListener('click', uploadPending);
+document.getElementById('sigUpName').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') uploadPending(); });
 document.getElementById('sigUpPwd').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') uploadPending(); });
 
 /* ---------- Drag&Drop / Clipboard / Tasten ---------- */
