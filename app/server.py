@@ -1,6 +1,7 @@
 # Blattwerk (Projekt: PDF-Werkstatt) - lokaler PDF-Server
 # Läuft auf 127.0.0.1, wird vom WebView2-Wrapper (PdfWerkstatt.exe) gestartet.
 import os
+import re
 import sys
 import io
 import json
@@ -21,6 +22,7 @@ else:
 
 UPLOADS = os.path.join(BASE, "uploads")
 SIGN_DIR = os.path.join(BASE, "signatures")
+TESSDATA = os.path.join(BASE, "tessdata")   # deu/eng Sprachdaten fuer Tesseract (PyMuPDF-OCR)
 DEMO = os.path.join(BASE, "demo", "demo.pdf")
 # Einstellungen NEBEN dem Programmordner: Deployment = PDF-Werkstatt\einstellungen.json
 # (ueberlebt server-Aktualisierungen); Entwicklung = Projektwurzel
@@ -351,11 +353,13 @@ async def set_field(did: str, page: int = Form(...), name: str = Form(...), valu
 
 @app.get("/api/hasannots/{did}")
 def hasannots(did: str):
-    """Gibt es bewegliche Objekte (Signaturen/Texte)? - fuer die Einbrennen-Rueckfrage."""
+    """Gibt es bewegliche Objekte (Signaturen/Texte/Formen/Markierungen)? -
+    fuer die Einbrennen-Rueckfrage."""
     d = _doc(did)
     for pg in d:
         for a in pg.annots():
-            if a.type[1] in ("Stamp", "FreeText"):
+            if a.type[1] in ("Stamp", "FreeText", "Square", "Circle", "Line", "Ink",
+                             "Highlight", "Underline", "StrikeOut", "Squiggly"):
                 return {"any": True}
     return {"any": False}
 
@@ -420,6 +424,28 @@ def save(did: str, flatten: int = 0):
                 col01 = tuple(c / 255 for c in color)
                 r = a.rect
                 text = (a.info.get("content") or "").replace("\r\n", "\n")
+                if font.startswith("doc~"):
+                    # Eingebettete Dokument-Schrift: auf DIESER Seite registrieren,
+                    # Vorschub aus den echten Font-Metriken (get_text_length kennt
+                    # nur Base14). Zeichnen dann wie gehabt zeichenweise mit Tc.
+                    res = _docfont_aufloesen(d, font)
+                    if res is None:
+                        continue   # AP hat Helv-Fallback -> normales bake uebernimmt
+                    fx, fontobj, fbuf = res
+                    alias = f"PWb{fx}"
+                    try:
+                        pg.insert_font(fontname=alias, fontbuffer=fbuf)
+                    except Exception:
+                        pass
+                    for i, zeile in enumerate(text.split("\n")):
+                        x = r.x0 + 2
+                        y = r.y0 + 2.5 + size * 0.2 + i * size * 1.25
+                        for ch in zeile:
+                            if ch != " ":
+                                pg.insert_text((x, y), ch, fontsize=size, fontname=alias, color=col01)
+                            x += fontobj.text_length(ch, fontsize=size) + sp
+                    pg.delete_annot(a)
+                    continue
                 for i, zeile in enumerate(text.split("\n")):
                     x = r.x0 + 2
                     y = r.y0 + 2.5 + size * 0.2 + i * size * 1.25
@@ -841,6 +867,35 @@ def annots(did: str, n: int):
             out.append({"xref": a.xref, "type": "sign", "rect": list(a.rect), "file": sig,
                         "rot": rot, "locked": bool(sig) and _sig_gesperrt(sig),
                         "unlocked": bool(sig) and sig in sig_unlocked})
+        elif t in ("Square", "Circle", "Line", "Ink"):
+            nm = a.info.get("id", "") or ""
+            daten = _shape_nm_teile(nm)
+            typ = daten["typ"] if daten else {v: k for k, v in SHAPE_ART.items()}.get(t, "rect")
+            try:
+                breite = daten["breite"] if daten else (a.border_width or 2)
+            except Exception:
+                breite = 2.0
+            out.append({"xref": a.xref, "type": "shape", "sub": typ, "rect": list(a.rect),
+                        "breite": float(breite),
+                        "farbe": (daten["strich"] if daten else None) or _farbe_zu_hex(a.colors.get("stroke")),
+                        "fuellung": (daten["fuellung"] if daten else "") or "0",
+                        "deckkraft": float(daten["deckkraft"]) if daten else round((a.opacity or 1) * 100),
+                        "punkte": (daten.get("punkte") if daten else []) or []})
+        elif t in MARKUP_ART.values():
+            art = [k for k, v in MARKUP_ART.items() if v == t][0]
+            werte = _zahlen_aus(d.xref_get_key(a.xref, "QuadPoints")[1] or "[]")
+            H = d[n].rect.height
+            quads = []
+            for i in range(0, len(werte) - 7, 8):
+                xs = [werte[i], werte[i + 2], werte[i + 4], werte[i + 6]]
+                ys = [H - v for v in (werte[i + 1], werte[i + 3], werte[i + 5], werte[i + 7])]
+                quads.append([round(min(xs), 2), round(min(ys), 2), round(max(xs), 2), round(max(ys), 2)])
+            bord = _zahlen_aus(d.xref_get_key(a.xref, "Border")[1] or "")
+            out.append({"xref": a.xref, "type": "markup", "sub": art, "rect": list(a.rect),
+                        "farbe": _farbe_zu_hex(a.colors.get("stroke")) or "FFD300",
+                        "deckkraft": round((a.opacity or 1) * 100),
+                        "staerke": bord[2] if len(bord) >= 3 and bord[2] > 0 else 1.0,
+                        "quads": quads})
     return out
 
 
@@ -886,8 +941,70 @@ async def annot_delete(did: str, page: int = Form(...), xref: int = Form(...)):
         txt = (an.info.get("content") or "").rstrip("\n")
         push_undo(did, {"op": "text-recreate", "page": page, "rect": old_rect, "text": txt,
                         "font": font, "size": size, "color": color, "spacing": sp})
+    elif t in ("Square", "Circle", "Line", "Ink"):
+        eintrag = _shape_recreate_daten(d, pg, xref, page, old_rect)
+        if eintrag:
+            push_undo(did, eintrag)
+    elif t in MARKUP_ART.values():
+        art = [k for k, v in MARKUP_ART.items() if v == t][0]
+        werte = _zahlen_aus(d.xref_get_key(xref, "QuadPoints")[1] or "[]")
+        H = pg.rect.height
+        quads = []
+        for i in range(0, len(werte) - 7, 8):
+            xs = [werte[i], werte[i + 2], werte[i + 4], werte[i + 6]]
+            ys = [H - v for v in (werte[i + 1], werte[i + 3], werte[i + 5], werte[i + 7])]
+            quads.append([round(min(xs), 2), round(min(ys), 2), round(max(xs), 2), round(max(ys), 2)])
+        bord = _zahlen_aus(d.xref_get_key(xref, "Border")[1] or "")
+        if quads:
+            push_undo(did, {"op": "markup-recreate", "page": page, "art": art, "quads": quads,
+                            "farbe": _farbe_zu_hex(an.colors.get("stroke")) or "FFD300",
+                            "deckkraft": round((an.opacity or 1) * 100),
+                            "staerke": bord[2] if len(bord) >= 3 and bord[2] > 0 else 1.0})
     pg.delete_annot(an)
     return {"ok": True}
+
+
+def _shape_recreate_daten(d, pg, xref, page, old_rect):
+    """Undo-Eintrag zum Neuaufbau einer Form aus ihrem aktuellen Zustand."""
+    an = pg.load_annot(xref)
+    if an is None:
+        return None
+    t = an.type[1]
+    nm = an.info.get("id", "") or ""
+    daten = _shape_nm_teile(nm)
+    typ = daten["typ"] if daten else {v: k for k, v in SHAPE_ART.items()}.get(t, "rect")
+    punkte = (daten.get("punkte") if daten else []) or []
+    H = pg.rect.height
+    if typ in ("line", "arrow") and len(punkte) < 2:
+        werte = _zahlen_aus(d.xref_get_key(xref, "L")[1] or "[]")
+        if len(werte) >= 4:
+            punkte = [[werte[0], H - werte[1]], [werte[2], H - werte[3]]]
+    elif typ == "ink" and not punkte:
+        punkte = []
+        roh = d.xref_get_key(xref, "InkList")[1] or "[]"
+        for st in re.findall(r"\[(.*?)\]", roh):
+            werte = _zahlen_aus(st)
+            pts = [[werte[i], H - werte[i + 1]] for i in range(0, len(werte) - 1, 2)]
+            if pts:
+                punkte.append(pts)
+    try:
+        breite = daten["breite"] if daten else (an.border_width or 2)
+    except Exception:
+        breite = 2.0
+    rect_fuer_undo = old_rect
+    if punkte:
+        if typ in ("line", "arrow"):
+            flach = punkte
+        else:   # ink: Striche ineinanderflachen
+            flach = [p for st in punkte for p in st]
+        xs = [p[0] for p in flach]; ys = [p[1] for p in flach]
+        rect_fuer_undo = [min(xs), min(ys), max(xs), max(ys)]
+    return {"op": "shape-recreate", "page": page, "typ": typ, "rect": rect_fuer_undo,
+            "punkte": punkte,
+            "breite": float(breite),
+            "farbe": (daten["strich"] if daten else None) or _farbe_zu_hex(an.colors.get("stroke")) or "000000",
+            "fuellung": (daten["fuellung"] if daten else "") or "0",
+            "deckkraft": float(daten["deckkraft"]) if daten else round((an.opacity or 1) * 100)}
 
 
 def _span_in_rect(pg, rect):
@@ -1129,32 +1246,76 @@ def _txt_leading(nm):
     return 0.0
 
 
-def _freetext_ap_mit_abstand(doc, an, page_h, spacing, leading=0.0):
+def _docfont_aufloesen(d, font_angabe):
+    """'doc~xref~basefont' -> (pdf_font_xref, pymupdf.Font) oder None.
+    xref kann nach Speichern mit GarbageCollection wandern - dann per
+    basefont ueber alle Seiten neu suchen."""
+    teile = font_angabe.split("~")
+    if len(teile) < 3:
+        return None
+    try:
+        xref = int(teile[1])
+    except ValueError:
+        return None
+    basefont = teile[2]
+    res = _docfont_lesen(d, str(id(d)) + basefont, xref)
+    if res is not None:
+        return res
+    for pno in range(d.page_count):
+        for eintrag in d.get_page_fonts(pno, full=True):
+            if eintrag[3] == basefont:
+                res = _docfont_lesen(d, str(id(d)) + basefont, eintrag[0])
+                if res is not None:
+                    return res
+    return None
+
+
+def _freetext_ap_mit_abstand(doc, an, page_h, spacing, leading=0.0, did_hint=None):
     """Ersetzt den Appearance-Stream einer Freitext-Annotation durch eine
     Darstellung mit Zeichenabstand (PDF-Operator Tc, in Punkten) und
     Zeilenabstand. Eigenschaften (Rect, Text, Schrift) kommen aus der
-    Annotation selbst; leading in pt (0 = size * 1,25)."""
+    Annotation selbst; leading in pt (0 = size * 1,25).
+    Schriften 'doc~xref~basefont' (eingebettete Dokument-Schriften) werden
+    per Glyph-ID-Stream gesetzt; fuer Zeichen ohne Glyph (Subsets!) springt
+    der Stream auf Helvetica um."""
     r = an.rect
     text = (an.info.get("content") or "").replace("\r\n", "\n")
     nm = an.info.get("id", "") or ""
     font, size, color = _txt_props(nm)
     basefont = FONTS_AP.get(font, "Helvetica")
     color01 = tuple(c / 255 for c in color)
+    docfont = None
+    if font.startswith("doc~"):
+        docfont = _docfont_aufloesen(doc, font)
+        if docfont is None:
+            font = "helv"   # Schrift nicht mehr im Dokument: Base14-Fallback
     fontx = _font_xref(doc, basefont)
+    helvx = _font_xref(doc, "Helvetica") if docfont else 0
     zeilenhoehe = leading if leading > 0 else size * 1.25
-    teile = [f"BT /F0 {size:.4g} Tf {color01[0]:.4g} {color01[1]:.4g} {color01[2]:.4g} rg"]
+    teile = [f"BT {color01[0]:.4g} {color01[1]:.4g} {color01[2]:.4g} rg"]
     if spacing:
         teile.append(f"{spacing:.4g} Tc")
-    # Baseline 0,9 * Groesse unter die Rect-Oberkante: Ascender bleiben in der
-    # BBox (kein Abschnitt), und die Lage passt zum HTML-Overlay (WYSIWYG).
-    # Zeilen im 1,25-fachen Leading wie das Overlay.
     for i, zeile in enumerate(text.split("\n")):
         baseline = (page_h - r.y0) - size * 0.9 - i * zeilenhoehe
-        teile.append(f"1 0 0 1 {r.x0 + 2:.2f} {baseline:.2f} Tm {_pdf_string(zeile).decode('latin-1')} Tj")
+        if docfont:
+            fx, fontobj, _buf = docfont
+            segmente = _gid_ap_text(fontobj, zeile)
+            if not segmente:
+                continue
+            teile.append(f"1 0 0 1 {r.x0 + 2:.2f} {baseline:.2f} Tm")
+            for ziel, inhalt in segmente:
+                if ziel == "doc":
+                    teile.append(f"/F0 {size:.4g} Tf <{inhalt}> Tj")
+                else:
+                    teile.append(f"/F1 {size:.4g} Tf ({inhalt}) Tj")
+        else:
+            teile.append(f"1 0 0 1 {r.x0 + 2:.2f} {baseline:.2f} Tm "
+                         f"/F0 {size:.4g} Tf {_pdf_string(zeile).decode('latin-1')} Tj")
     teile.append("ET")
     apx = doc.get_new_xref()
+    fonts_res = f"/F0 {fontx} 0 R" if not docfont else f"/F0 {docfont[0]} 0 R /F1 {helvx} 0 R"
     doc.update_object(apx, f"<< /Type /XObject /Subtype /Form /BBox [{r.x0:.2f} {page_h - r.y1:.2f} {r.x1:.2f} {page_h - r.y0:.2f}] "
-                           f"/Resources << /Font << /F0 {fontx} 0 R >> >> >>")
+                           f"/Resources << /Font << {fonts_res} >> >> >>")
     doc.update_stream(apx, ("q " + " ".join(teile) + " Q").encode("latin-1"), new=1)
     doc.xref_set_key(an.xref, "AP", f"<< /N {apx} 0 R >>")
 
@@ -1170,7 +1331,10 @@ async def annot_text(did: str, page: int = Form(...), rect: str = Form(...), tex
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
-    if font not in FONTS:
+    if font.startswith("doc~"):
+        if _docfont_aufloesen(d, font) is None:
+            font = "helv"   # eingebettete Schrift nicht (mehr) vorhanden
+    elif font not in FONTS:
         font = "helv"
     try:
         spacing_f = float(spacing or 0)
@@ -1397,7 +1561,830 @@ def undo(did: str):
                     _feld_wert_setzen(d, w, e["value"])
     elif op == "rotate":
         pg.set_rotation((pg.rotation + e["delta"]) % 360)
+    elif op == "shape-recreate":
+        try:
+            _shape_anlegen(d, pg, e["typ"], pymupdf.Rect(e["rect"]), e.get("punkte") or [],
+                           e.get("breite", 2), e.get("farbe", "000000"),
+                           e.get("fuellung", "0"), e.get("deckkraft", 100))
+        except HTTPException:
+            raise
+        except Exception as ex:
+            raise HTTPException(400, "Form konnte nicht wiederhergestellt werden: " + str(ex))
+    elif op == "markup-recreate":
+        try:
+            rects = [pymupdf.Rect(q[0], q[1], q[2], q[3]) for q in e["quads"]]
+            _markup_anlegen(d, pg, e["art"], rects, e.get("farbe", "FFD300"),
+                            e.get("deckkraft", 40), e.get("staerke", 1))
+        except HTTPException:
+            raise
+        except Exception as ex:
+            raise HTTPException(400, "Markierung konnte nicht wiederhergestellt werden: " + str(ex))
+    elif op == "shape-move":
+        an = pg.load_annot(e["xref"])
+        if an is not None:
+            _shape_transformieren(d, pg, e["xref"], pymupdf.Rect(e["alt"]), pymupdf.Rect(e["neu"]))
+    elif op == "style-set":
+        if pg.load_annot(e["xref"]) is not None:
+            _style_setzen(d, pg, e["xref"], e["alt"])
     return {"ok": True, "undone": True, "page": e["page"], "op": op, "left": len(stack)}
+
+
+# ---------- Formen (Rechteck/Oval/Linie/Pfeil/Tinte) & Text-Markierungen ----------
+#
+# Formen sind echte PDF-Annotationen (Square/Circle/Line/Ink) mit Stil im
+# PDFW-SHAPE-NM-Marker, Markierungen sind Markup-Annotationen (Highlight/
+# Underline/StrikeOut/Squiggly) mit eigenem Appearance-Stream: MuPDFs AP
+# kennt keine Strichstaerke bei Unter-/Durchstreichen, und set_rect wird fuer
+# Markup schlicht abgelehnt ("no Rect property") - Verschieben geht also nur
+# ueber QuadPoints + Rect + eigenen AP in einem Zug.
+#
+# PDF-Koordinaten: die API arbeitet durchgaengig mit TOP-basierten
+# Koordinaten (wie der Rest des Servers); die PDF-Keys QuadPoints/L/InkList
+# sind bottom-up - die Umrechnung passiert nur in den _qp/_l/_ilk-Helfern.
+
+SHAPE_ART = {"rect": "Square", "oval": "Circle", "line": "Line", "arrow": "Line", "ink": "Ink"}
+SHAPE_NAME = {"rect": "Rechteck", "oval": "Oval", "line": "Linie", "arrow": "Pfeil", "ink": "Tinte"}
+MARKUP_ART = {"h": "Highlight", "u": "Underline", "s": "StrikeOut", "q": "Squiggly"}
+MARKUP_NAME = {"h": "Marker", "u": "Unterstrichen", "s": "Durchgestrichen", "q": "Wellenlinie"}
+
+
+def _hex_zu_farbe(s):
+    s = (s or "").strip().lstrip("#")
+    if len(s) != 6:
+        return None
+    try:
+        return tuple(int(s[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    except ValueError:
+        return None
+
+
+def _farbe_zu_hex(t):
+    if not t:
+        return "0"
+    return "%02X%02X%02X" % tuple(min(255, max(0, round(c * 255))) for c in t[:3])
+
+
+def _zahlen_aus(s):
+    """Floats aus einem PDF-Array-String ([x y ...] / [[..] [..]]) ziehen."""
+    import re
+    return [float(v) for v in re.findall(r"-?\d+\.?\d*", s)]
+
+
+def _shape_nm(typ, breite, strich, fuellung, deckkraft, punkte=""):
+    return f"PDFW-SHAPE:{typ}:{breite:g}:{strich}:{fuellung}:{round(deckkraft)}:{punkte}"
+
+
+def _shape_nm_teile(nm):
+    """NM-Marker -> dict oder None (fremde Annotation ohne Marker)."""
+    if not (nm or "").startswith("PDFW-SHAPE:"):
+        return None
+    try:
+        _, typ, breite, strich, fuellung, deckkraft, punkte = nm.split(":", 6)
+        daten = {"typ": typ, "breite": float(breite), "strich": strich,
+                 "fuellung": fuellung, "deckkraft": float(deckkraft)}
+        if typ in ("line", "arrow"):
+            daten["punkte"] = [[float(v) for v in p.split(",")] for p in punkte.split(";")] if punkte else []
+        elif typ == "ink":
+            daten["punkte"] = [[[float(v) for v in p.split(",")] for p in st.split(";")]
+                               for st in punkte.split("|")] if punkte else []
+        else:
+            daten["punkte"] = []
+        return daten
+    except (ValueError, IndexError):
+        return None
+
+
+def _punkte_zu_nm(typ, punkte):
+    if typ in ("line", "arrow") and len(punkte) >= 2:
+        return ";".join(f"{p[0]:.1f},{p[1]:.1f}" for p in punkte[:2])
+    if typ == "ink" and punkte:
+        return "|".join(";".join(f"{p[0]:.1f},{p[1]:.1f}" for p in st) for st in punkte)
+    return ""
+
+
+def _shape_anlegen(doc, pg, typ, rect_r, punkte, breite, strich, fuellung, deckkraft):
+    """Form-Annotation anlegen (auch fuer Undo-Neuaufbau). punkte: line/arrow
+    [[x1,y1],[x2,y2]], ink [[ [x,y],... ],...], sonst []."""
+    farbe = _hex_zu_farbe(strich) or (0, 0, 0)
+    fuellung = (fuellung or "0").strip()
+    fill = _hex_zu_farbe(fuellung) if fuellung not in ("", "0") else None
+    if typ == "rect":
+        a = pg.add_rect_annot(rect_r)
+    elif typ == "oval":
+        a = pg.add_circle_annot(rect_r)
+    elif typ in ("line", "arrow"):
+        p1, p2 = punkte[0], punkte[1]
+        a = pg.add_line_annot(pymupdf.Point(p1[0], p1[1]), pymupdf.Point(p2[0], p2[1]))
+    elif typ == "ink":
+        a = pg.add_ink_annot([[ [p[0], p[1]] for p in st] for st in punkte])   # float-Paare, KEINE Point-Objekte
+    else:
+        raise HTTPException(400, "Unbekannter Formtyp: " + typ)
+    try:
+        a.set_colors(stroke=farbe, fill=fill)
+        a.set_border(width=max(0.2, float(breite)))
+        if float(deckkraft) < 100:
+            a.set_opacity(max(0.05, float(deckkraft) / 100))
+    except Exception:
+        pass  # fremde/leere Objekte: Stil so gut wie moeglich setzen
+    if typ == "arrow":
+        doc.xref_set_key(a.xref, "LE", "[/None /ClosedArrow]")
+    a.update()   # Standard-AP aus den Eigenschaften erzeugen (nur Stamp-AP nie updaten!)
+    doc.xref_set_key(a.xref, "NM",
+                     f"({_shape_nm(typ, float(breite), strich, fuellung, float(deckkraft), _punkte_zu_nm(typ, punkte))})")
+    return a
+
+
+def _qp_string(rects, H):
+    teile = []
+    for r in rects:
+        teile.append(f"{r.x0:.2f} {H - r.y0:.2f} {r.x1:.2f} {H - r.y0:.2f} "
+                     f"{r.x0:.2f} {H - r.y1:.2f} {r.x1:.2f} {H - r.y1:.2f}")
+    return "[" + " ".join(teile) + "]"
+
+
+def _markup_ap_setzen(doc, xref, rects, art, farbe_hex, staerke, H):
+    """Eigener Appearance-Stream: Markup mit Strichstaerke und genauer Lage.
+    Die AP-BBox wird vom Viewer auf das Annot-/Rect gemappt - BBox und Rect
+    muessen identisch sein, sonst wandert die Darstellung."""
+    c = _hex_zu_farbe(farbe_hex) or (1, 0.85, 0)
+    x0 = min(r.x0 for r in rects); y0 = min(r.y0 for r in rects)
+    x1 = max(r.x1 for r in rects); y1 = max(r.y1 for r in rects)
+    ops = []
+    if art == "h":
+        ops.append(f"{c[0]:.4g} {c[1]:.4g} {c[2]:.4g} rg")
+        for r in rects:
+            ops.append(f"{r.x0:.2f} {H - r.y1:.2f} {r.x1 - r.x0:.2f} {r.y1 - r.y0:.2g} re f")
+    else:
+        w = max(0.3, float(staerke))
+        ops.append(f"{c[0]:.4g} {c[1]:.4g} {c[2]:.4g} RG {w:.4g} w 1 J")
+        for r in rects:
+            if art == "u":
+                y = H - r.y1 + 1.2
+                ops.append(f"{r.x0:.2f} {y:.2f} m {r.x1:.2f} {y:.2f} l S")
+            elif art == "s":
+                y = H - (r.y0 + r.y1) / 2
+                ops.append(f"{r.x0:.2f} {y:.2f} m {r.x1:.2f} {y:.2f} l S")
+            else:   # q: Wellenlinie entlang der Unterkante
+                ybase = H - r.y1 + 2
+                pts = []
+                i = 0
+                x = r.x0
+                while x < r.x1:
+                    pts.append(f"{x:.2f} {ybase + (2.2 if i % 2 == 0 else 0):.2f}")
+                    x += 4
+                    i += 1
+                if pts:
+                    ops.append("m " + " l ".join(pts) + " l S")
+    apx = doc.get_new_xref()
+    doc.update_object(apx, f"<< /Type /XObject /Subtype /Form "
+                           f"/BBox [{x0:.2f} {H - y1:.2f} {x1:.2f} {H - y0:.2f}] >>")
+    doc.update_stream(apx, (" ".join(ops)).encode("latin-1"), new=1)
+    doc.xref_set_key(xref, "AP", f"<< /N {apx} 0 R >>")
+
+
+def _markup_anlegen(doc, pg, art, rects, farbe_hex, deckkraft, staerke):
+    H = pg.rect.height
+    ql = [pymupdf.Quad(pymupdf.Point(r.x0, r.y0), pymupdf.Point(r.x1, r.y0),
+                       pymupdf.Point(r.x0, r.y1), pymupdf.Point(r.x1, r.y1)) for r in rects]
+    adder = {"h": pg.add_highlight_annot, "u": pg.add_underline_annot,
+             "s": pg.add_strikeout_annot, "q": pg.add_squiggly_annot}[art]
+    a = adder(quads=ql)
+    a.set_colors(stroke=_hex_zu_farbe(farbe_hex) or (1, 0.85, 0))
+    if float(deckkraft) < 100:
+        a.set_opacity(max(0.05, float(deckkraft) / 100))
+    a.update()
+    _markup_konsistent(doc, a.xref, rects, art, farbe_hex, float(staerke), H)
+    return a
+
+
+def _markup_konsistent(doc, xref, rects, art, farbe_hex, staerke, H):
+    """QuadPoints, Rect, Border und AP einer Markup-Annotation in Einklang
+    bringen (gleiche Stelle, gleiche Groesse - sonst mappt der Viewer die AP
+    falsch)."""
+    doc.xref_set_key(xref, "QuadPoints", _qp_string(rects, H))
+    x0 = min(r.x0 for r in rects); y0 = min(r.y0 for r in rects)
+    x1 = max(r.x1 for r in rects); y1 = max(r.y1 for r in rects)
+    doc.xref_set_key(xref, "Rect", f"[{x0:.2f} {H - y1:.2f} {x1:.2f} {H - y0:.2f}]")
+    if art != "h":
+        doc.xref_set_key(xref, "Border", f"[0 0 {max(0.3, float(staerke)):.4g}]")
+    _markup_ap_setzen(doc, xref, rects, art, farbe_hex, staerke, H)
+
+
+@app.get("/api/textquads/{did}/{n}")
+def textquads(did: str, n: int, x0: float, y0: float, x1: float, y1: float):
+    """Wort-Umrahmungen (Top-Koordinaten) im Auswahlrechteck - Grundlage fuer
+    Markierungen: Nur ueberlappte Woerter werden markiert, nicht ganze Zeilen."""
+    d = _doc(did)
+    if n < 0 or n >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    pg = d[n]
+    sel = pymupdf.Rect(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+    treffer = []
+    for w in pg.get_text("words"):
+        wr = pymupdf.Rect(w[:4])
+        ix = min(wr.x1, sel.x1) - max(wr.x0, sel.x0)
+        iy = min(wr.y1, sel.y1) - max(wr.y0, sel.y0)
+        flaeche = (wr.x1 - wr.x0) * (wr.y1 - wr.y0)
+        if ix > 0 and iy > 0 and ix * iy >= 0.25 * flaeche:
+            treffer.append([round(wr.x0, 2), round(wr.y0, 2), round(wr.x1, 2), round(wr.y1, 2), w[4]])
+    treffer.sort(key=lambda q: (q[1], q[0]))
+    return {"quads": [q[:4] for q in treffer], "text": " ".join(q[4] for q in treffer)}
+
+
+@app.post("/api/annot/shape/{did}")
+async def annot_shape(did: str, page: int = Form(...), typ: str = Form(...),
+                      rect: str = Form(...), punkte: str = Form("[]"),
+                      breite: float = Form(2), farbe: str = Form("000000"),
+                      fuellung: str = Form("0"), deckkraft: float = Form(100)):
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    if typ not in SHAPE_ART:
+        raise HTTPException(400, "Unbekannter Formtyp: " + typ)
+    pg = d[page]
+    try:
+        pts = json.loads(punkte) if punkte else []
+        rect_r = pymupdf.Rect(*[float(v) for v in json.loads(rect)])
+    except (ValueError, TypeError):
+        raise HTTPException(400, "Ungültige Geometrie")
+    if typ in ("line", "arrow"):
+        if len(pts) < 2:
+            raise HTTPException(400, "Linie braucht zwei Punkte")
+        alle = pts[:2]
+        rect_r = pymupdf.Rect(min(alle[0][0], alle[1][0]), min(alle[0][1], alle[1][1]),
+                              max(alle[0][0], alle[1][0]), max(alle[0][1], alle[1][1]))
+        if rect_r.get_area() < 4:   # winziger Klick: kleine Diagonale daraus machen
+            alle = [pts[0], [pts[1][0] + 8, pts[1][1] + 8]]
+            rect_r = pymupdf.Rect(alle[0][0], alle[0][1], alle[1][0], alle[1][1])
+        pts = alle
+    elif typ == "ink":
+        if not pts or not any(len(st) >= 2 for st in pts):
+            raise HTTPException(400, "Tinte braucht Punkte")
+        xs = [p[0] for st in pts for p in st]; ys = [p[1] for st in pts for p in st]
+        rect_r = pymupdf.Rect(min(xs), min(ys), max(xs), max(ys))
+    rect_r = rect_r | pymupdf.Rect(rect_r.x0, rect_r.y0, rect_r.x0 + 2, rect_r.y0 + 2)  # Mindestgroesse
+    a = _shape_anlegen(d, pg, typ, rect_r, pts, breite, farbe, fuellung, deckkraft)
+    push_undo(did, {"op": "annot-delete", "page": page, "xref": a.xref})
+    return {"ok": True, "xref": a.xref, "rect": list(a.rect)}
+
+
+@app.post("/api/annot/markup/{did}")
+async def annot_markup(did: str, page: int = Form(...), art: str = Form(...),
+                       quads: str = Form(...), farbe: str = Form("FFD300"),
+                       deckkraft: float = Form(40), staerke: float = Form(1)):
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    if art not in MARKUP_ART:
+        raise HTTPException(400, "Unbekannte Markierungsart: " + art)
+    try:
+        rects = [pymupdf.Rect(q[0], q[1], q[2], q[3]) for q in json.loads(quads)]
+    except (ValueError, TypeError, IndexError):
+        raise HTTPException(400, "quads muss JSON-Liste [x0,y0,x1,y1] sein")
+    if not rects:
+        raise HTTPException(400, "Keine Auswahl übergeben")
+    pg = d[page]
+    a = _markup_anlegen(d, pg, art, rects, farbe, deckkraft, staerke)
+    push_undo(did, {"op": "annot-delete", "page": page, "xref": a.xref})
+    return {"ok": True, "xref": a.xref, "rect": list(a.rect)}
+
+
+def _shape_transformieren(doc, pg, xref, alt_r, neu_r):
+    """Form/Markierung verschieben oder skalieren: alt_r = aktuelle BBox,
+    neu_r = Ziel-BBox. Punkte (L/InkList/QuadPoints) werden proportional
+    umgerechnet - nur set_rect wuerde die Grafik verzerren bzw. bei Markup
+    (kein Rect per API) gar nicht gehen."""
+    an = pg.load_annot(xref)
+    if an is None:
+        raise HTTPException(404, "Annotation nicht gefunden")
+    t = an.type[1]
+    H = pg.rect.height
+    sx = (neu_r.x1 - neu_r.x0) / (alt_r.x1 - alt_r.x0) if alt_r.x1 > alt_r.x0 else 1
+    sy = (neu_r.y1 - neu_r.y0) / (alt_r.y1 - alt_r.y0) if alt_r.y1 > alt_r.y0 else 1
+
+    def skaliere(x, y):   # Top-Koordinaten: alt_r-BBox auf neu_r-BBox abbilden
+        return (neu_r.x0 + (x - alt_r.x0) * sx, neu_r.y0 + (y - alt_r.y0) * sy)
+
+    if t in ("Square", "Circle"):
+        # MuPDF legt den ZIEHPFAD in das uebergebene Rect, der sichtbare Kasten
+        # (inkl. Strichbreite) wird um halbe Strichbreite GROESSER. Fuer
+        # "sichtbares Rechteck = Ziel" vorher um halbe Strichbreite einziehen.
+        daten = _shape_nm_teile(an.info.get("id", "") or "") or {}
+        b = float(daten.get("breite") or 0) / 2
+        an.set_rect(pymupdf.Rect(neu_r.x0 + b, neu_r.y0 + b, neu_r.x1 - b, neu_r.y1 - b))
+        an.update()
+        an = pg.load_annot(xref)
+        an.set_rect(pymupdf.Rect(neu_r.x0 + b, neu_r.y0 + b, neu_r.x1 - b, neu_r.y1 - b))
+    elif t == "Line":
+        werte = _zahlen_aus(doc.xref_get_key(xref, "L")[1] or "[]")
+        if len(werte) >= 4:
+            p1 = skaliere(werte[0], H - werte[1])
+            p2 = skaliere(werte[2], H - werte[3])
+            doc.xref_set_key(xref, "L", f"[{p1[0]:.2f} {H - p1[1]:.2f} {p2[0]:.2f} {H - p2[1]:.2f}]")
+        an = pg.load_annot(xref)
+        an.update()   # Rect folgt /L automatisch
+    elif t == "Ink":
+        roh = doc.xref_get_key(xref, "InkList")[1] or "[]"
+        stroks = []
+        for st in re.findall(r"\[(.*?)\]", roh):
+            werte = _zahlen_aus(st)
+            pts = []
+            for i in range(0, len(werte) - 1, 2):
+                x, y = skaliere(werte[i], H - werte[i + 1])
+                pts.append(f"{x:.2f} {H - y:.2f}")
+            if pts:
+                stroks.append("[" + " ".join(pts) + "]")
+        if stroks:
+            doc.xref_set_key(xref, "InkList", "[" + "".join(stroks) + "]")
+        an = pg.load_annot(xref)
+        an.update()
+    elif t in MARKUP_ART.values():
+        art = [k for k, v in MARKUP_ART.items() if v == t][0]
+        nm_farbe = _farbe_zu_hex(an.colors.get("stroke")) if an.colors.get("stroke") else "FFD300"
+        staerke = 1.0
+        try:
+            bord = _zahlen_aus(doc.xref_get_key(xref, "Border")[1] or "")
+            if len(bord) >= 3 and bord[2] > 0:
+                staerke = bord[2]
+        except Exception:
+            pass
+        werte = _zahlen_aus(doc.xref_get_key(xref, "QuadPoints")[1] or "[]")
+        rects = []
+        for i in range(0, len(werte) - 7, 8):
+            xs = [werte[i], werte[i + 2], werte[i + 4], werte[i + 6]]
+            ys = [H - v for v in (werte[i + 1], werte[i + 3], werte[i + 5], werte[i + 7])]
+            ecken = [skaliere(x, y) for x, y in zip(xs, ys)]
+            rects.append(pymupdf.Rect(min(p[0] for p in ecken), min(p[1] for p in ecken),
+                                      max(p[0] for p in ecken), max(p[1] for p in ecken)))
+        if rects:
+            _markup_konsistent(doc, xref, rects, art, nm_farbe, staerke, H)
+    else:
+        raise HTTPException(400, "Dieser Annotationstyp ist nicht verschiebbar: " + t)
+
+
+def _style_lesen(d, pg, xref):
+    """Aktueller Stil einer Form/Markierung (fuer Undo)."""
+    an = pg.load_annot(xref)
+    if an is None:
+        raise HTTPException(404, "Annotation nicht gefunden")
+    t = an.type[1]
+    if t in MARKUP_ART.values():
+        bord = _zahlen_aus(d.xref_get_key(xref, "Border")[1] or "")
+        return {"art": "markup", "sub": [k for k, v in MARKUP_ART.items() if v == t][0],
+                "farbe": _farbe_zu_hex(an.colors.get("stroke")),
+                "deckkraft": round((an.opacity or 1) * 100),
+                "staerke": bord[2] if len(bord) >= 3 and bord[2] > 0 else 1.0}
+    daten = _shape_nm_teile(an.info.get("id", "") or "") or {}
+    return {"art": "shape", "sub": daten.get("typ") or {v: k for k, v in SHAPE_ART.items()}.get(t, "rect"),
+            "farbe": daten.get("strich") or _farbe_zu_hex(an.colors.get("stroke")),
+            "fuellung": daten.get("fuellung", "0"),
+            "deckkraft": daten.get("deckkraft", round((an.opacity or 1) * 100)),
+            "breite": daten.get("breite", 2.0)}
+
+
+def _style_setzen(doc, pg, xref, werte):
+    """Stil einer Form/Markierung anwenden (Endpoint und Undo teilen sich das)."""
+    an = pg.load_annot(xref)
+    if an is None:
+        raise HTTPException(404, "Annotation nicht gefunden")
+    t = an.type[1]
+    farbe = werte.get("farbe") or ""
+    hexf = _hex_zu_farbe(farbe) if farbe else None
+    deckkraft = float(werte.get("deckkraft") or 100)
+    if t in MARKUP_ART.values():
+        art = [k for k, v in MARKUP_ART.items() if v == t][0]
+        an.set_colors(stroke=hexf or an.colors.get("stroke") or (1, 0.85, 0))
+        an.set_opacity(max(0.05, deckkraft / 100))
+        an.update()
+        werte_qp = _zahlen_aus(doc.xref_get_key(xref, "QuadPoints")[1] or "[]")
+        H = pg.rect.height
+        rects = []
+        for i in range(0, len(werte_qp) - 7, 8):
+            xs = [werte_qp[i], werte_qp[i + 2], werte_qp[i + 4], werte_qp[i + 6]]
+            ys = [H - v for v in (werte_qp[i + 1], werte_qp[i + 3], werte_qp[i + 5], werte_qp[i + 7])]
+            rects.append(pymupdf.Rect(min(xs), min(ys), max(xs), max(ys)))
+        if rects:
+            _markup_konsistent(doc, xref, rects, art,
+                               farbe or _farbe_zu_hex(an.colors.get("stroke")),
+                               float(werte.get("staerke") or 1), H)
+        return
+    if hexf is not None or werte.get("fuellung") is not None:
+        fill = None
+        if (werte.get("fuellung") or "0") not in ("", "0"):
+            fill = _hex_zu_farbe(werte["fuellung"])
+        try:
+            an.set_colors(stroke=hexf or an.colors.get("stroke"), fill=fill)
+        except Exception:
+            pass
+    if werte.get("breite"):
+        try:
+            an.set_border(width=max(0.2, float(werte["breite"])))
+        except Exception:
+            pass
+    if deckkraft < 100:
+        try:
+            an.set_opacity(max(0.05, deckkraft / 100))
+        except Exception:
+            pass
+    an.update()
+    alt = _shape_nm_teile(an.info.get("id", "") or "") or {}
+    typ = alt.get("typ") or {v: k for k, v in SHAPE_ART.items()}.get(t, "rect")
+    doc.xref_set_key(xref, "NM", "(" + _shape_nm(
+        typ,
+        float(werte.get("breite") or alt.get("breite") or 2),
+        werte.get("farbe") or alt.get("strich") or "000000",
+        werte.get("fuellung") if werte.get("fuellung") is not None else alt.get("fuellung", "0"),
+        deckkraft if werte.get("deckkraft") is not None else alt.get("deckkraft", 100),
+        _punkte_zu_nm(typ, alt.get("punkte", []))) + ")")
+
+
+@app.post("/api/annot/shapemove/{did}")
+async def annot_shapemove(did: str, page: int = Form(...), xref: int = Form(...),
+                          alt: str = Form(...), neu: str = Form(...)):
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    pg = d[page]
+    alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
+    neu_r = pymupdf.Rect(*[float(v) for v in json.loads(neu)])
+    _shape_transformieren(d, pg, xref, alt_r, neu_r)
+    an = pg.load_annot(xref)
+    push_undo(did, {"op": "shape-move", "page": page, "xref": xref,
+                    "alt": list(neu_r), "neu": list(alt_r)})   # invertiert: zurueckskalieren
+    return {"ok": True, "rect": list(an.rect) if an else list(neu_r)}
+
+
+@app.post("/api/annot/style/{did}")
+async def annot_style(did: str, page: int = Form(...), xref: int = Form(...),
+                      breite: str = Form(""), farbe: str = Form(""),
+                      fuellung: str = Form(""), deckkraft: str = Form(""),
+                      staerke: str = Form("")):
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    pg = d[page]
+    if pg.load_annot(xref) is None:
+        raise HTTPException(404, "Annotation nicht gefunden")
+    alt = _style_lesen(d, pg, xref)
+    neu = {}
+    for k, v in (("breite", breite), ("farbe", farbe), ("fuellung", fuellung),
+                 ("deckkraft", deckkraft), ("staerke", staerke)):
+        if v != "":
+            neu[k] = v
+    if not neu:
+        return {"ok": True}
+    _style_setzen(d, pg, xref, neu)
+    push_undo(did, {"op": "style-set", "page": page, "xref": xref, "alt": alt})
+    return {"ok": True}
+
+
+# ---------- OCR: unsichtbare Textebene fuer Seiten ohne Text (Scans) ----------
+#
+# Tesseract ist im PyMuPDF-Wheel enthalten (1.28.x) - es fehlen nur die
+# Sprachdaten (tessdata/deu+eng.traineddata neben der EXE bzw. im Projekt).
+# Pro Seite: OCR-Textpage -> Zeilen gruppieren -> je Zeile unsichtbaren Text
+# (render_mode=3) an der OCR-Baseline einsetzen. Kein Undo (wie Redaction):
+# die Ebene ist rein zusaetzlich, veraendert nichts Sichtbares.
+
+@app.get("/api/ocr/info/{did}")
+def ocr_info(did: str):
+    """Welche Seiten haben bereits Text (und kommen fuer OCR nicht in Frage)?"""
+    d = _doc(did)
+    ohne = []
+    for i in range(d.page_count):
+        if not d[i].get_text().strip():
+            ohne.append(i)
+    return {"pages": d.page_count, "seiten_ohne_text": ohne,
+            "tessdata": sorted(f[:-12] for f in os.listdir(TESSDATA)
+                               if f.endswith(".traineddata")) if os.path.isdir(TESSDATA) else []}
+
+
+@app.post("/api/ocr/{did}")
+async def ocr_seite(did: str, page: int = Form(...), lang: str = Form("deu+eng"),
+                    dpi: int = Form(300)):
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    verfuegbar = ([f[:-12] for f in os.listdir(TESSDATA) if f.endswith(".traineddata")]
+                  if os.path.isdir(TESSDATA) else [])
+    for code in lang.split("+"):
+        if code and code not in verfuegbar:
+            raise HTTPException(400, f"Sprachdaten '{code}' fehlen (tessdata-Ordner)")
+    pg = d[page]
+    if pg.get_text().strip():
+        return {"ok": True, "skip": True, "zeilen": 0}
+    try:
+        tp = pg.get_textpage_ocr(language=lang, dpi=max(150, min(400, int(dpi))),
+                                 full=True, tessdata=TESSDATA)
+    except Exception as e:
+        raise HTTPException(500, "OCR fehlgeschlagen: " + str(e)[:300])
+    woerter = pg.get_text("words", textpage=tp)
+    zeilen = {}
+    for w in woerter:
+        zeilen.setdefault((w[5], w[6]), []).append(w)
+    eingefuegt = 0
+    for key in sorted(zeilen):
+        ws = sorted(zeilen[key], key=lambda w: w[0])
+        text = " ".join(w[4] for w in ws)
+        if not text.strip():
+            continue
+        x0 = min(w[0] for w in ws); y0 = min(w[1] for w in ws)
+        x1 = max(w[2] for w in ws); y1 = max(w[3] for w in ws)
+        hoehe = max(4.0, y1 - y0)
+        size = hoehe * 0.8
+        # Baseline: Unterkante minus ~18 % Versalhoehe (wie bei echtem Text)
+        rc = pg.insert_text((x0, y1 - hoehe * 0.18), text, fontsize=size,
+                            fontname="helv", render_mode=3)
+        if rc >= 0:
+            eingefuegt += 1
+    return {"ok": True, "skip": False, "zeilen": eingefuegt}
+
+
+# ---------- Eingebettete Schriften des Dokuments (Zeichensatz-Auswahl) ----------
+#
+# Eingebettete Fonts (TTF/OTF/CFF) werden per xref extrahiert: die UI laedt
+# sie als @font-face fuer das Overlay, der Server nutzt sie fuer Freitext-APs
+# (Glyph-ID-Streams, Identity-H) und beim Einbrennen. Subsets (XXXXXX+Name)
+# enthalten nur die im Dokument benutzten Zeichen - fehlende Glyphen fallen
+# auf Helvetica zurueck.
+
+_docfont_cache = {}   # cache-schluessel -> (pdf_font_xref, pymupdf.Font, buffer)
+
+
+def _docfont_lesen(d, cache_schluessel, fontxref):
+    """Font einbetten (einmalig je Dokument+Font) und als Objekt liefern."""
+    if cache_schluessel in _docfont_cache:
+        return _docfont_cache[cache_schluessel]
+    try:
+        _, ext, _, buf = d.extract_font(fontxref)
+    except Exception:
+        buf = None
+    if not buf or (ext or "") not in ("ttf", "otf", "cff"):
+        _docfont_cache[cache_schluessel] = None
+        return None
+    font = pymupdf.Font(fontbuffer=buf)
+    # irgendeine Seite als Ressourcen-Anker: insert_font legt das Font-Objekt an
+    fx = 0
+    for pg in d:
+        try:
+            fx = pg.insert_font(fontname=f"PWd{fontxref}", fontbuffer=buf)
+            break
+        except Exception:
+            continue
+    if not fx:
+        _docfont_cache[cache_schluessel] = None
+        return None
+    _docfont_cache[cache_schluessel] = (fx, font, buf)
+    return _docfont_cache[cache_schluessel]
+
+
+@app.get("/api/fonts/{did}")
+def schriften(did: str):
+    """Eingebettete Schriften aller Seiten (dedupliziert), nur vollstaendig
+    extrahierbare sind auswaehlbar."""
+    d = _doc(did)
+    gesehen = {}
+    for pno in range(d.page_count):
+        for eintrag in d.get_page_fonts(pno, full=True):
+            xref, ext, typ, basefont = eintrag[0], eintrag[1], eintrag[2], eintrag[3]
+            if xref in gesehen or xref <= 0:
+                continue
+            name = basefont[7:] if re.match(r"^[A-Z]{6}\+", basefont) else basefont
+            gesehen[xref] = {"xref": xref, "name": name, "basefont": basefont,
+                             "typ": typ, "ext": ext,
+                             "subset": bool(re.match(r"^[A-Z]{6}\+", basefont)),
+                             "nutzbar": ext in ("ttf", "otf", "cff")}
+    return list(gesehen.values())
+
+
+@app.get("/api/font/file/{did}/{xref}")
+def schrift_datei(did: str, xref: int):
+    d = _doc(did)
+    try:
+        name, ext, typ, buf = d.extract_font(xref)
+    except Exception:
+        raise HTTPException(404, "Schrift nicht extrahierbar")
+    if not buf:
+        raise HTTPException(404, "Schrift nicht eingebettet")
+    media = {"ttf": "font/ttf", "otf": "font/otf", "cff": "application/octet-stream",
+             "pfa": "application/octet-stream", "pfb": "application/octet-stream"}.get(ext, "application/octet-stream")
+    datei = re.sub(r"[^A-Za-z0-9_.-]", "_", name or f"font{xref}") + "." + (ext or "bin")
+    return Response(content=buf, media_type=media,
+                    headers={"Content-Disposition": f'inline; filename="{datei}"'})
+
+
+def _gid_ap_text(font, text):
+    """Text als Glyph-ID-Segmente: Laufe mit Glyphen im Doc-Font, Luecken
+    (Subset ohne Zeichen) als WinAnsi-Helvetica-Segment."""
+    segmente = []   # (docfont|helv, inhalt) - inhalt: hexstring oder pdf-string
+    def push(ziel, inhalt):
+        if inhalt and segmente and segmente[-1][0] == ziel:
+            segmente[-1] = (ziel, segmente[-1][1] + inhalt)
+        elif inhalt:
+            segmente.append((ziel, inhalt))
+    for ch in text:
+        gid = font.has_glyph(ord(ch)) if font else 0
+        if ch in "\r\n\t":
+            continue   # Zeilenumbrueche werden vom Aufrufer in separate Tm aufgeteilt
+        if gid and gid > 0:
+            push("doc", f"{gid:04X}")
+        else:
+            push("helv", _pdf_string(ch).decode("latin-1"))
+    return segmente
+
+
+# ---------- KI-Assistent (BYOK: Anbieter + API-Schluessel vom Nutzer) ----------
+#
+# Die Konfiguration liegt in einstellungen.json unter dem Schluessel "ki"
+# (Modelle mit URL/Schluessel + Aufgaben-Zuordnung) - der Server liest sie
+# nur. Alle Anbieter-Anfragen laufen ueber den lokalen Server: keine Keys im
+# Browser, kein CORS. Streaming: der Server zieht SSE vom Anbieter und reicht
+# Text-Deltas als Chunks weiter (urllib, kein zusaetzliches Bundle-Paket).
+
+AI_PRESETS = {
+    "openai":     {"name": "OpenAI", "url": "https://api.openai.com/v1", "art": "openai"},
+    "zai":        {"name": "z.ai (GLM)", "url": "https://api.z.ai/api/paas/v4", "art": "openai"},
+    "openrouter": {"name": "OpenRouter", "url": "https://openrouter.ai/api/v1", "art": "openai"},
+    "anthropic":  {"name": "Anthropic (Claude)", "url": "https://api.anthropic.com", "art": "anthropic"},
+    "google":     {"name": "Google (Gemini)", "url": "https://generativelanguage.googleapis.com/v1beta", "art": "google"},
+    "ollama":     {"name": "Ollama (lokal)", "url": "http://localhost:11434/v1", "art": "openai"},
+    "custom":     {"name": "OpenAI-kompatibel (eigene URL)", "url": "", "art": "openai"},
+}
+
+
+def _ki_einstellungen():
+    try:
+        with open(PREFS_FILE, encoding="utf-8") as f:
+            daten = json.load(f)
+        ki = daten.get("ki")
+    except Exception:
+        ki = None
+    return ki if isinstance(ki, dict) else {}
+
+
+def _ki_modell(mid: str):
+    for m in _ki_einstellungen().get("modelle", []):
+        if isinstance(m, dict) and m.get("id") == mid:
+            return m
+    raise HTTPException(404, "KI-Modell nicht konfiguriert (Id " + mid + ")")
+
+
+def _ai_headers(art, key):
+    h = {"Content-Type": "application/json"}
+    if art == "anthropic":
+        h["x-api-key"] = key
+        h["anthropic-version"] = "2023-06-01"
+    elif art == "google":
+        pass   # Key haengt in der URL
+    else:
+        h["Authorization"] = "Bearer " + key
+    return h
+
+
+def _ai_url_basis(modell):
+    url = (modell.get("url") or "").strip().rstrip("/")
+    art = modell.get("art") or "openai"
+    if not url:
+        preset = AI_PRESETS.get(modell.get("anbieter", ""))
+        url = (preset or {}).get("url", "")
+        art = (preset or {}).get("art", "openai")
+    return url, art
+
+
+@app.get("/api/ai/models")
+def ai_modelle(url: str, key: str = "", art: str = "openai"):
+    """Verfuegbare Modelle eines Anbieters abrufen (Konfigurationsdialog,
+    'Liste der Modelle aktualisieren')."""
+    import urllib.request
+    import urllib.parse
+    basis = url.strip().rstrip("/")
+    if not basis:
+        raise HTTPException(400, "Keine URL angegeben")
+    try:
+        if art == "google":
+            req = urllib.request.Request(basis + "/models?key=" + urllib.parse.quote(key),
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                daten = json.loads(resp.read().decode("utf-8"))
+            ids = sorted(m["name"].split("/")[-1] for m in daten.get("models", [])
+                         if isinstance(m, dict) and m.get("name"))
+        else:
+            pfad = "/models" if art == "anthropic" else "/models"
+            req = urllib.request.Request(basis + pfad, headers=_ai_headers(art, key))
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                daten = json.loads(resp.read().decode("utf-8"))
+            ids = sorted(str(m.get("id")) for m in daten.get("data", [])
+                         if isinstance(m, dict) and m.get("id"))
+    except Exception as e:
+        detail = ""
+        if hasattr(e, "read"):
+            try:
+                detail = " – " + e.read().decode("utf-8", "replace")[:200]
+            except Exception:
+                pass
+        raise HTTPException(502, "Anbieter nicht erreichbar: " + str(e)[:200] + detail)
+    return {"modelle": ids}
+
+
+def _ai_strom(modell, nachrichten, system):
+    """Generator: Text-Deltas vom Anbieter (SSE) als utf-8-Chunks weiterreichen."""
+    import urllib.request
+    import urllib.error
+    import urllib.parse
+    basis, art = _ai_url_basis(modell)
+    key = modell.get("key") or ""
+    name = modell.get("model") or ""
+    try:
+        if art == "anthropic":
+            koerper = {"model": name, "max_tokens": 4096, "stream": True,
+                       "messages": [{"role": m["role"], "content": m["content"]} for m in nachrichten]}
+            if system:
+                koerper["system"] = system
+            url = basis + "/v1/messages"
+        elif art == "google":
+            rollen = {"user": "user", "assistant": "model"}
+            inhalt = [{"role": rollen.get(m["role"], "user"), "parts": [{"text": m["content"]}]}
+                      for m in nachrichten]
+            koerper = {"contents": inhalt, "generationConfig": {"maxOutputTokens": 8192}}
+            if system:
+                koerper["systemInstruction"] = {"parts": [{"text": system}]}
+            url = basis + f"/models/{name}:streamGenerateContent?alt=sse"
+            if key:
+                url += "&key=" + urllib.parse.quote(key)
+        else:
+            koerper = {"model": name, "stream": True, "messages": []}
+            if system:
+                koerper["messages"].append({"role": "system", "content": system})
+            koerper["messages"] += [{"role": m["role"], "content": m["content"]} for m in nachrichten]
+            url = basis + "/chat/completions"
+        req = urllib.request.Request(url, data=json.dumps(koerper).encode("utf-8"),
+                                     headers=_ai_headers(art, key), method="POST")
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            for zeile in resp:
+                zeile = zeile.decode("utf-8", "replace").strip()
+                if not zeile.startswith("data:"):
+                    continue
+                daten_str = zeile[5:].strip()
+                if daten_str in ("", "[DONE]"):
+                    continue
+                try:
+                    ereignis = json.loads(daten_str)
+                except ValueError:
+                    continue
+                stueck = ""
+                if art == "anthropic":
+                    if ereignis.get("type") == "content_block_delta":
+                        stueck = (ereignis.get("delta") or {}).get("text") or ""
+                elif art == "google":
+                    try:
+                        stueck = ereignis["candidates"][0]["content"]["parts"][0]["text"]
+                    except (KeyError, IndexError, TypeError):
+                        stueck = ""
+                else:
+                    try:
+                        stueck = ereignis["choices"][0]["delta"].get("content") or ""
+                    except (KeyError, IndexError, TypeError, AttributeError):
+                        stueck = ""
+                if stueck:
+                    yield stueck.encode("utf-8")
+    except urllib.error.HTTPError as e:
+        koerper = ""
+        try:
+            koerper = e.read().decode("utf-8", "replace")[:300]
+        except Exception:
+            pass
+        yield f"\n⚠ Anbieter-Fehler {e.code}: {koerper}".encode("utf-8")
+    except Exception as e:
+        yield f"\n⚠ {str(e)[:300]}".encode("utf-8")
+
+
+@app.post("/api/ai/chat")
+async def ai_chat(mid: str = Form(...), nachrichten: str = Form("[]"), system: str = Form("")):
+    """Chat-Anfrage an das konfigurierte Modell - Antwort als Text-Strom."""
+    modell = _ki_modell(mid)
+    try:
+        msgs = json.loads(nachrichten)
+        msgs = [m for m in msgs if isinstance(m, dict) and m.get("content")]
+    except ValueError:
+        raise HTTPException(400, "nachrichten muss JSON sein")
+    if not modell.get("model"):
+        raise HTTPException(400, "Dem Modell ist kein Anbieter-Modellname zugewiesen")
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(_ai_strom(modell, msgs, system),
+                             media_type="text/plain; charset=utf-8")
+
+
+@app.get("/api/fulltext/{did}")
+def volltext(did: str):
+    """Gesamttext des Dokuments mit Seitenmarkern (KI-Kontext, Zusammenfassen)."""
+    d = _doc(did)
+    teile = []
+    for i in range(d.page_count):
+        t = d[i].get_text().strip()
+        if t:
+            teile.append(f"--- Seite {i + 1} ---\n{t}")
+    return {"text": "\n\n".join(teile), "seiten": d.page_count,
+            "zeichen": sum(len(t) for t in teile)}
 
 
 if __name__ == "__main__":
