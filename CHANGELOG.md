@@ -2,6 +2,22 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.18.10 — Logo mit Original-Transparenz (wirkt freundlicher)
+- **Die Eckenmaske fliegt raus (Nutzer-Wunsch):** Das Logo/Ikon wurde bisher
+  auf ein abgerundetes Quadrat (22 %) maskiert — gegen den dunklen Chrome
+  wirkte es kantig. Jetzt wird die ORIGINALE Transparenz der Nutzer-Bild-
+  quelle respektiert: Papierstapel + Band schweben frei (Quelle:
+  wrapper/icon_quelle.png, liegt jetzt im Repo).
+- **Neu gebaut:** app/static/logo.png (512 px, Original-Alpha),
+  wrapper/pdfwerkstatt_icon.ico (Multi-Size 16–256 px, aus der 1024er-
+  Quelle) — EXE-Icon im Taskbar/Explorer per Wrapper-Publish erneuert und
+  per Icon-Extraktion aus der deployeden EXE nachgewiesen.
+- **Rahmen-Effekte entfernt, die ein Quadrat zeichneten:** Header-Marke
+  ohne 1-px-Ring (box-shadow), Splash-/Fehlerbildschirm ohne weichen
+  Kastenschatten hinter dem Logo.
+- Alte Versionen als logo_alt.png / pdfwerkstatt_icon_alt.ico gesichert
+  (unversioniert, .gitignore). Suite 80 PASS.
+
 ## v0.18.9 — Trikolore-Kante läuft wieder durch die Fensterknopf-Zone
 - **Harte Kante oben rechts beseitigt (Nutzer-Meldung: „unschöne Kante, die
   vier Symbole wirken höher"):** Die eigene 3-px-Trikolore-Kante der Kopfzeile

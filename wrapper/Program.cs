@@ -293,7 +293,7 @@ internal static class Program
         html,body{height:100%;margin:0}
         body{background:#17191d;color:#e6e9ee;font-family:'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center}
         .c{text-align:center}
-        .logo{display:block;margin:0 auto 16px;border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+        .logo{display:block;margin:0 auto 16px}
         .logo.emoji{line-height:1}
         h1{font-weight:600;margin:0 0 8px}
         p{color:#97a0af;margin:0}
@@ -308,7 +308,7 @@ internal static class Program
         html,body{height:100%;margin:0}
         body{background:#17191d;color:#e6e9ee;font-family:'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center}
         .c{text-align:center;max-width:420px}
-        .logo{display:block;margin:0 auto 18px;border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+        .logo{display:block;margin:0 auto 18px}
         .logo.emoji{line-height:1}
         h1{font-weight:600;margin:0 0 10px}
         p{color:#97a0af;line-height:1.6;margin:0}
