@@ -340,6 +340,7 @@
   .drawvor { position:absolute; z-index:6; border:1px dashed var(--accent); background:var(--sel-fill);
              pointer-events:none; border-radius:2px; }
   .drawvor svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  svg.shapeinner { overflow:visible; }   /* Pfeilspitzen ragen ueber das /Rect hinaus (wie im PDF) */
   .markvor { position:absolute; z-index:6; background:rgba(255,211,0,.28); border:1px solid rgba(255,190,0,.8);
              pointer-events:none; border-radius:2px; }
   .annot.eraserhover { outline:2px dashed var(--danger) !important; outline-offset:1px; cursor:pointer; }
@@ -1273,6 +1274,34 @@ function famCss(fontAlias) {
   }
   return FAM_PREFIX[fontAlias] || FAM_PREFIX.helv;
 }
+/* Pfeilspitzen-Eckpunkte: EXAKT die MuPDF-/LE-Proportionen (im AP-Stream
+   ausgemessen, v0.18.7): Spitzenlaenge 8,8x Strichbreite, Halbbreite 4,5x.
+   Dieselbe Formel im PDF laeuft serverseitig ueber /LE + /IC - Overlay und
+   gespeicherte Datei zeigen sonst unterschiedliche Spitzen (Nutzer-Meldung:
+   'Spitzen kuerzer als der Pfeil'). Alle Koordinaten im SVG-Massstab (px). */
+function kopfEcken(sx, sy, ex, ey, dicke) {
+  const dxx = ex - sx, dyy = ey - sy, len = Math.hypot(dxx, dyy) || 1;
+  const ux = dxx / len, uy = dyy / len;
+  const laenge = Math.max(7, dicke * 8.8), halb = dicke * 4.5;
+  const bx = ex - ux * laenge, by = ey - uy * laenge;   // Basiszentrum
+  return [[bx - uy * halb, by + ux * halb], [bx + uy * halb, by - ux * halb]];
+}
+/* BBox von Linien-/Tintenpunkten bzw. Quads (fuer den Flip-Renderpfad) */
+function punkteBBox(punkte, fallback) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const rein = (p) => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
+  if (punkte.length && Array.isArray(punkte[0][0])) punkte.forEach(st => st.forEach(rein));
+  else punkte.forEach(rein);
+  return isFinite(x0) ? [x0, y0, x1, y1] : fallback;
+}
+function quadsBBox(quads, fallback) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const q of quads) {
+    x0 = Math.min(x0, q[0], q[2]); y0 = Math.min(y0, q[1], q[3]);
+    x1 = Math.max(x1, q[0], q[2]); y1 = Math.max(y1, q[1], q[3]);
+  }
+  return isFinite(x0) ? [x0, y0, x1, y1] : fallback;
+}
 /* Geometrie (Punkte/Quads) proportional von altR nach neuR abbilden - das
    Herzstueck des Verschiebens/Skalierens: nur a.rect zu aendern laesst die
    Strichform am alten Fleck stehen (Nutzer-Fall v0.18.5: Pfeil 'bewegt sich
@@ -1290,18 +1319,24 @@ function formGeometrieTransformieren(a, altR, neuR) {
     a.quads = a.quads.map(q => [tx(q[0]), ty(q[1]), tx(q[2]), ty(q[3])]);
 }
 function shapeObjZeichnen(div, a, k, rectOpt, altROpt) {
-  const r = rectOpt || a.rect;
-  const rw = r[2] - r[0], rh = r[3] - r[1];
-  positionRect(div, r, k);
-  div.querySelectorAll('.shapeinner').forEach(e => e.remove());
+  let r = rectOpt || a.rect;
   // Waehrend des Ziehens: Punkte PRO VISUELLE Darstellung transformieren (ohne
-  // die Annotation zu veraendern - ggf. wird der Zug ja abgebrochen).
+  // die Annotation zu veraendern - ggf. wird der Zug ja abgebrochen). Der Zug
+  // darf gespiegelt sein (Flip, v0.18.7): dann Div/ViewBox an die echte
+  // Strichform ausrichten statt am Zugrechteck (negativBreite = kaputtes SVG).
   let renderPunkte = a.punkte, renderQuads = a.quads;
   if (altROpt) {
     const kopie = Object.assign({}, a);
     formGeometrieTransformieren(kopie, altROpt, r);
     renderPunkte = kopie.punkte; renderQuads = kopie.quads;
+    if ((a.sub === 'line' || a.sub === 'arrow' || a.sub === 'ink') && renderPunkte)
+      r = punkteBBox(renderPunkte, r);
+    else if (a.type === 'markup' && renderQuads)
+      r = quadsBBox(renderQuads, r);
   }
+  const rw = r[2] - r[0], rh = r[3] - r[1];
+  positionRect(div, r, k);
+  div.querySelectorAll('.shapeinner').forEach(e => e.remove());
   div.style.opacity = (a.deckkraft != null && a.deckkraft < 100) ? (a.deckkraft / 100) : '';
   if (a.type === 'shape') {
     const farbe = '#' + (a.farbe || '000000');
@@ -1331,22 +1366,19 @@ function shapeObjZeichnen(div, a, k, rectOpt, altROpt) {
                        : a.linienstil === '2' ? '0.1,' + (dicke * 2.4) : null;
       const kopfZeichnen = (sx, sy, ex, ey, art) => {
         if (!art || art === 'N') return;
-        const win = Math.atan2(ey - sy, ex - sx), laenge = Math.max(7, dicke * 4);
-        if (art === 'O') {   // offene Spitze: zwei kurze Striche
-          for (const delta of [-0.45, 0.45]) {
+        const [e1, e2] = kopfEcken(sx, sy, ex, ey, dicke);
+        if (art === 'O') {   // offene Spitze: zwei Streiche wie MuPDF-OpenArrow
+          for (const [qx, qy] of [e1, e2]) {
             const kl = document.createElementNS(SVGNS, 'line');
             kl.setAttribute('x1', ex); kl.setAttribute('y1', ey);
-            kl.setAttribute('x2', ex - laenge * Math.cos(win + delta));
-            kl.setAttribute('y2', ey - laenge * Math.sin(win + delta));
+            kl.setAttribute('x2', qx); kl.setAttribute('y2', qy);
             kl.setAttribute('stroke', farbe); kl.setAttribute('stroke-width', dicke);
             svg.appendChild(kl);
           }
           return;
         }
-        const kopf = document.createElementNS(SVGNS, 'polygon');   // C: gefuellt
-        kopf.setAttribute('points', `${ex},${ey} ` +
-          `${ex - laenge * Math.cos(win - 0.42)},${ey - laenge * Math.sin(win - 0.42)} ` +
-          `${ex - laenge * Math.cos(win + 0.42)},${ey - laenge * Math.sin(win + 0.42)}`);
+        const kopf = document.createElementNS(SVGNS, 'polygon');   // C: gefuellt (PDF: /IC)
+        kopf.setAttribute('points', `${ex},${ey} ${e1[0]},${e1[1]} ${e2[0]},${e2[1]}`);
         kopf.setAttribute('fill', farbe);
         svg.appendChild(kopf);
       };
@@ -1763,7 +1795,12 @@ document.addEventListener('mousemove', (ev) => {
       const seite = Math.max(Math.max(r[2] - r[0] + dx, 10), Math.max(r[3] - r[1] + dy, 10));
       r[2] = r[0] + seite;
       r[3] = r[1] + seite;
-    } else {                                  // Text/Form/Markierung: frei skalierbar
+    } else if (drag.a && drag.a.type === 'shape') {
+      // Formen: Flip erlaubt - ueber die Gegenseite ziehen kehrt die Strichform
+      // (Pfeil von nach unten auf nach oben, v0.18.7). Punkte wandern als
+      // Absolute mit, das Rechteck wird beim Loslassen wieder normalisiert.
+      r[2] += dx; r[3] += dy;
+    } else {                                  // Text/Markierung: frei skalierbar
       r[2] = Math.max(r[0] + 10, r[2] + dx);
       r[3] = Math.max(r[1] + 10, r[3] + dy);
     }
@@ -1812,11 +1849,13 @@ document.addEventListener('mouseup', async () => {
   }
   const r = await fetch(url, {method: 'POST', body: fd});
   if (r.ok) {
+    const j = await r.json().catch(() => null);
     if (drag.a) {
       if (istForm) formGeometrieTransformieren(drag.a, drag.rect, drag.newRect);   // Punkte/Quads nachziehen (sonst bleibt die Form visuell stehen)
-      drag.a.rect = drag.newRect;                    // Objektdaten aktuell halten (Fix: Sprung zur Alt-Position)
+      drag.a.rect = (j && Array.isArray(j.rect) && j.rect.length === 4) ? j.rect : drag.newRect;   // Server-Envelope: bei Flip wieder normalisiert
     }
-    drag.div._pdfRect = drag.newRect;
+    drag.div._pdfRect = drag.a.rect;
+    if (istForm) shapeObjZeichnen(drag.div, drag.a, drag.k);   // mit gueltigem Rect neu aufbauen (Zugrect kann gespiegelt gewesen sein)
     setDirty(true); stat('Geändert – Speichern macht es dauerhaft.', true);
     syncProps();
   } else {
@@ -3326,13 +3365,24 @@ function drawVorZeichnen() {
     ln.setAttribute('stroke', farbe); ln.setAttribute('stroke-width', dicke);
     svg.appendChild(ln);
     if (drawDrag.tool === 'arrow') {
-      const win = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]), laenge = Math.max(7, dicke * 4);
-      const kopf = document.createElementNS(SVGNS, 'polygon');
-      kopf.setAttribute('points', `${p2[0]},${p2[1]} ` +
-        `${p2[0] - laenge * Math.cos(win - 0.42)},${p2[1] - laenge * Math.sin(win - 0.42)} ` +
-        `${p2[0] - laenge * Math.cos(win + 0.42)},${p2[1] - laenge * Math.sin(win + 0.42)}`);
-      kopf.setAttribute('fill', farbe);
-      svg.appendChild(kopf);
+      const art = (document.getElementById('dwSpitze').value || 'C').toUpperCase();
+      if (art !== 'N') {   // gleiche Geometrie wie shapeObjZeichnen (= PDF)
+        const [e1, e2] = kopfEcken(p1[0], p1[1], p2[0], p2[1], dicke);
+        if (art === 'O') {
+          for (const [qx, qy] of [e1, e2]) {
+            const kl = document.createElementNS(SVGNS, 'line');
+            kl.setAttribute('x1', p2[0]); kl.setAttribute('y1', p2[1]);
+            kl.setAttribute('x2', qx); kl.setAttribute('y2', qy);
+            kl.setAttribute('stroke', farbe); kl.setAttribute('stroke-width', dicke);
+            svg.appendChild(kl);
+          }
+        } else {
+          const kopf = document.createElementNS(SVGNS, 'polygon');
+          kopf.setAttribute('points', `${p2[0]},${p2[1]} ${e1[0]},${e1[1]} ${e2[0]},${e2[1]}`);
+          kopf.setAttribute('fill', farbe);
+          svg.appendChild(kopf);
+        }
+      }
     }
   }
   drawDrag.div.appendChild(svg);

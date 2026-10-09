@@ -1,6 +1,37 @@
 # Blattwerk — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
+
+## v0.18.7 — Pfeilspitzen in richtiger Größe, Pfeil per Umdrehen skalieren
+- **Pfeilspitzen endlich so groß wie im PDF (Nutzer-Meldung: „Spitzen kürzer
+  als der Pfeil"):** Das Overlay zeichnete die Spitze 4× Strichbreite (min.
+  7 px) — MuPDFs /LE im gespeicherten PDF aber 8,8× (Halbbreite 4,5×, im
+  AP-Stream ausgemessen). Ein gemeinsamer Eckpunkt-Rechner (`kopfEcken`)
+  nutzt jetzt auf beiden Seiten die MuPDF-Proportionen: Live-Vorschau beim
+  Zeichnen, Overlay und PDF zeigen identische Spitzen. Offene Spitze (O)
+  mit denselben Eckpunkten wie ClosedArrow, wie bei MuPDF.
+- **Gefüllte Spitze auch in der DATEI:** MuPDF füllt ClosedArrow nur bei
+  gesetztem /IC — vorher war die Spitze im gespeicherten PDF hohl (`h S`),
+  während das Overlay sie füllte. `/api/annot/shape` und `/api/annot/style`
+  setzen jetzt über `_line_stil_anwenden` /IC = Strichfarbe (und entfernen
+  es, wenn keine C-Spitze mehr da ist).
+- **Pfeil durch Ziehen UMdrehen (Nutzer-Wunsch):** Der Größe-Anker unten
+  rechts darf jetzt über die Gegenseite hinausgezogen werden (Formen ohne
+  Mindestmaß/Clamp) — der Pfeil kehrt dabei seine Richtung (nach unten ↔
+  nach oben, links ↔ rechts), die Spitze folgt dem Griff. Punkte wandern
+  als Absolute mit (vorzeichenrichtige Abbildung alt→neu, Flip inklusive),
+  das Rechteck wird danach wieder normalisiert (Server-Antwort-Rect).
+  Rechteck/Oval/Tinte dürfen ebenfalls spiegeln; Markierungen/Text/
+  Signaturen behalten ihr Mindestmaß.
+- **Latenter v0.18.5-Bug mitbehoben:** shapemove schrieb die Punkte im
+  PDFW-SHAPE-NM-Marker nie zurück — nach Seitenwechsel/Neuladen zeichnete
+  das Overlay die ALTE Stelle (Rect war neu, Punkte alt). `_shape_
+  transformieren` schreibt jetzt /L bzw. InkList UND die NM-Punkte
+  (strukturerhaltend bei Tinte). Der Undo-Guard (`alt_r.x1 > alt_r.x0`)
+  akzeptiert gespiegelte Rechtecke, damit auch der Flip sauber rückgängig
+  geht (sonst sx=sy=1 und /L blieb geflippt).
+- Suite 80 PASS (neu: Pfeil-Move-NM-Sync, Flip + Flip-Undo, /LE+/IC im
+  Datei-Byte).
 
 ## v0.18.6 — Über-Dialog am Logo
 - **Klick auf Logo/„Blattwerk" in der Kopfzeile öffnet den Über-Dialog:** zentriertes

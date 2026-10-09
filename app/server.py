@@ -33,7 +33,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="Blattwerk")
 
-APP_VERSION = "0.18.6"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
+APP_VERSION = "0.18.7"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
 
 
 @app.middleware("http")
@@ -1720,10 +1720,19 @@ def _stil_teile(stil):
 
 
 def _line_stil_anwenden(doc, a, breite, stil):
-    """/LE (Pfeilspitzen) und /Border mit Dash-Muster direkt setzen (vor update())."""
+    """/LE (Pfeilspitzen), /IC (gefuellte Spitzen) und /Border mit Dash-Muster
+    direkt setzen (vor update()). MuPDF fuellt ClosedArrow NUR bei gesetztem
+    /IC - ohne sieht die Spitze im PDF hohl aus, waehrend das Overlay sie
+    fuellt (WYSIWYG-Fix v0.18.7). Fuellfarbe = Strichfarbe, wie im Overlay."""
     start, ende, linienstil = _stil_teile(stil)
     if start != "N" or ende != "N":
         doc.xref_set_key(a.xref, "LE", f"[{LE_PDF.get(start, '/None')} {LE_PDF.get(ende, '/None')}]")
+    if "C" in (start, ende):
+        c = a.colors.get("stroke")
+        if c:
+            doc.xref_set_key(a.xref, "IC", "[" + " ".join(f"{v:g}" for v in c) + "]")
+    else:
+        doc.xref_set_key(a.xref, "IC", "null")   # keine gefuellte Spitze mehr: /IC entfernen
     b = max(0.2, float(breite))
     if linienstil == "1":
         doc.xref_set_key(a.xref, "Border", f"[0 0 {b:g} [5 4]]")
@@ -1950,8 +1959,10 @@ def _shape_transformieren(doc, pg, xref, alt_r, neu_r):
         raise HTTPException(404, "Annotation nicht gefunden")
     t = an.type[1]
     H = pg.rect.height
-    sx = (neu_r.x1 - neu_r.x0) / (alt_r.x1 - alt_r.x0) if alt_r.x1 > alt_r.x0 else 1
-    sy = (neu_r.y1 - neu_r.y0) / (alt_r.y1 - alt_r.y0) if alt_r.y1 > alt_r.y0 else 1
+    # Vorzeichen bewusst erlaubt (alt_r/neu_r duerfen gespiegelt sein, x1<x0 -
+    # Undo eines Flips v0.18.7): sx/sy < 0 spiegeln die Punkte mit.
+    sx = (neu_r.x1 - neu_r.x0) / (alt_r.x1 - alt_r.x0) if alt_r.x1 != alt_r.x0 else 1
+    sy = (neu_r.y1 - neu_r.y0) / (alt_r.y1 - alt_r.y0) if alt_r.y1 != alt_r.y0 else 1
 
     def skaliere(x, y):   # Top-Koordinaten: alt_r-BBox auf neu_r-BBox abbilden
         return (neu_r.x0 + (x - alt_r.x0) * sx, neu_r.y0 + (y - alt_r.y0) * sy)
@@ -1967,26 +1978,48 @@ def _shape_transformieren(doc, pg, xref, alt_r, neu_r):
         an = pg.load_annot(xref)
         an.set_rect(pymupdf.Rect(neu_r.x0 + b, neu_r.y0 + b, neu_r.x1 - b, neu_r.y1 - b))
     elif t == "Line":
+        daten = _shape_nm_teile(an.info.get("id", "") or "") or {}
         werte = _zahlen_aus(doc.xref_get_key(xref, "L")[1] or "[]")
         if len(werte) >= 4:
             p1 = skaliere(werte[0], H - werte[1])
             p2 = skaliere(werte[2], H - werte[3])
             doc.xref_set_key(xref, "L", f"[{p1[0]:.2f} {H - p1[1]:.2f} {p2[0]:.2f} {H - p2[1]:.2f}]")
+            # NM-Punkte mitziehen - sonst zeichnet das Overlay nach einem Reload
+            # die ALTE Stelle (latenter Bug seit v0.18.5, der Flip hat ihn aufgedeckt)
+            if daten:
+                doc.xref_set_key(xref, "NM", "(" + _shape_nm(
+                    daten.get("typ", "line"), float(daten.get("breite") or 2),
+                    daten.get("strich") or "000000", daten.get("fuellung", "0"),
+                    float(daten.get("deckkraft") or 100), daten.get("stil") or "",
+                    _punkte_zu_nm(daten.get("typ", "line"), [p1, p2])) + ")")
         an = pg.load_annot(xref)
         an.update()   # Rect folgt /L automatisch
     elif t == "Ink":
+        daten = _shape_nm_teile(an.info.get("id", "") or "") or {}
         roh = doc.xref_get_key(xref, "InkList")[1] or "[]"
         stroks = []
+        neu_punkte = []   # Struktur erhalten: eine Liste je Strich
+        neu_stroke = []
         for st in re.findall(r"\[(.*?)\]", roh):
             werte = _zahlen_aus(st)
             pts = []
             for i in range(0, len(werte) - 1, 2):
                 x, y = skaliere(werte[i], H - werte[i + 1])
                 pts.append(f"{x:.2f} {H - y:.2f}")
+                neu_stroke.append([x, y])
             if pts:
                 stroks.append("[" + " ".join(pts) + "]")
+                neu_punkte.append(neu_stroke)
+                neu_stroke = []
         if stroks:
             doc.xref_set_key(xref, "InkList", "[" + "".join(stroks) + "]")
+            # NM-Striche mitziehen (wie bei Line - sonst alte Stelle nach Reload)
+            if daten:
+                doc.xref_set_key(xref, "NM", "(" + _shape_nm(
+                    daten.get("typ", "ink"), float(daten.get("breite") or 2),
+                    daten.get("strich") or "000000", daten.get("fuellung", "0"),
+                    float(daten.get("deckkraft") or 100), daten.get("stil") or "",
+                    _punkte_zu_nm("ink", neu_punkte)) + ")")
         an = pg.load_annot(xref)
         an.update()
     elif t in MARKUP_ART.values():
