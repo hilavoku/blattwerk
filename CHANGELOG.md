@@ -2,6 +2,17 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.17.12 — Fix: Drehen ohne kurzes „Zurückspringen" in die alte Ansicht
+- Nach dem Drehen am Griff erschien die Signatur kurz in der alten Darstellung
+  und „drehte sich dann richtig": Das Overlay besitzt eine 120-ms-Blendregel
+  für das Hintergrundbild — beim Übernehmen der Drehung blendete das alte,
+  ungedrehte Bild über das neue (Bild-für-Bild-Beweis: ein Frame mit halber
+  Farbintensität mitten im Wechsel). Die Blendregel ist für den Dreh-Wechsel
+  jetzt deaktiviert: Kasten, Bild und Winkel tauschen in einem harten,
+  unsichtbaren Schritt.
+- Winkel-Eingabe oben: zeigt die Drehung jetzt sofort als Vorschau, während
+  der Server rechnet (vorher stand die Signatur ~150 ms im alten Zustand).
+
 ## v0.17.11 — Geschützte Signatur: Passwortabfrage direkt beim Ablegen
 - Passwortgeschützte Signaturen mussten erst im Menü entsperrt werden, bevor
   sie aufs Papier gezogen werden konnten. Jetzt sind ihre Kacheln **direkt

@@ -1111,13 +1111,21 @@ async function rotateAnnot(div) {
 async function rotateAnnotTo(div, ziel) {
   if (!div || !div._annot || div._annot.type !== 'sign' || isNaN(ziel)) return;
   const pageN = parseInt(div.dataset.page);
+  // Sofortige Live-Vorschau wie am Drehgriff: ohne sie steht die Signatur
+  // waehrend des Server-Roundtrips (~150-200 ms) noch im ALTEN Zustand und
+  // springt dann hart auf die Drehung („kurz alte Position, dann dreht sie").
+  const vorschau = ziel - (div._annot.rot || 0);
+  if (Math.abs(vorschau) > 0.05) div.style.transform = 'rotate(' + vorschau + 'deg)';
   const fd = new FormData();
   fd.append('page', pageN); fd.append('xref', div.dataset.xref); fd.append('to', ziel);
   const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
   if (r.ok) {
     await rotateDivAktualisieren(div, await r.json());
     stat('Signatur auf ' + ziel + '\u00B0 gedreht.', true);
-  } else stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+  } else {
+    div.style.transform = '';
+    stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+  }
 }
 /* Drehung ohne Flackern uebernehmen: Bild mit neuem Winkel VORAB laden, dann
    Kasten, Hintergrund und Daten in einem synchronen Rutsch austauschen (kein
@@ -1136,9 +1144,15 @@ async function rotateDivAktualisieren(div, j) {
   div._pdfRect = j.rect;
   const img = document.querySelector('#page' + div.dataset.page + ' img');
   const k = img && img.dataset.k ? parseFloat(img.dataset.k) : 1;
+  // background-Transition (120ms Cross-Fade) fuer den Tausch ABSCHALTEN:
+  // sonst blendet das alte, ungedrehte Bild ueber dem neuen - der Nutzer
+  // sieht die Signatur kurz in alter Darstellung und sie „dreht sich dann"
+  // sichtbar in die neue (Beweis: Frame mit halber Farbintensitaet im Fade).
+  div.style.transition = 'none';
   positionRect(div, j.rect, k);
   div.style.backgroundImage = (a.file && !gesperrt) ? `url(${url})` : '';
   div.style.transform = '';          // Live-Drehung erst jetzt abloesen
+  requestAnimationFrame(() => requestAnimationFrame(() => { div.style.transition = ''; }));
   setDirty(true);
   selectAnnot({div});
 }
