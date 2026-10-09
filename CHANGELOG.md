@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.18.1 — Fix: Werkzeug-Symbole Rechteck/Oval
+- Die beiden Zeichen-Werkzeuge zeigten zufällig gewählte MDL2-Symbole (Crop-
+  beziehungsweise formasatz-artig statt der Form) — Nutzer-Meldung mit Screenshot.
+- Beide sind jetzt eigene Inline-SVGs wie Linie/Pfeil/Tinte: abgerundetes
+  Rechteck bzw. Oval, einheitliche Strichstärke.
+
 ## v0.18.0 — Großausbau: Markieren, Zeichnen, OCR, KI-Assistent, Dokument-Schriften
 Fünf neue Funktionsbereiche (Wunschliste vom 2026-10-09), Suite jetzt 74 Checks (alle PASS):
 
