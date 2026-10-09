@@ -33,6 +33,8 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="Blattwerk")
 
+APP_VERSION = "0.18.6"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
+
 
 @app.middleware("http")
 async def _kein_cache(request, call_next):
@@ -191,9 +193,25 @@ def favicon():
     return Response(content=open(path, "rb").read(), media_type="image/png")
 
 
+@app.get("/logo.png")
+def logo():
+    """Logo in Originalgroesse fuer den Über-Dialog (Klick auf Logo/Blattwerk)."""
+    path = os.path.join(STATIC, "logo.png")
+    if not os.path.isfile(path):
+        raise HTTPException(404)
+    return Response(content=open(path, "rb").read(), media_type="image/png")
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/api/version")
+def version():
+    """Eckdaten für den Über-Dialog (Klick auf Logo/Blattwerk in der Kopfzeile)."""
+    return {"name": "Blattwerk", "version": APP_VERSION,
+            "pymupdf": pymupdf.__version__, "lokal": True}
 
 
 @app.get("/api/prefs")

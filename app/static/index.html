@@ -40,7 +40,9 @@
   header.slim .fmtbar select { max-width:110px; }
   .tbtn .lbl { white-space:nowrap; }
   .kopfzeile::-webkit-scrollbar { height:0; }
-  .brand { display:flex; align-items:center; gap:9px; margin-right:10px; user-select:none; cursor:default; }
+  .brand { display:flex; align-items:center; gap:9px; margin:0 4px 0 -6px; padding:0 6px; user-select:none;
+           cursor:pointer; border-radius:8px; }
+  .brand:hover { background:var(--hover); }
   .brand .logo { width:30px; height:30px; border-radius:7px; overflow:hidden; flex:none;
                  box-shadow:0 0 0 1px rgba(255,255,255,.12); }
   .brand .logo img { width:100%; height:100%; display:block; }
@@ -423,7 +425,7 @@
   <div id="modePill"></div>
   <div class="kopfzeile">
   <div class="griff" title="Ziehen verschiebt das Fenster"></div>
-  <div class="brand"><div class="logo"><img src="/favicon.ico" alt=""></div><span class="name">Blattwerk</span></div>
+  <div class="brand" id="brand" title="Über Blattwerk – Programm- und Versionsinfo"><div class="logo"><img src="/favicon.ico" alt=""></div><span class="name">Blattwerk</span></div>
   <div class="griff"></div>
   <input type="file" id="file" accept=".pdf" style="display:none">
   <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
@@ -677,6 +679,24 @@
     <button id="kiAddOpen">Modell hinzufügen</button>
     <button id="kiConfOk" class="prim">Fertig</button>
   </div>
+</div>
+
+<div id="infoBox" class="miniBox" style="display:none; width:330px">
+  <div style="display:flex; align-items:center; gap:14px">
+    <img src="/logo.png" alt="" style="width:64px; height:64px; border-radius:14px; flex:none">
+    <div>
+      <div style="font-size:17px; font-weight:700">Blattwerk</div>
+      <div style="font-size:12.5px; margin-top:3px">Version <b id="infoVersion">…</b></div>
+      <div class="muted" style="font-size:11px; margin-top:2px" id="infoEngine"></div>
+    </div>
+  </div>
+  <p style="font-size:12px; line-height:1.55; margin:12px 0 0">PDFs öffnen, lesen, bearbeiten, signieren und
+  markieren — vollständig lokal auf diesem Rechner, ohne Cloud und ohne Telemetrie.</p>
+  <div style="margin-top:10px; padding:8px 10px; background:var(--chrome2); border:1px solid var(--border);
+              border-radius:8px; font-size:11.5px; line-height:1.6">
+    Idee und Entwicklung: <b>Guido</b> · © 2026
+  </div>
+  <div class="row"><button id="infoOk" class="prim">Schließen</button></div>
 </div>
 
 <div id="kiAddBox" class="miniBox" style="display:none">
@@ -1563,11 +1583,13 @@ window.addEventListener('blur', hideCtxMenu);
 const kopfleiste = document.querySelector('header');
 kopfleiste.addEventListener('mousedown', (ev) => {
   if (ev.button !== 0) return;
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterzone, #sigPanel, .miniBox, #renameBox, #ctxMenu')) return;   // Panel haengt im Kopfzeilen-Baum: Ziehen darf Kachel-Drag&Drop nicht fressen
+  // .brand ausgenommen: Klick auf Logo/Blattwerk oeffnet den Über-Dialog; der modale
+  // Titelleisten-Move (HTCAPTION) wuerde das Loslassen schlucken (v0.17.7/8-Falle)
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterzone, #sigPanel, .miniBox, #renameBox, #ctxMenu, .brand')) return;   // Panel haengt im Kopfzeilen-Baum: Ziehen darf Kachel-Drag&Drop nicht fressen
   window.chrome?.webview?.postMessage('fenster|drag');
 });
 kopfleiste.addEventListener('dblclick', (ev) => {
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, .fensterzone')) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, .fensterzone, .brand')) return;
   window.chrome?.webview?.postMessage('fenster|max');
 });
 window.pwMaximiert = (max) => {
@@ -2989,6 +3011,7 @@ document.addEventListener('keydown', (ev) => {
   }
   else if (ev.key === 'Escape') {
     if (ctxMenu.style.display === 'block') hideCtxMenu();
+    else if (document.getElementById('infoBox').style.display === 'block') infoBoxSchliessen();
     else if (inline) cancelInline();
     else if (origEdit) cancelOriginalEdit();
     else if (freeSel.length) clearFreeSel();
@@ -2998,6 +3021,29 @@ document.addEventListener('keydown', (ev) => {
     const ae = document.activeElement;
     if (!(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) { ev.preventDefault(); deleteAnnot(selAnnot.div); }
   }
+});
+
+/* ---------- Über-Dialog: Klick auf Logo/„Blattwerk" in der Kopfzeile ---------- */
+function infoBoxOeffnen() {
+  const box = document.getElementById('infoBox');
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }   // erneuter Klick schliesst
+  box.style.display = 'block';
+  box.style.left = Math.round((window.innerWidth - box.offsetWidth) / 2) + 'px';
+  box.style.top = Math.max(8, Math.round((window.innerHeight - box.offsetHeight) / 2) - 30) + 'px';
+  fetch('/api/version').then(r => r.json()).then(j => {
+    document.getElementById('infoVersion').textContent = j.version;
+    document.getElementById('infoEngine').textContent = 'PDF-Engine: PyMuPDF ' + j.pymupdf;
+  }).catch(() => { document.getElementById('infoVersion').textContent = '?'; });
+}
+function infoBoxSchliessen() { document.getElementById('infoBox').style.display = 'none'; }
+/* Klick auf die Marke robust abgreifen (kein Button, click kann geschluckt werden) */
+klickRobust(document.getElementById('brand'), infoBoxOeffnen);
+document.getElementById('infoOk').addEventListener('click', infoBoxSchliessen);
+/* Klick neben den Dialog schliesst ihn (Klick auf die Marke macht das Toggle selbst) */
+document.addEventListener('pointerdown', (ev) => {
+  const box = document.getElementById('infoBox');
+  if (box.style.display !== 'block') return;
+  if (!box.contains(ev.target) && !(ev.target.closest && ev.target.closest('#brand'))) infoBoxSchliessen();
 });
 
 /* ---------- Theme (hell/dunkel) ---------- */

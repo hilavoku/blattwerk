@@ -2,6 +2,23 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.18.6 — Über-Dialog am Logo
+- **Klick auf Logo/„Blattwerk" in der Kopfzeile öffnet den Über-Dialog:** zentriertes
+  kleines Modal (bekanntes miniBox-Muster) mit Logo in groß, Name, Versionsanzeige,
+  PDF-Engine-Stand (PyMuPDF), Kurzbeschreibung (lokal, ohne Cloud, telemetriefrei)
+  und Entwickler-Zeile („Idee und Entwicklung: Guido · © 2026"). Schließen per Knopf,
+  Esc oder Klick neben den Dialog; erneuter Klick auf die Marke schaltet um.
+- **Tooltip an der Marke:** „Über Blattwerk – Programm- und Versionsinfo" (natives
+  title-Attribut, wie bei allen Knöpfen der Leiste).
+- **Robustheit:** Die Marke ist aus der Fenster-Ziehfläche der Kopfzeile ausgenommen —
+  der modale Titelleisten-Move des Wrappers (HTCAPTION) würde das Loslassen schlucken
+  (v0.17.7/8-Falle); der Klick läuft über klickRobust (pointerdown+pointerup mit
+  Nahbereich). Doppelklick auf die Marke maximiert das Fenster nicht mehr.
+- **Server:** neue APP_VERSION-Konstante und Endpunkt /api/version (Name, Version,
+  PyMuPDF-Stand) sowie Route /logo.png (Logo in Originalgröße für den Dialog).
+  Version künftig bei jedem Release in server.py mitziehen.
+- Suite 76 PASS (neu: Versions-Endpunkt, Logo-Route).
+
 ## v0.18.5 — Pfeil-Fix: Verschieben/Skalieren + Spitzen, Linienstil, Dicke
 - **Pfeil, Linie und Tinte lassen sich wieder verschieben/skalieren (Nutzer-
   Meldung: Rahmen erscheint, der Pfeil passiert nichts):** Beim Verschieben
