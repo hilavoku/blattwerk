@@ -2,6 +2,20 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.18.4 — Markier-Leiste: Symbole statt Dropdown + Mausrad für Deckkraft
+- **Art der Markierung als Symbolknöpfe:** Das Dropdown (Marker/Unterstrichen/
+  Durchgestrichen/Wellenlinie) ist durch vier kleine Symbole ersetzt — Stift
+  für Marker, „A" mit Linie darunter/darhindurch/als Wellenlinie —
+  stilgleich mit den Zeichen-Werkzeugen (Nutzer-Wunsch).
+- **Deckkraft per Mausrad:** Beide %-Felder (Marker-Deckkraft, Form-Deckkraft)
+  ändern sich jetzt mit dem Mausrad in 5er-Schritten, wie Größe und
+  Zeichenabstand schon vorher.
+- Nebenbei gefunden und gefixt: Die change-Listener-Kette der Werkzeugleiste
+  griff noch auf das entfernte mkArt-Select zu — null.addEventListener brach
+  die Script-Ausführung an dieser Stelle ab (alles danach Ungebundene, u. a.
+  sämtliche Markier-/Zeichen-Bindings, lief nicht mehr). Kette ist jetzt
+  null-sicher (?.).
+
 ## v0.18.3 — Zeichnen: ein konsistenter Werkzeug-Zustand + Kontextmenü
 - **Objekte im Zeichen-Werkzeug direkt greifbar (wie PDFgear):** Angelegte
   Formen, Markierungen, Texte und Signaturen lassen sich im Zeichen-Modus
