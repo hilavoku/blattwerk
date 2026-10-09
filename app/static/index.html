@@ -327,8 +327,9 @@
   .mode-mark .line, .mode-draw .line, .mode-mark .winput, .mode-draw .winput,
   .mode-mark .imgobj, .mode-draw .imgobj { pointer-events:none; }
   .mode-mark .annot, .mode-draw .annot { pointer-events:none; }   /* Zeichnen/Markieren gehts aufs Papier; Objekte greifen nicht dazwischen */
-  .annot.shapeobj { background:transparent; }
+  .annot.shapeobj { background:transparent; cursor:move; }
   .annot.shapeobj svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+  .mode-draw .annot svg *, .mode-mark .annot svg * { pointer-events: none !important; }   /* Griff-Spuren duerfen Zeichnen/Markieren nicht abfangen */
   .annot.markupobj { background:transparent; cursor:move; }
   .annot.markupobj .mkq { position:absolute; pointer-events:none; }
   .annot.markupobj.h .mkq { border-radius:1px; }
@@ -473,8 +474,8 @@
   </div>
   <div class="fmtbar" id="drawBar" style="display:none" title="Werkzeuge und Stil für Formen">
     <div class="leistenbtns" id="drawTools">
-      <button class="tbtn active" id="dwRect" title="Rechteck"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.2" y="2.7" width="11.6" height="8.6" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button>
-      <button class="tbtn" id="dwOval" title="Oval / Kreis"><svg width="14" height="14" viewBox="0 0 14 14"><ellipse cx="7" cy="7" rx="5.6" ry="4.1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button>
+      <button class="tbtn active" id="dwRect" title="Rechteck – gedrückte Strg- oder Umschalt-Taste zeichnet ein Quadrat"><svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.2" y="2.7" width="11.6" height="8.6" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button>
+      <button class="tbtn" id="dwOval" title="Oval – gedrückte Strg- oder Umschalt-Taste zeichnet einen Kreis"><svg width="14" height="14" viewBox="0 0 14 14"><ellipse cx="7" cy="7" rx="5.6" ry="4.1" fill="none" stroke="currentColor" stroke-width="1.4"/></svg></button>
       <button class="tbtn" id="dwLine" title="Linie"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 13 L13 1" stroke="currentColor" stroke-width="1.6"/></svg></button>
       <button class="tbtn" id="dwArrow" title="Pfeil"><svg width="15" height="14" viewBox="0 0 15 14"><path d="M1 13 L12 2 M12 2 L6 3 M12 2 L11 8" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button>
       <button class="tbtn" id="dwInk" title="Tinte (freihand zeichnen)"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 11 C3 5, 5 12, 8 7 S 12 2, 13 3" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button>
@@ -541,7 +542,7 @@
       <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.<br>
       <b>Löschen:</b> Signatur/Text/Form anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Markieren:</b> Werkzeug „Markieren" wählen, Text aufziehen – Marker, Unterstreichen, Durchstreichen oder Wellenlinie; Farbe, Deckkraft und Stärke oben einstellen. Markierung anklicken und ziehen verschiebt sie.<br>
-      <b>Zeichnen:</b> Rechteck, Oval, Linie, Pfeil oder Tinte aufziehen bzw. malen – Strichdicke, Strich- und Füllfarbe oben. Radiergummi klickt Objekte weg. Ziehen am Anker unten rechts ändert die Größe.<br>
+      <b>Zeichnen:</b> Rechteck, Oval, Linie, Pfeil oder Tinte aufziehen bzw. malen – Strichdicke, Strich- und Füllfarbe oben. Mit gedrückter <b>Strg</b>- (oder Umschalt-)Taste wird das Rechteck zum Quadrat und das Oval zum Kreis. Radiergummi klickt Objekte weg. Objekt anklicken und ziehen verschiebt es, Anker unten rechts ändert die Größe – Linien, Pfeile und Tinte lassen sich auch direkt am Strich greifen.<br>
       <b>OCR:</b> Knopf „OCR" – erkennt Text auf Scan-Seiten (Deutsch + Englisch) und bettet ihn unsichtbar ein: durchsuchbar, kopierbar, markierbar.<br>
       <b>KI:</b> Knopf „KI" – Chat mit Dokument-Kontext, Zusammenfassen, Auswahl übersetzen. Eigener Anbieter und API-Schlüssel (Zahnrad im Panel), gespeichert nur lokal.<br>
       <b>Schriften:</b> Im Text-Werkzeug stehen auch die im PDF eingebetteten Schriften zur Auswahl („Aus dem Dokument").<br>
@@ -785,11 +786,7 @@ let drawTool = 'rect';   // Unterauswahl im Zeichnen-Modus: rect/oval/line/arrow
 
 function setMode(m) {
   mode = (mode === m) ? 'normal' : m;
-  document.querySelectorAll('#topbar .tbtn.active').forEach(b => b.classList.remove('active'));
   document.getElementById('btnDelGo')?.remove();
-  const aktiv = document.getElementById(mode === 'normal' ? 'btnNormal' : (MODUS_BTN[mode] || ''));
-  if (aktiv) aktiv.classList.add('active');
-  movePill();
   marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
   drawVorEntfernen(); markVorEntfernen();
   document.querySelectorAll('.pagewrap').forEach(w => {
@@ -820,14 +817,21 @@ function kontextLeiste() {
   const sep = document.getElementById('kontextSep');
   ['fmtBar','markBar','drawBar'].forEach(id => document.getElementById(id).style.display = 'none');
   let welche = null;
+  let zielBtn = 'btnNormal';
   if (selAnnot && selAnnot.div && selAnnot.div._annot) {
     const t = selAnnot.div._annot.type;
     welche = t === 'text' ? 'fmtBar' : t === 'markup' ? 'markBar' : t === 'shape' ? 'drawBar' : null;
-  } else if (mode === 'text' || inline || origEdit) welche = 'fmtBar';
-  else if (mode === 'mark') welche = 'markBar';
-  else if (mode === 'draw') welche = 'drawBar';
+    zielBtn = t === 'text' ? 'btnText' : t === 'markup' ? 'btnMark' : t === 'shape' ? 'btnDraw' : 'btnNormal';
+  } else if (mode === 'text' || inline || origEdit) { welche = 'fmtBar'; zielBtn = 'btnText'; }
+  else if (mode === 'mark') { welche = 'markBar'; zielBtn = 'btnMark'; }
+  else if (mode === 'draw') { welche = 'drawBar'; zielBtn = 'btnDraw'; }
+  if (mode !== 'normal') zielBtn = MODUS_BTN[mode] || 'btnNormal';   // Modus schlaegt Auswahl (z. B. Loeschen)
+  ['btnNormal','btnText','btnMark','btnDraw','btnDel'].forEach(id =>
+    document.getElementById(id)?.classList.remove('active'));
+  document.getElementById(zielBtn)?.classList.add('active');
   if (welche) { document.getElementById(welche).style.display = 'flex'; sep.style.display = ''; }
   else sep.style.display = 'none';
+  movePill();
   requestAnimationFrame(fitToolbar);
 }
 function updateMarked() { const c = document.getElementById('markCount'); if (c) c.textContent = marked.length; }
@@ -1230,8 +1234,19 @@ function shapeObjZeichnen(div, a, k, rectOpt) {
       svg.setAttribute('viewBox', `0 0 ${Math.max(1, rw * k)} ${Math.max(1, rh * k)}`);
       const pt = (p) => [ (p[0] - r[0]) * k, (p[1] - r[1]) * k ];
       const dicke = Math.max(1, a.breite * k);
+      const griffSpur = (form) => {   // unsichtbare breite Klickbahn: duenne Striche greifbar machen
+        form.setAttribute('stroke', 'rgba(0,0,0,0)');
+        form.setAttribute('stroke-width', 16);
+        form.setAttribute('fill', 'none');
+        form.setAttribute('pointer-events', 'stroke');
+        svg.appendChild(form);
+      };
       if ((a.sub === 'line' || a.sub === 'arrow') && a.punkte && a.punkte.length >= 2) {
         const [x1, y1] = pt(a.punkte[0]), [x2, y2] = pt(a.punkte[1]);
+        const spur = document.createElementNS(SVGNS, 'line');
+        spur.setAttribute('x1', x1); spur.setAttribute('y1', y1);
+        spur.setAttribute('x2', x2); spur.setAttribute('y2', y2);
+        griffSpur(spur);
         const ln = document.createElementNS(SVGNS, 'line');
         ln.setAttribute('x1', x1); ln.setAttribute('y1', y1);
         ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
@@ -1247,6 +1262,12 @@ function shapeObjZeichnen(div, a, k, rectOpt) {
           svg.appendChild(kopf);
         }
       } else if (a.sub === 'ink' && a.punkte && a.punkte.length) {
+        for (const st of a.punkte) {
+          if (!st || st.length < 2) continue;
+          const spur = document.createElementNS(SVGNS, 'polyline');
+          spur.setAttribute('points', st.map(p => pt(p).join(',')).join(' '));
+          griffSpur(spur);
+        }
         for (const st of a.punkte) {
           if (!st || st.length < 2) continue;
           const pl = document.createElementNS(SVGNS, 'polyline');
@@ -3044,6 +3065,14 @@ function drawDragBewegen(ev) {
   const wr = drawDrag.img.getBoundingClientRect();
   drawDrag.x1 = Math.max(0, Math.min(wr.width, ev.clientX - wr.left));
   drawDrag.y1 = Math.max(0, Math.min(wr.height, ev.clientY - wr.top));
+  // Strg oder Umschalt: Rechteck wird zum Quadrat, Oval zum Kreis -
+  // Seitenlaenge = der groesseren Richtung, vom Startpunkt aus.
+  if ((drawDrag.tool === 'rect' || drawDrag.tool === 'oval') && (ev.ctrlKey || ev.shiftKey)) {
+    const dx = drawDrag.x1 - drawDrag.x0, dy = drawDrag.y1 - drawDrag.y0;
+    const seite = Math.max(Math.abs(dx), Math.abs(dy));
+    drawDrag.x1 = drawDrag.x0 + (dx < 0 ? -1 : 1) * seite;
+    drawDrag.y1 = drawDrag.y0 + (dy < 0 ? -1 : 1) * seite;
+  }
   if (drawDrag.tool === 'ink') {
     const px = drawDrag.x1 / drawDrag.k, py = drawDrag.y1 / drawDrag.k;
     const letzte = drawDrag.punkte[drawDrag.punkte.length - 1];

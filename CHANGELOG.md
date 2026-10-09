@@ -2,6 +2,22 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.18.2 — Zeichnen: Strich-Greifen, Quadrat/Kreis-Zwang, Werkzeug-Anzeige
+- **Linie, Pfeil und Tinte direkt am Strich greifbar:** Dünne Striche waren
+  praktisch nicht zu treffen. Jede Strichform bekommt eine unsichtbare
+  breite Klickbahn (16 px) unter dem Strich — anklicken und ziehen
+  funktioniert jetzt auch mitten auf der Linie (Nutzer-Meldung: Pfeil ließ
+  sich nicht verschieben). Im Zeichen-/Markier-Modus ist die Bahn bewusst
+  abgeschaltet, damit sie das Zeichnen nicht abfängt; Formen zeigen den
+  Verschiebe-Cursor.
+- **Quadrat/Kreis-Zwang:** Rechteck/Oval mit gedrückter Strg-Taste (oder
+  Umschalt, wie in anderen Programmen üblich) zeichnen exakt Quadrat/Kreis —
+  schon live in der Vorschau (Nutzer-Wunsch).
+- **Werkzeug-Anzeige folgt der Auswahl:** Ist ein Objekt ausgewählt, leuchtet
+  der passende Werkzeug-Knopf (Text → T, Markierung → Markieren, Form →
+  Zeichnen) samt gleitender Markierung statt des Auswahl-Werkzeugs — vorher
+  blieb „Auswahl" aktiviert, obwohl die Formen-Leiste offen war.
+
 ## v0.18.1 — Fix: Werkzeug-Symbole Rechteck/Oval
 - Die beiden Zeichen-Werkzeuge zeigten zufällig gewählte MDL2-Symbole (Crop-
   beziehungsweise formasatz-artig statt der Form) — Nutzer-Meldung mit Screenshot.
