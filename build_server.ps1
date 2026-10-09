@@ -36,6 +36,16 @@ $dist = Join-Path $root "app\dist\PdfWerkstattServer\PdfWerkstattServer.exe"
 if (Test-Path $dist) {
     $size = [math]::Round((Get-ChildItem (Split-Path $dist) -Recurse | Measure-Object Length -Sum).Sum/1MB,1)
     Write-Host "SERVER-EXE OK: $dist ($size MB)"
+    # OCR-Sprachdaten mit ins Paket legen (Tesseract selbst steckt im PyMuPDF-Wheel)
+    $tessquelle = Join-Path $root "tessdata"
+    $tessziel = Join-Path (Split-Path $dist) "tessdata"
+    if (Test-Path $tessquelle) {
+        if (Test-Path $tessziel) { Remove-Item $tessziel -Recurse -Force }
+        Copy-Item $tessquelle $tessziel -Recurse
+        Write-Host ("TESSDATA OK: " + $tessziel + " (" + ((Get-ChildItem $tessziel).Name -join ", ") + ")")
+    } else {
+        Write-Host "TESSDATA FEHLT (OCR ohne Sprachdaten!): $tessquelle"
+    }
 } else {
     Write-Host "SERVER-EXE FEHLT!"
 }

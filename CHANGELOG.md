@@ -2,6 +2,45 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.18.0 — Großausbau: Markieren, Zeichnen, OCR, KI-Assistent, Dokument-Schriften
+Fünf neue Funktionsbereiche (Wunschliste vom 2026-10-09), Suite jetzt 74 Checks (alle PASS):
+
+- **Markieren:** Werkzeug „Markieren" — Text mit gedrückter Maustaste aufziehen
+  (waagerecht entlang einer Zeile genügt!) und per Marker, Unterstrich,
+  Durchstreichen oder Wellenlinie hervorheben. Farbe, Deckkraft (Marker) und
+  Strichstärke (Linien) in der Kontextleiste oben. Markierungen sind echte
+  Markup-Annotationen mit eigenem Appearance-Stream (MuPDF kennt keine
+  Strichstärke bei Unter-/Durchstreichen) — verschieb- und skalierbar über
+  QuadPoints-Neuberechnung, löschbar, Strg+Z-fähig. Ohne Textebene (Scan)
+  wird die Auswahlfläche selbst markiert.
+- **Zeichnen:** Rechteck (mit/ohne Füllung), Oval, Linie, Pfeil und Tinte
+  (Freihand) — Strichdicke, Strich- und Füllfarbe, Deckkraft einstellbar.
+  Formen sind Square/Circle/Line/Ink-Annotationen (Stil im PDFW-SHAPE-NM-
+  Marker), verschieben/skalieren rechnet Punkte (L/InkList/QuadPoints) mit,
+  Pfeilspitzen per /LE. Radiergummi löscht angeklickte Objekte.
+- **Werkzeugleiste dynamisch:** Statt Dauerschriftleiste zeigt der Kopf
+  je Werkzeug/Auswahl genau EINE Kontextleiste (Text | Markieren | Zeichnen);
+  Auswahl schlägt Modus. Plus neue Knöpfe OCR und KI.
+- **OCR:** Knopf „OCR" — Texterkennung für Seiten ohne Textebene (Scans),
+  Sprachen Deutsch + Englisch (tessdata im Paket, Tesseract steckt im
+  PyMuPDF-Wheel). Pro Seite Fortschritt, danach durchsuchbar/kopierbar/
+  markierbar; nicht rückgängig machbar (reine Zusatzebene).
+- **KI-Assistent (BYOK):** Panel mit Chat (Antworten live gestreamt),
+  „Zusammenfassen" (ganzes Dokument), „Auswahl übersetzen" (Alt+Ziehen).
+  Konfiguration nach Adobe-Vorbild: Anbieter (OpenAI, z.ai, OpenRouter,
+  Anthropic, Google, Ollama lokal, OpenAI-kompatibel eigen), URL, API-
+  Schlüssel, Modellliste vom Anbieter ladbar; Aufgaben zuordenbar. Schlüssel
+  liegen nur lokal in einstellungen.json; alle Anbieter-Anfragen laufen über
+  den lokalen Server.
+- **Dokument-Schriften:** Im Text-Werkzeug stehen die im PDF eingebetteten
+  Schriften zur Auswahl (Overlay lädt sie als @font-face; der Server bettet
+  sie in den Freitext-AP per Glyph-ID-Stream ein, Helvetica-Fallback bei
+  fehlenden Subset-Glyphen).
+- **Server aufgeräumt:** toter Doppelblock (save bis _txt_spacing, byte-
+  identisch) entfernt — 2033 statt 1415 Zeilen ohne Verhaltensänderung.
+- **Grenzen:** OCR ist (wie Redaction) nicht rückgängig machbar — die Ebene
+  ist rein zusätzlich; das Einbrennen fragt jetzt auch bei Formen/Markierungen.
+
 ## v0.17.12 — Fix: Drehen ohne kurzes „Zurückspringen" in die alte Ansicht
 - Nach dem Drehen am Griff erschien die Signatur kurz in der alten Darstellung
   und „drehte sich dann richtig": Das Overlay besitzt eine 120-ms-Blendregel
