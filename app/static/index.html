@@ -181,7 +181,11 @@
               transition: transform var(--d3) var(--e-standard), width var(--d3) var(--e-standard), opacity var(--d2); pointer-events:none; }
   header { position: relative; }
   body:not(.light) header::before { content:""; position:absolute; top:0; left:0; right:0; height:3px;
-    background:linear-gradient(90deg, #1a1a1a, #dd0000 50%, #ffcc00 100%); }
+    background:linear-gradient(90deg, #1a1a1a, #dd0000 50%, #ffcc00 100%); z-index:4; }
+  /* z-index:4: die Kante muss UEBER der .fensterzone (z-index:3) liegen, sonst
+     reisst sie dort ab - harte Kante an der linken Zonecke, kahlen Ecken
+     (Nutzer-Meldung v0.18.9). Die Knepfe selbst stehen tiefer, der 3px-Streifen
+     ueberlappt nichts Sichtbares. */
   header .tbtn { position: relative; z-index: 1; }
   header .tbtn.active { background: transparent; }   /* die gleitende Pill liefert die Fläche */
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }

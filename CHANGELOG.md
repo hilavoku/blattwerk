@@ -2,6 +2,19 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.18.9 — Trikolore-Kante läuft wieder durch die Fensterknopf-Zone
+- **Harte Kante oben rechts beseitigt (Nutzer-Meldung: „unschöne Kante, die
+  vier Symbole wirken höher"):** Die eigene 3-px-Trikolore-Kante der Kopfzeile
+  (header::before) wurde von der opaken .fensterzone (z-Index 3) auf ihren
+  ~180 px überdeckt — der Verlauf riss dort ab, die Ecke oben rechts wirkte
+  kahl und die Knöpfe dadurch „verschoben". Die Kante liegt jetzt mit
+  z-Index 4 ÜBER der Zone und läuft durchgehend bis zum rechten Rand
+  (im App-Screenshot gemessen: Goldband wieder 10 px auf ganzer Breite,
+  vorher Stufe 9→6 px an der Zonengrenze). Die Knopfreihen standen exakt —
+  Zentren 24 px — der Eindruck kam vom Kantenabriss. 3-px-Streifen
+  überlappt nichts Sichtbares (Knöpfe beginnen erst darunter).
+- Suite 80 PASS. Nur-UI-Änderung (1 Zeile + Kommentar).
+
 ## v0.18.8 — KI-Assistent: Breite verstellbar, bündig unter der Kopfzeile, klares Schließen
 - **Breite veränderbar (Nutzer-Wunsch):** Linke Panelkante ist ein Breitengriff
   (7 px, Akzent bei Hover); Zug klemmt bei 300 px bzw. Fensterbreite minus 80.
