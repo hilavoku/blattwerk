@@ -2,6 +2,28 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.18.3 — Zeichnen: ein konsistenter Werkzeug-Zustand + Kontextmenü
+- **Objekte im Zeichen-Werkzeug direkt greifbar (wie PDFgear):** Angelegte
+  Formen, Markierungen, Texte und Signaturen lassen sich im Zeichen-Modus
+  anklicken und verschieben, ohne zum Auswahl-Werkzeug zu wechseln — die
+  freie Papierfläche zeichnet weiterhin. Der gemeldete Mischzustand (Anzeige
+  „Zeichnen", Cursor Hand, Klick schiebt das Dokument) ist damit aufgelöst.
+- **Auswahl schaltet den Werkzeug-Zustand passend:** Wird im Auswahl-Modus
+  eine Form/Markierung angeklickt, wechselt die App wirklich in den Zeichen-
+  Modus — mit dem zum Objekt passenden Unterwerkzeug (Pfeil anklicken →
+  Pfeil-Werkzeug aktiv). Anzeige, Cursor und Verhalten sind immer eins.
+  Text/Signatur wechseln bewusst nicht (Text-Modus würde beim nächsten Klick
+  aufs Papier einen Editor öffnen statt zu verschieben).
+- **Strg/Umschalt auch beim Nachträglich-Vergrößern:** Am Anker unten rechts
+  erzwingt die Taste wie beim Zeichnen Quadrat beziehungsweise Kreis
+  (Nutzer-Wunsch).
+- **Rechtsklick-Kontextmenü ausgebaut (Nutzer-Vorschlag):** Rechtsklick aufs
+  Papier bietet „Letzte Form bearbeiten" (wählt die zuletzt gezeichnete
+  Form/Markierung aus — Stil, Größe, Position in der Leiste oben) und den
+  Werkzeugwechsel mit Häkchen am aktiven Werkzeug. Rechtsklick auf ein
+  Objekt: Stil/Löschen (wie bisher) plus Werkzeugwechsel. Der Radiergummi
+  bleibt davon unberührt (Klick löscht statt auszuwählen).
+
 ## v0.18.2 — Zeichnen: Strich-Greifen, Quadrat/Kreis-Zwang, Werkzeug-Anzeige
 - **Linie, Pfeil und Tinte direkt am Strich greifbar:** Dünne Striche waren
   praktisch nicht zu treffen. Jede Strichform bekommt eine unsichtbare

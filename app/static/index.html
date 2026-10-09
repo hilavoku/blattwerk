@@ -326,10 +326,11 @@
   .pagewrap.mode-mark img, .pagewrap.mode-draw img { cursor:crosshair; }
   .mode-mark .line, .mode-draw .line, .mode-mark .winput, .mode-draw .winput,
   .mode-mark .imgobj, .mode-draw .imgobj { pointer-events:none; }
-  .mode-mark .annot, .mode-draw .annot { pointer-events:none; }   /* Zeichnen/Markieren gehts aufs Papier; Objekte greifen nicht dazwischen */
+  .mode-mark .annot { pointer-events:none; }      /* Markieren: freies Aufziehen ueber alles */
+  .mode-draw .annot { pointer-events:auto; cursor:move; }   /* Zeichnen: Objekte direkt greifen (PDFgear-Art), freie Flaeche zeichnet */
   .annot.shapeobj { background:transparent; cursor:move; }
   .annot.shapeobj svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
-  .mode-draw .annot svg *, .mode-mark .annot svg * { pointer-events: none !important; }   /* Griff-Spuren duerfen Zeichnen/Markieren nicht abfangen */
+  .mode-mark .annot svg * { pointer-events: none !important; }   /* Griff-Spuren duerfen Markieren nicht abfangen (im Zeichen-Modus greifen sie bewusst) */
   .annot.markupobj { background:transparent; cursor:move; }
   .annot.markupobj .mkq { position:absolute; pointer-events:none; }
   .annot.markupobj.h .mkq { border-radius:1px; }
@@ -542,7 +543,7 @@
       <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.<br>
       <b>Löschen:</b> Signatur/Text/Form anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Markieren:</b> Werkzeug „Markieren" wählen, Text aufziehen – Marker, Unterstreichen, Durchstreichen oder Wellenlinie; Farbe, Deckkraft und Stärke oben einstellen. Markierung anklicken und ziehen verschiebt sie.<br>
-      <b>Zeichnen:</b> Rechteck, Oval, Linie, Pfeil oder Tinte aufziehen bzw. malen – Strichdicke, Strich- und Füllfarbe oben. Mit gedrückter <b>Strg</b>- (oder Umschalt-)Taste wird das Rechteck zum Quadrat und das Oval zum Kreis. Radiergummi klickt Objekte weg. Objekt anklicken und ziehen verschiebt es, Anker unten rechts ändert die Größe – Linien, Pfeile und Tinte lassen sich auch direkt am Strich greifen.<br>
+      <b>Zeichnen:</b> Rechteck, Oval, Linie, Pfeil oder Tinte aufziehen bzw. malen – Strichdicke, Strich- und Füllfarbe oben. Mit gedrückter <b>Strg</b>- (oder Umschalt-)Taste wird das Rechteck zum Quadrat und das Oval zum Kreis. Radiergummi klickt Objekte weg. Objekte lassen sich auch direkt im Zeichen-Werkzeug anklicken und verschieben (ohne Werkzeugwechsel), Anker unten rechts ändert die Größe – mit Strg/Umschalt wieder Quadrat/Kreis –, Linien, Pfeile und Tinte greift man direkt am Strich. <b>Rechtsklick</b> aufs Papier wechselt das Werkzeug oder bearbeitet die letzte Form; Rechtsklick aufs Objekt bietet Stil, Löschen und Werkzeugwechsel.<br>
       <b>OCR:</b> Knopf „OCR" – erkennt Text auf Scan-Seiten (Deutsch + Englisch) und bettet ihn unsichtbar ein: durchsuchbar, kopierbar, markierbar.<br>
       <b>KI:</b> Knopf „KI" – Chat mit Dokument-Kontext, Zusammenfassen, Auswahl übersetzen. Eigener Anbieter und API-Schlüssel (Zahnrad im Panel), gespeichert nur lokal.<br>
       <b>Schriften:</b> Im Text-Werkzeug stehen auch die im PDF eingebetteten Schriften zur Auswahl („Aus dem Dokument").<br>
@@ -784,15 +785,35 @@ function setPref(key, value) {
 const MODUS_BTN = {text:'btnText', mark:'btnMark', draw:'btnDraw', delete:'btnDel'};
 let drawTool = 'rect';   // Unterauswahl im Zeichnen-Modus: rect/oval/line/arrow/ink/erase
 
+function modusKlassenSetzen() {
+  document.querySelectorAll('.pagewrap').forEach(w => {
+    w.classList.remove('mode-sign','mode-text','mode-mark','mode-draw','mode-delete');
+    if (mode !== 'normal') w.classList.add('mode-' + mode);
+  });
+}
+/* Auswahl schaltet den WERKZEUG-ZUSTAND passend zum Objekt (Anzeige = Cursor =
+   Verhalten, kein Mischzustand): Form -> Zeichnen mit passendem Unterwerkzeug,
+   Markierung -> Zeichnen mit passender Art, Text -> Text-Werkzeug. */
+function werkzeugFuerObjektSetzen(a) {
+  if (!a || (mode !== 'normal' && mode !== 'draw')) return;   // Loesch-/Markier-/Text-Modus nicht anfassen
+  if (a.type === 'shape' || a.type === 'markup') {
+    if (mode !== 'draw') { mode = 'draw'; modusKlassenSetzen(); }
+    if (a.type === 'shape' && DRAW_BTN[a.sub]) setDrawTool(a.sub);
+    if (a.type === 'markup' && a.sub) {
+      document.getElementById('mkArt').value = a.sub;
+      markFelderSchaerfen();
+    }
+  }
+  // Text/Signatur: kein Moduswechsel - Text-Modus wuerde beim naechsten Klick aufs
+  // Papier einen Editor oeffnen statt zu verschieben (Auswahl-Modus bleibt da richtiger).
+}
+
 function setMode(m) {
   mode = (mode === m) ? 'normal' : m;
   document.getElementById('btnDelGo')?.remove();
   marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
   drawVorEntfernen(); markVorEntfernen();
-  document.querySelectorAll('.pagewrap').forEach(w => {
-    w.classList.remove('mode-sign','mode-text','mode-mark','mode-draw','mode-delete');
-    if (mode !== 'normal') w.classList.add('mode-' + mode);
-  });
+  modusKlassenSetzen();
   const tip = {normal:'', sign:'Klicke auf die Stelle, wo die Signatur hin soll.',
                text:'Klicke aufs Papier und tippe direkt dort.',
                mark:'Text aufziehen (gedrückt halten) – Stil und Farbe oben einstellen.',
@@ -1192,7 +1213,11 @@ async function addAnnots(img) {
     rz.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startDrag(ev, d, a, n, k, 'resize'); });
     ro.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startRotate(ev, d, a, n, k); });
     d.addEventListener('dblclick', (ev) => { ev.stopPropagation(); if (a.type === 'text') startInlineEdit(n, null, null, a); });
-    d.addEventListener('click', (ev) => { ev.stopPropagation(); selectAnnot({div: d}); });
+    d.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (mode === 'draw' && drawTool === 'erase') return;   // Loeschen statt Auswahl
+      selectAnnot({div: d});
+    });
     wrap.appendChild(d);
   }
 }
@@ -1345,6 +1370,7 @@ function selectAnnot(sel) {
     document.getElementById('prRot').style.display = isSign ? '' : 'none';
     document.getElementById('prRot').value = Math.round((sel.div._annot.rot || 0) * 10) / 10;
     bar.style.display = 'flex';
+    werkzeugFuerObjektSetzen(sel.div._annot);   // Zustand an die Anzeige angleichen
   } else {
     bar.style.display = 'none';
   }
@@ -1471,28 +1497,44 @@ window.pwMaximiert = (max) => {
 };
 
 document.addEventListener('contextmenu', (ev) => {
-  if (mode === 'text' && !ev.target.closest('input, textarea')) { setMode('normal'); return; }   // Rechtsklick im Text-Modus: Modus beenden
   if (ev.target.closest('input, textarea')) return;   // natives Menü in Eingabefeldern erlauben
   ev.preventDefault();                                 // kein WebView2-Bildmenü ("Bild speichern" etc.)
+  if (mode === 'text' && !ev.target.closest('.annot')) { setMode('normal'); return; }   // Rechtsklick daneben: Text-Modus beenden
   const div = ev.target.closest('.annot');
-  if (!div || !div._annot) return;
-  selectAnnot({div});
   ctxMenu.innerHTML = '';
   const eintrag = (label, icon, fn, danger) => {
     const b = document.createElement('button');
     if (danger) b.className = 'danger';
-    b.innerHTML = '<span class="i">' + icon + '</span>' + label;
+    b.innerHTML = (icon ? '<span class="i">' + icon + '</span>' : '') + label;
     b.onclick = (ev2) => { ev2.stopPropagation(); hideCtxMenu(); fn(); };
     ctxMenu.appendChild(b);
   };
-  const pageN = parseInt(div.dataset.page);
-  if (div._annot.type === 'sign')
-    eintrag('Drehen (90°)', '&#xE7A8;', () => rotateAnnot(div));
-  if (div._annot.type === 'text')
-    eintrag('Bearbeiten', '&#xE70F;', () => startInlineEdit(pageN, null, null, div._annot));
-  if (div._annot.type === 'markup' || div._annot.type === 'shape')
-    eintrag('Stil oben ändern', '&#xE790;', () => { selectAnnot({div}); stat('Stil in der Werkzeugleiste oben einstellen.', true); });
-  eintrag('Löschen', '&#xE74D;', () => deleteAnnot(div), true);
+  const modusEintrag = (name, m) =>
+    eintrag((mode === m ? '✓ ' : '') + name, '', () => { if (mode !== m) setMode(m); });
+  if (div && div._annot) {
+    selectAnnot({div});
+    const pageN = parseInt(div.dataset.page);
+    if (div._annot.type === 'sign')
+      eintrag('Drehen (90°)', '&#xE7A8;', () => rotateAnnot(div));
+    if (div._annot.type === 'text')
+      eintrag('Bearbeiten', '&#xE70F;', () => startInlineEdit(pageN, null, null, div._annot));
+    if (div._annot.type === 'markup' || div._annot.type === 'shape')
+      eintrag('Stil oben ändern', '&#xE790;', () => { stat('Stil in der Werkzeugleiste oben einstellen.', true); });
+    eintrag('Löschen', '&#xE74D;', () => deleteAnnot(div), true);
+    if (mode !== 'normal')
+      eintrag('Werkzeug: Auswahl & Verschieben', '', () => setMode('normal'));
+  } else if (cur && ev.target.closest('#viewer')) {
+    // Kontextmenü auf dem Papier: letzte Aktion weiterbearbeiten + Werkzeug wechseln
+    const letzteDiv = letzteForm
+      ? document.querySelector('#page' + letzteForm.page + ' .annot[data-xref="' + letzteForm.xref + '"]')
+      : null;
+    if (letzteDiv)
+      eintrag('Letzte Form bearbeiten (Stil, Größe …)', '', () => selectAnnot({div: letzteDiv}));
+    modusEintrag('Werkzeug: Auswahl & Verschieben', 'normal');
+    modusEintrag('Werkzeug: Zeichnen (Formen & Freihand)', 'draw');
+    modusEintrag('Werkzeug: Markieren', 'mark');
+    modusEintrag('Werkzeug: Text', 'text');
+  } else return;
   ctxMenu.style.display = 'block';
   const r = ctxMenu.getBoundingClientRect();
   ctxMenu.style.left = Math.max(4, Math.min(ev.clientX, window.innerWidth - r.width - 6)) + 'px';
@@ -1573,14 +1615,15 @@ async function rotateDivAktualisieren(div, j) {
 }
 
 function startDrag(ev, div, a, pageN, k, kind) {
-  if (mode !== 'normal') return;
+  if (mode !== 'normal' && mode !== 'draw') return;   // Zeichen-Modus: Objekte direkt greifen
+  if (mode === 'draw' && drawTool === 'erase') return; // Radiergummi loescht per Klick, kein Drag
   ev.preventDefault(); ev.stopPropagation();
   selectAnnot({div});
   drag = {xref:a.xref, page:pageN, k, div, a, rect:a.rect.slice(), kind,
           startX:ev.clientX, startY:ev.clientY, aspect:(a.rect[3]-a.rect[1])/(a.rect[2]-a.rect[0])};
 }
 function startRotate(ev, div, a, pageN, k) {
-  if (mode !== 'normal') return;
+  if (mode !== 'normal' && mode !== 'draw') return;
   if (a.type !== 'sign') return;
   ev.preventDefault(); ev.stopPropagation();
   selectAnnot({div});
@@ -1608,6 +1651,13 @@ document.addEventListener('mousemove', (ev) => {
     if (drag.a && drag.a.type === 'sign') {   // Signatur: Seitenverhaeltnis halten
       const nw = Math.max(20, (r[2]-r[0]) + dx);
       r[2] = r[0] + nw; r[3] = r[1] + nw * drag.aspect;
+    } else if (drag.a && (drag.a.type === 'shape') &&
+               (drag.a.sub === 'rect' || drag.a.sub === 'oval') &&
+               (ev.ctrlKey || ev.shiftKey)) {
+      // Strg/Umschalt beim Groesseraendern: Quadrat/Kreis erzwingen
+      const seite = Math.max(Math.max(r[2] - r[0] + dx, 10), Math.max(r[3] - r[1] + dy, 10));
+      r[2] = r[0] + seite;
+      r[3] = r[1] + seite;
     } else {                                  // Text/Form/Markierung: frei skalierbar
       r[2] = Math.max(r[0] + 10, r[2] + dx);
       r[3] = Math.max(r[1] + 10, r[3] + dy);
@@ -3013,6 +3063,8 @@ async function markDragLoslassen() {
   fd.append('staerke', document.getElementById('mkStaerke').value || '1');
   const r = await fetch('/api/annot/markup/' + cur.id, {method: 'POST', body: fd});
   if (r.ok) {
+    const j = await r.json();
+    letzteForm = {page: md.n, xref: j.xref};
     setDirty(true);
     await reloadAnnots(md.n);
     stat(text ? ('Markiert: ' + text.slice(0, 60)) : 'Bereich markiert (kein Text darunter – Scan).', true);
@@ -3021,6 +3073,7 @@ async function markDragLoslassen() {
 
 /* ---------- Zeichnen: Formen aufziehen, Tinte malen, Radiergummi ---------- */
 let drawDrag = null;
+let letzteForm = null;   // zuletzt erstellte Form/Markierung: Rechtsklick -> 'Letzte Form bearbeiten'
 const DRAW_BTN = {rect:'dwRect', oval:'dwOval', line:'dwLine', arrow:'dwArrow', ink:'dwInk', erase:'dwErase'};
 function drawVorEntfernen() { document.querySelectorAll('.drawvor').forEach(e => e.remove()); drawDrag = null; }
 function setDrawTool(t) {
@@ -3158,6 +3211,8 @@ async function drawDragLoslassen() {
   }
   const r = await fetch('/api/annot/shape/' + cur.id, {method: 'POST', body: fd});
   if (r.ok) {
+    const j = await r.json();
+    letzteForm = {page: dd.n, xref: j.xref};
     setDirty(true);
     await reloadAnnots(dd.n);
     stat(TYP_NAME.shape[dd.tool] + ' gesetzt – Strg+Z macht es rückgängig.', true);
