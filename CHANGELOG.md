@@ -2,6 +2,22 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.18.8 — KI-Assistent: Breite verstellbar, bündig unter der Kopfzeile, klares Schließen
+- **Breite veränderbar (Nutzer-Wunsch):** Linke Panelkante ist ein Breitengriff
+  (7 px, Akzent bei Hover); Zug klemmt bei 300 px bzw. Fensterbreite minus 80.
+  Die Breite bleibt in einstellungen.json (prefs.kiBreite) und steht beim
+  nächsten Start wieder so.
+- **Panel beginnt unter der Kopfzeile (Nutzer-Meldung: „etwas tiefer, bündig“):**
+  Vorher überdeckte das Panel die Kopfzeilen-Zone incl. Fensterknöpfen. Jetzt
+  setzt es beim Öffnen auf header.offsetHeight — bündig mit der Oberkante des
+  Papierbereichs, auch wenn die Leiste bei schmalen Fenstern umbricht.
+  Design-Knopf, Minimieren/Maximieren/Schließen bleiben sichtbar und klickbar.
+- **Schließen-Knopf eindeutig (Nutzer-Meldung):** Das nackte X des Panels saß
+  an derselben Ecke wie das Fenster-Schließen-X und wirkte verwechselnd.
+  Jetzt ein beschrifteter Knopf „Schließen“ (eingerahmt, Panel-Stil) mit
+  Hinweis im Tooltip („schließt NICHT das Programm“).
+- Suite 80 PASS (nur UI-Änderungen, Server unverändert).
+
 ## v0.18.7 — Pfeilspitzen in richtiger Größe, Pfeil per Umdrehen skalieren
 - **Pfeilspitzen endlich so groß wie im PDF (Nutzer-Meldung: „Spitzen kürzer
   als der Pfeil"):** Das Overlay zeichnete die Spitze 4× Strichbreite (min.

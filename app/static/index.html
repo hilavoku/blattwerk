@@ -356,13 +356,22 @@
                    border-radius:6px; padding:7px 9px; font-size:13px; }
   #ocrBox .info { font-size:11.5px; line-height:1.5; margin-top:8px; }
   /* ---------- KI-Panel (rechts, wie ein Assistent-Fenster) ---------- */
-  #kiPanel { position:fixed; top:0; right:0; bottom:0; width:380px; z-index:250; background:var(--chrome);
+  #kiPanel { position:fixed; top:48px; right:0; bottom:0; width:380px; z-index:250; background:var(--chrome);
              border-left:1px solid var(--border); display:none; flex-direction:column;
              box-shadow:-12px 0 40px rgba(0,0,0,.35); }
   #kiPanel.offen { display:flex; }
+  /* Linke Kante = Breitengriff (v0.18.8); Breite bleibt in einstellungen.json */
+  #kiPanel .kizieh { position:absolute; left:-3px; top:0; bottom:0; width:7px; cursor:ew-resize; z-index:5; }
+  #kiPanel .kizieh:hover, #kiPanel .kizieh.zieht { background:var(--accent); opacity:.4; }
   #kiPanel .kikopf { padding:10px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
   #kiPanel .kikopf b { font-size:13px; }
   #kiPanel .kikopf .spacer { flex:1; }
+  #kiPanel .kikopf select { flex:0 1 auto; min-width:0; }
+  /* Schliessen des Panels als beschrifteter Knopf - ein nacktes X an derselben
+     Ecke wie der Fenster-Schliessen-Knopf wirkte irrefuehrend (v0.18.8) */
+  #kiPanel .kizu { background:var(--chrome2); border:1px solid var(--border); color:var(--text);
+                   border-radius:6px; padding:4px 10px; font-size:11.5px; cursor:pointer; white-space:nowrap; }
+  #kiPanel .kizu:hover { border-color:var(--accent); color:var(--accent); }
   #kiPanel select { background:var(--chrome2); color:var(--text); border:1px solid var(--border); border-radius:6px;
                     padding:4px 6px; font-size:12px; max-width:150px; }
   #kiLog { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
@@ -718,12 +727,13 @@
 </div>
 
 <div id="kiPanel">
+  <div class="kizieh" id="kiZieh" title="Ziehen ändert die Breite"></div>
   <div class="kikopf">
     <span class="i" style="font-family:var(--icon)">&#xE945;</span><b>KI-Assistent</b>
     <span class="spacer"></span>
     <select id="kiChatModell" title="Modell für den Chat"></select>
     <button class="tbtn" onclick="kiConfigOeffnen()" title="KI-Konfiguration (Modelle, Schlüssel, Aufgaben)"><span class="i">&#xE713;</span></button>
-    <button class="tbtn" onclick="kiPanelUmschalten()" title="Schließen"><span class="i">&#xE711;</span></button>
+    <button class="kizu" onclick="kiPanelUmschalten()" title="Assistent ausblenden – schließt NICHT das Programm">Schließen</button>
   </div>
   <div id="kiLog"><div class="kileer" id="kiLeer">Noch kein Modell eingerichtet.<br>„Einrichten" öffnet die Konfiguration – eigener Anbieter, eigener Schlüssel (BYOK).<br><button onclick="kiConfigOeffnen()">Einrichten</button></div></div>
   <div class="kiaktionen">
@@ -3714,8 +3724,32 @@ function kiModellFuer(aufgabe) {
 }
 function kiPanelUmschalten() {
   const p = document.getElementById('kiPanel');
+  if (!p.classList.contains('offen'))
+    p.style.top = document.querySelector('header').offsetHeight + 'px';   // bündig UNTER der Kopfzeile (auch wenn sie umbricht)
   p.classList.toggle('offen');
 }
+/* Breitengriff an der linken Panelkante; die Breite bleibt in einstellungen.json
+   (Prefs, nicht localStorage - Port wechselt je Start). */
+document.getElementById('kiZieh').addEventListener('pointerdown', (ev) => {
+  if (ev.button !== 0) return;
+  ev.preventDefault();
+  const p = document.getElementById('kiPanel');
+  const griff = document.getElementById('kiZieh');
+  griff.classList.add('zieht');
+  const moven = (e2) => {
+    const w = Math.round(Math.min(window.innerWidth - 80, Math.max(300, window.innerWidth - e2.clientX)));
+    p.style.width = w + 'px';
+  };
+  const hoch = () => {
+    document.removeEventListener('pointermove', moven);
+    document.removeEventListener('pointerup', hoch);
+    griff.classList.remove('zieht');
+    const w = parseInt(p.style.width, 10);
+    if (w) setPref('kiBreite', w);
+  };
+  document.addEventListener('pointermove', moven);
+  document.addEventListener('pointerup', hoch);
+});
 function kiPanelAufbauen() {
   const leer = document.getElementById('kiLeer');
   const sel = document.getElementById('kiChatModell');
@@ -3992,6 +4026,7 @@ loadSignatures();
   kiLaden();                       // KI-Modelle/Aufgaben aus den Server-Einstellungen
   if (prefs.drawTool) setDrawTool(prefs.drawTool);
   if (prefs.mkArt) setMkArt(prefs.mkArt);
+  if (prefs.kiBreite) document.getElementById('kiPanel').style.width = Math.max(300, Math.min(window.innerWidth - 80, prefs.kiBreite)) + 'px';
   document.getElementById('btnNormal').classList.add('active');   // Startwerkzeug
   movePill();
   new ResizeObserver(() => movePill()).observe(document.getElementById('topbar'));
