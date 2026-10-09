@@ -322,6 +322,85 @@
   .inlineDel { position:absolute; z-index:51; background:var(--danger); color:white; border:none; border-radius:5px;
                cursor:pointer; font-family:var(--icon); font-size:12px; padding:3px 7px; display:none; }
   .inlineDel:hover { filter:brightness(1.15); }
+  /* ---------- Formen & Markierungen (Overlays + Werkzeuge) ---------- */
+  .pagewrap.mode-mark img, .pagewrap.mode-draw img { cursor:crosshair; }
+  .mode-mark .line, .mode-draw .line, .mode-mark .winput, .mode-draw .winput,
+  .mode-mark .imgobj, .mode-draw .imgobj { pointer-events:none; }
+  .mode-mark .annot, .mode-draw .annot { pointer-events:none; }   /* Zeichnen/Markieren gehts aufs Papier; Objekte greifen nicht dazwischen */
+  .annot.shapeobj { background:transparent; }
+  .annot.shapeobj svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+  .annot.markupobj { background:transparent; cursor:move; }
+  .annot.markupobj .mkq { position:absolute; pointer-events:none; }
+  .annot.markupobj.h .mkq { border-radius:1px; }
+  .annot.markupobj.q .mkq svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .drawvor { position:absolute; z-index:6; border:1px dashed var(--accent); background:var(--sel-fill);
+             pointer-events:none; border-radius:2px; }
+  .drawvor svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .markvor { position:absolute; z-index:6; background:rgba(255,211,0,.28); border:1px solid rgba(255,190,0,.8);
+             pointer-events:none; border-radius:2px; }
+  .annot.eraserhover { outline:2px dashed var(--danger) !important; outline-offset:1px; cursor:pointer; }
+  .leistenbtns { display:flex; align-items:center; gap:2px; }
+  .leistenbtns .tbtn { padding:5px 7px; }
+  .leistenbtns .tbtn .i { font-size:15px; }
+  .farbfeld { width:26px; height:24px; padding:1px; border:1px solid var(--border); border-radius:6px;
+              background:var(--chrome2); }
+  /* ---------- OCR-Dialog ---------- */
+  #ocrBox .fortschritt { height:6px; border-radius:3px; background:var(--chrome2); margin-top:10px; overflow:hidden; }
+  #ocrBox .fortschritt > div { height:100%; width:0%; background:var(--accent); transition:width var(--d2) var(--e-standard); }
+  #ocrBox select { width:100%; margin-top:8px; background:var(--bg); color:var(--text); border:1px solid var(--border);
+                   border-radius:6px; padding:7px 9px; font-size:13px; }
+  #ocrBox .info { font-size:11.5px; line-height:1.5; margin-top:8px; }
+  /* ---------- KI-Panel (rechts, wie ein Assistent-Fenster) ---------- */
+  #kiPanel { position:fixed; top:0; right:0; bottom:0; width:380px; z-index:250; background:var(--chrome);
+             border-left:1px solid var(--border); display:none; flex-direction:column;
+             box-shadow:-12px 0 40px rgba(0,0,0,.35); }
+  #kiPanel.offen { display:flex; }
+  #kiPanel .kikopf { padding:10px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+  #kiPanel .kikopf b { font-size:13px; }
+  #kiPanel .kikopf .spacer { flex:1; }
+  #kiPanel select { background:var(--chrome2); color:var(--text); border:1px solid var(--border); border-radius:6px;
+                    padding:4px 6px; font-size:12px; max-width:150px; }
+  #kiLog { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+  .kiblase { max-width:88%; padding:8px 11px; border-radius:10px; font-size:12.5px; line-height:1.5;
+             white-space:pre-wrap; word-break:break-word; animation: statIn var(--d2) var(--e-out); }
+  .kiblase-user { align-self:flex-end; background:var(--accent); color:#0b1620; border-bottom-right-radius:3px; }
+  .kiblase-ki { align-self:flex-start; background:var(--chrome2); border:1px solid var(--border);
+                border-bottom-left-radius:3px; }
+  .kiblase-ki.denkt::after { content:"▍"; animation: dotPulse 1s infinite; }
+  #kiPanel .kiaktionen { display:flex; gap:6px; padding:0 12px 8px; flex-wrap:wrap; }
+  #kiPanel .kiaktionen button { background:var(--chrome2); border:1px solid var(--border); color:var(--text);
+    border-radius:14px; padding:4px 11px; font-size:11.5px; cursor:pointer; }
+  #kiPanel .kiaktionen button:hover { border-color:var(--accent); color:var(--accent); }
+  #kiPanel .kiaktionen button:disabled { opacity:.4; cursor:default; }
+  #kiEingabe { display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--border); }
+  #kiEingabe textarea { flex:1; resize:none; height:44px; background:var(--bg); color:var(--text);
+    border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:12.5px; font-family:inherit; outline:none; }
+  #kiEingabe textarea:focus { border-color:var(--accent-dim); }
+  #kiEingabe button { align-self:flex-end; background:var(--accent); color:#0b1620; border:none; border-radius:8px;
+    padding:8px 14px; font-weight:600; cursor:pointer; }
+  #kiPanel .kileer { margin:auto; text-align:center; color:var(--muted); padding:20px; font-size:12.5px; line-height:1.6; }
+  #kiPanel .kileer button { margin-top:10px; background:var(--accent); color:#0b1620; border:none; border-radius:7px;
+    padding:8px 14px; font-weight:600; cursor:pointer; }
+  .kiconf-zeile { display:flex; align-items:center; gap:8px; padding:7px 8px; border:1px solid var(--border);
+                  border-radius:8px; margin-bottom:6px; font-size:12px; }
+  .kiconf-zeile .del { margin-left:auto; background:none; border:none; color:var(--muted); cursor:pointer;
+                      font-family:var(--icon); font-size:14px; }
+  .kiconf-zeile .del:hover { color:var(--danger); }
+  .kiconf-aufgabe { display:flex; align-items:center; gap:8px; margin-bottom:7px; font-size:12px; }
+  .kiconf-aufgabe select { flex:1; background:var(--chrome2); color:var(--text); border:1px solid var(--border);
+                           border-radius:6px; padding:5px 7px; font-size:12px; }
+  #kiAddBox, #kiConfBox { width:360px; }
+  #kiAddBox input, #kiConfBox input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 9px; font-size:12.5px; outline:none; margin-top:6px; }
+  #kiAddBox select, #kiConfBox select { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:7px 9px; font-size:12.5px; margin-top:6px; }
+  .kzeile { display:flex; gap:6px; align-items:center; }
+  .kzeile .akt { background:var(--chrome2); border:1px solid var(--border); color:var(--text); border-radius:6px;
+                 padding:6px 9px; cursor:pointer; font-size:12px; white-space:nowrap; }
+  .kzeile .akt:hover { border-color:var(--accent); }
+  .khinweis { font-size:11px; color:var(--muted); line-height:1.45; margin-top:8px; }
+  body.light #kiPanel { box-shadow:-12px 0 40px rgba(30,40,60,.18); }
+
   body.light { --bg:#eef1f5; --chrome:#ffffff; --chrome2:#f5f7fa; --hover:#e8ecf2; --border:#d5dae2;
                --text:#1a1f27; --muted:#626c7a; --accent:#0b6ec9; --accent-dim:#cfe6f8; --danger:#d13438; --ok:#0e8a4c;
                --sel-fill: rgba(76, 194, 255, .16); --sel-border: rgba(76, 194, 255, .55);
@@ -357,10 +436,14 @@
   <input type="file" id="sigFile" accept=".png,.jpg,.jpeg" style="display:none">
   <button class="tbtn" id="btnNormal" onclick="setMode('normal')" title="Auswahl & Verschieben – beendet Text-/Löschen-Modus (Esc)"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M2.5 1 L2.5 14.4 L5.6 11.5 L7.5 15.7 L9.6 14.8 L7.7 10.7 L11.7 10.7 Z" fill="currentColor"/></svg><span class="lbl">Auswahl</span></button>
   <button class="tbtn" id="btnText" onclick="setMode('text')" title="Aufs Papier klicken und direkt tippen"><span style="font-weight:600">T</span><span class="lbl">Text</span></button>
+  <button class="tbtn" id="btnMark" onclick="setMode('mark')" title="Text aufziehen und markieren – Marker, Unterstreichen, Durchstreichen"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M1 15 L2.8 11 L12 1 L14 3.5 L4.8 13.4 Z M1 15 L3.5 14" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 14.5 L1.5 15 L1.8 13.4 Z" fill="currentColor"/></svg><span class="lbl">Markieren</span></button>
+  <button class="tbtn" id="btnDraw" onclick="setMode('draw')" title="Formen und Freihand zeichnen – Rechteck, Oval, Linie, Pfeil, Tinte"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M1.5 13.5 L10 3.5" stroke="currentColor" stroke-width="1.4" fill="none"/><path d="M8.5 2.5 L11.5 2 L11.8 5" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/><path d="M1 15.5 L1.8 13 L3.5 14.2 Z" fill="currentColor"/></svg><span class="lbl">Zeichnen</span></button>
   <button class="tbtn" id="btnDel" onclick="setMode('delete')" title="Original-Text entfernen"><span class="i">&#xE74D;</span><span class="lbl">Löschen</span></button>
   <button class="tbtn" id="undoBtn" onclick="undoLast()" title="Rückgängig (Strg+Z)" disabled><span class="i">&#xE7A7;</span><span class="lbl">Rückgängig</span></button>
-  <div class="sep"></div>
-  <div class="fmtbar" id="fmtBar" title="Schrift für neue und bearbeitete Texte">
+  <button class="tbtn" id="btnOcr" onclick="ocrDialogOeffnen()" title="Texterkennung (OCR) – durchsuchbarer Text für Scans" disabled><span class="i">&#xE8E6;</span><span class="lbl">OCR</span></button>
+  <button class="tbtn" id="btnAi" onclick="kiPanelUmschalten()" title="KI-Assistent – Chat, Zusammenfassen, Übersetzen (eigener API-Schlüssel)"><span class="i">&#xE945;</span><span class="lbl">KI</span></button>
+  <div class="sep" id="kontextSep" style="display:none"></div>
+  <div class="fmtbar" id="fmtBar" style="display:none" title="Schrift für neue und bearbeitete Texte">
     <select id="teFam">
       <option value="helv">Helvetica</option>
       <option value="tiro">Times</option>
@@ -375,6 +458,35 @@
     <input type="number" id="teSize" value="11" min="6" max="72" title="Schriftgröße (Mausrad darüber: ± 1)">
     <input type="number" id="teAbstand" value="0" step="0.25" min="-2" max="40" title="Zeichenabstand (Spacing) in Punkten – auch negativ; Mausrad darüber: ± 0,25">
     <input type="color" id="teColor" value="#000000" title="Textfarbe">
+  </div>
+  <div class="fmtbar" id="markBar" style="display:none" title="Stil für neue und ausgewählte Markierungen">
+    <select id="mkArt" title="Art der Markierung">
+      <option value="h">Marker</option>
+      <option value="u">Unterstrichen</option>
+      <option value="s">Durchgestrichen</option>
+      <option value="q">Wellenlinie</option>
+    </select>
+    <input type="color" id="mkFarbe" value="#ffd300" title="Farbe der Markierung">
+    <input type="number" id="mkDeckkraft" value="45" min="5" max="100" step="5" title="Deckkraft in % (Marker)">
+    <input type="number" id="mkStaerke" value="1" min="0.5" max="8" step="0.5" title="Strichstärke in pt (Unter-/Durchstreichen, Wellenlinie); Mausrad: ± 0,5">
+    <span class="lbl" style="color:var(--muted);font-size:11px">pt</span>
+  </div>
+  <div class="fmtbar" id="drawBar" style="display:none" title="Werkzeuge und Stil für Formen">
+    <div class="leistenbtns" id="drawTools">
+      <button class="tbtn active" id="dwRect" title="Rechteck"><span class="i">&#xE7A8;</span></button>
+      <button class="tbtn" id="dwOval" title="Oval / Kreis"><span class="i">&#xE7E9;</span></button>
+      <button class="tbtn" id="dwLine" title="Linie"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 13 L13 1" stroke="currentColor" stroke-width="1.6"/></svg></button>
+      <button class="tbtn" id="dwArrow" title="Pfeil"><svg width="15" height="14" viewBox="0 0 15 14"><path d="M1 13 L12 2 M12 2 L6 3 M12 2 L11 8" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button>
+      <button class="tbtn" id="dwInk" title="Tinte (freihand zeichnen)"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 11 C3 5, 5 12, 8 7 S 12 2, 13 3" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></button>
+      <button class="tbtn" id="dwErase" title="Radiergummi – Objekte anklicken zum Löschen"><span class="i">&#xE75C;</span></button>
+    </div>
+    <input type="number" id="dwBreite" value="2" min="0.5" max="12" step="0.5" title="Strichdicke in pt; Mausrad: ± 0,5">
+    <span class="lbl" style="color:var(--muted);font-size:11px">pt</span>
+    <input type="color" id="dwFarbe" value="#e0242f" title="Strichfarbe">
+    <input type="color" id="dwFuellung" value="#ffe680" title="Füllfarbe (nur Rechteck/Oval)">
+    <label class="chk" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)"><input type="checkbox" id="dwFuellt" checked title="Form füllen">Füllung</label>
+    <input type="number" id="dwDeckkraft" value="100" min="5" max="100" step="5" title="Deckkraft in %">
+    <span class="lbl" style="color:var(--muted);font-size:11px">%</span>
   </div>
   <div class="sep"></div>
   <div class="propsbar" id="propsBar" style="display:none">
@@ -427,9 +539,14 @@
       <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
       <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
       <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.<br>
-      <b>Löschen:</b> Signatur/Text anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
+      <b>Löschen:</b> Signatur/Text/Form anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
+      <b>Markieren:</b> Werkzeug „Markieren" wählen, Text aufziehen – Marker, Unterstreichen, Durchstreichen oder Wellenlinie; Farbe, Deckkraft und Stärke oben einstellen. Markierung anklicken und ziehen verschiebt sie.<br>
+      <b>Zeichnen:</b> Rechteck, Oval, Linie, Pfeil oder Tinte aufziehen bzw. malen – Strichdicke, Strich- und Füllfarbe oben. Radiergummi klickt Objekte weg. Ziehen am Anker unten rechts ändert die Größe.<br>
+      <b>OCR:</b> Knopf „OCR" – erkennt Text auf Scan-Seiten (Deutsch + Englisch) und bettet ihn unsichtbar ein: durchsuchbar, kopierbar, markierbar.<br>
+      <b>KI:</b> Knopf „KI" – Chat mit Dokument-Kontext, Zusammenfassen, Auswahl übersetzen. Eigener Anbieter und API-Schlüssel (Zahnrad im Panel), gespeichert nur lokal.<br>
+      <b>Schriften:</b> Im Text-Werkzeug stehen auch die im PDF eingebetteten Schriften zur Auswahl („Aus dem Dokument").<br>
       <b>Drehen:</b> runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.<br>
-      <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte fix werden sollen.<br>
+      <b>Einbrennen:</b> Beim Speichern wird gefragt, ob Signaturen/Texte/Formen fix werden sollen.<br>
       <b>Geschützte Signatur:</b> im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.<br>
       <b>Text:</b> Bereich mit gedrückter Maustaste aufziehen oder Punkt anklicken – direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe, Abstand oben änderbar). Beenden: Esc, Rechtsklick oder Klick neben das Feld. Kopfzeile: Griffe/Logo ziehen verschiebt das Fenster, Doppelklick max/min.<br>
       <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt. Danach ist der Text ein verschiebbares Objekt.<br>
@@ -473,8 +590,8 @@
 
 <div id="saveBox" class="miniBox">
   <div><b id="saveBoxTitle">Beim Speichern einbrennen?</b></div>
-  <p class="muted" style="margin:8px 0 0; line-height:1.5">Eingebrennt werden Signaturen und Texte fixer
-  Seiteninhalt – in keinem PDF-Programm mehr entfernbar oder verschiebbar. Formularfelder bleiben ausfüllbar.</p>
+  <p class="muted" style="margin:8px 0 0; line-height:1.5">Eingebrennt werden Signaturen, Texte, Formen und
+  Markierungen fixer Seiteninhalt – in keinem PDF-Programm mehr entfernbar oder verschiebbar. Formularfelder bleiben ausfüllbar.</p>
   <div class="row">
     <button id="saveBurn" class="prim">Einbrennen &amp; speichern</button>
     <button id="saveKeep">Beweglich speichern</button>
@@ -514,6 +631,78 @@
   <div class="row">
     <button id="sigUpOk" class="prim">Hochladen</button>
     <button id="sigUpCancel">Abbrechen</button>
+  </div>
+</div>
+
+<div id="ocrBox" class="miniBox" style="display:none; width:330px">
+  <div><b>Texterkennung (OCR)</b></div>
+  <p class="info muted" style="margin:8px 0 0">Erkennt Text auf Seiten ohne Textebene (Scans, Fotos) und bettet ihn
+  unsichtbar ein: durchsuchbar, kopierbar, markierbar. Vorhandener Text bleibt unangetastet.</p>
+  <select id="ocrLang">
+    <option value="deu+eng">Deutsch + Englisch</option>
+    <option value="deu">Deutsch</option>
+    <option value="eng">Englisch</option>
+  </select>
+  <div class="info" id="ocrInfo"></div>
+  <div class="fortschritt"><div id="ocrBalken"></div></div>
+  <div class="row">
+    <button id="ocrOk" class="prim">Starten</button>
+    <button id="ocrCancel">Abbrechen</button>
+    <button id="ocrClose" style="display:none">Schließen</button>
+  </div>
+</div>
+
+<div id="kiConfBox" class="miniBox" style="display:none">
+  <div><b>KI-Konfiguration</b></div>
+  <p class="khinweis">Aufgabe dem Modell zuordnen. Die Schlüssel liegen nur lokal in einstellungen.json.</p>
+  <div id="kiAufgaben" style="margin-top:8px"></div>
+  <div style="margin:10px 0 4px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px">Modelle</div>
+  <div id="kiModellListe"></div>
+  <div class="row">
+    <button id="kiAddOpen">Modell hinzufügen</button>
+    <button id="kiConfOk" class="prim">Fertig</button>
+  </div>
+</div>
+
+<div id="kiAddBox" class="miniBox" style="display:none">
+  <div><b>KI-Modell hinzufügen</b></div>
+  <select id="kiAnbieter"></select>
+  <input type="text" id="kiName" placeholder="Name (z. B. Arbeits-KI)">
+  <input type="text" id="kiUrl" placeholder="Basis-URL (https://…/v1)">
+  <input type="password" id="kiKey" placeholder="API-Schlüssel (leer bei Ollama)">
+  <div class="kzeile" style="margin-top:6px">
+    <select id="kiModell"><option value="">– Anbieter-Modell –</option></select>
+    <button class="akt" id="kiModelleLaden" title="Liste der Modelle vom Anbieter laden">Liste der Modelle aktualisieren</button>
+  </div>
+  <div class="khinweis" id="kiAddHinweis"></div>
+  <div class="row">
+    <button id="kiAddOk" class="prim">Hinzufügen</button>
+    <button id="kiAddCancel">Abbrechen</button>
+  </div>
+</div>
+
+<div id="kiPanel">
+  <div class="kikopf">
+    <span class="i" style="font-family:var(--icon)">&#xE945;</span><b>KI-Assistent</b>
+    <span class="spacer"></span>
+    <select id="kiChatModell" title="Modell für den Chat"></select>
+    <button class="tbtn" onclick="kiConfigOeffnen()" title="KI-Konfiguration (Modelle, Schlüssel, Aufgaben)"><span class="i">&#xE713;</span></button>
+    <button class="tbtn" onclick="kiPanelUmschalten()" title="Schließen"><span class="i">&#xE711;</span></button>
+  </div>
+  <div id="kiLog"><div class="kileer" id="kiLeer">Noch kein Modell eingerichtet.<br>„Einrichten" öffnet die Konfiguration – eigener Anbieter, eigener Schlüssel (BYOK).<br><button onclick="kiConfigOeffnen()">Einrichten</button></div></div>
+  <div class="kiaktionen">
+    <button id="kiZusammen" onclick="kiZusammenfassen()" title="Ganzes Dokument zusammenfassen">Zusammenfassen</button>
+    <button id="kiUebersetzen" onclick="kiAuswahlUebersetzen()" disabled title="Markierte Zeilen übersetzen (Alt+Ziehen auswählen)">Auswahl übersetzen</button>
+    <select id="kiZielSprache" title="Zielsprache für Übersetzungen" style="max-width:100px">
+      <option>Deutsch</option><option>Englisch</option><option>Französisch</option><option>Spanisch</option><option>Italienisch</option>
+    </select>
+    <label class="chk" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)" title="Gesamttext des Dokuments als Kontext mitschicken">
+      <input type="checkbox" id="kiKontext" checked>Dokument als Kontext
+    </label>
+  </div>
+  <div id="kiEingabe">
+    <textarea id="kiText" placeholder="Frage zum Dokument stellen… (Enter senden, Umschalt+Enter neue Zeile)"></textarea>
+    <button id="kiSenden" onclick="kiSenden()">Senden</button>
   </div>
 </div>
 
@@ -568,7 +757,7 @@ function movePill() {
   pill.style.transform = 'translateX(' + (r.left - hr.left) + 'px)';
 }
 window.addEventListener('resize', movePill);
-['btnNormal', 'btnText', 'btnDel'].forEach(id => {
+['btnNormal', 'btnText', 'btnMark', 'btnDraw', 'btnDel'].forEach(id => {
   const b = document.getElementById(id);
   if (b) new ResizeObserver(() => movePill()).observe(b);   // Beschriftung an/aus: Knöpfe schrumpfen -> Pill folgt
 });
@@ -591,20 +780,26 @@ function setPref(key, value) {
 }
 
 /* ---------- Modi ---------- */
+const MODUS_BTN = {text:'btnText', mark:'btnMark', draw:'btnDraw', delete:'btnDel'};
+let drawTool = 'rect';   // Unterauswahl im Zeichnen-Modus: rect/oval/line/arrow/ink/erase
+
 function setMode(m) {
   mode = (mode === m) ? 'normal' : m;
-  ['btnNormal','btnText','btnDel'].forEach(id => { const b = document.getElementById(id); if (b) b.classList.remove('active'); });
+  document.querySelectorAll('#topbar .tbtn.active').forEach(b => b.classList.remove('active'));
   document.getElementById('btnDelGo')?.remove();
-  const aktiv = document.getElementById('btn' + (mode === 'normal' ? 'Normal' : {text:'Text',delete:'Del'}[mode] || ''));
+  const aktiv = document.getElementById(mode === 'normal' ? 'btnNormal' : (MODUS_BTN[mode] || ''));
   if (aktiv) aktiv.classList.add('active');
   movePill();
   marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
+  drawVorEntfernen(); markVorEntfernen();
   document.querySelectorAll('.pagewrap').forEach(w => {
-    w.classList.remove('mode-sign','mode-text','mode-delete');
+    w.classList.remove('mode-sign','mode-text','mode-mark','mode-draw','mode-delete');
     if (mode !== 'normal') w.classList.add('mode-' + mode);
   });
   const tip = {normal:'', sign:'Klicke auf die Stelle, wo die Signatur hin soll.',
                text:'Klicke aufs Papier und tippe direkt dort.',
+               mark:'Text aufziehen (gedrückt halten) – Stil und Farbe oben einstellen.',
+               draw:'Form aufziehen bzw. Tinte zeichnen – Stil oben einstellen. Esc beendet.',
                delete:'Klicke die zu löschenden Zeilen an (rot), dann unten "Löschen ausführen".'}[mode];
   // Delete-Ausfuehren-Knopf dynamisch in Statusleiste
   document.getElementById('delGoWrap')?.remove();
@@ -615,7 +810,25 @@ function setMode(m) {
     b.onclick = deleteMarked;
     document.querySelector('footer').insertBefore(b, document.getElementById('statusMain'));
   }
+  kontextLeiste();
   if (tip) stat(tip, true);
+}
+
+/* Kontextleiste: genau EINE Werkzeuggleiste je Tool/Auswahl (Text/Markieren/
+   Zeichnen) - Auswahl schlaegt Modus. */
+function kontextLeiste() {
+  const sep = document.getElementById('kontextSep');
+  ['fmtBar','markBar','drawBar'].forEach(id => document.getElementById(id).style.display = 'none');
+  let welche = null;
+  if (selAnnot && selAnnot.div && selAnnot.div._annot) {
+    const t = selAnnot.div._annot.type;
+    welche = t === 'text' ? 'fmtBar' : t === 'markup' ? 'markBar' : t === 'shape' ? 'drawBar' : null;
+  } else if (mode === 'text' || inline || origEdit) welche = 'fmtBar';
+  else if (mode === 'mark') welche = 'markBar';
+  else if (mode === 'draw') welche = 'drawBar';
+  if (welche) { document.getElementById(welche).style.display = 'flex'; sep.style.display = ''; }
+  else sep.style.display = 'none';
+  requestAnimationFrame(fitToolbar);
 }
 function updateMarked() { const c = document.getElementById('markCount'); if (c) c.textContent = marked.length; }
 
@@ -626,6 +839,7 @@ function openDoc(info) {
   document.getElementById('saveBtn').disabled = false;
   ['saveAsBtn', 'prBtn'].forEach(id => document.getElementById(id).disabled = false);
   document.querySelectorAll('footer .sbtn').forEach(b => b.disabled = false);
+  document.getElementById('btnOcr').disabled = false;
   stat('Geöffnet: ' + info.name + ' (' + info.pages + ' Seiten)', true);
   const toc = document.getElementById('toc');
   if (!info.toc.length) { toc.textContent = 'Dieses Dokument hat keine Lesezeichen.'; toc.className='muted'; }
@@ -640,6 +854,7 @@ function openDoc(info) {
     }
   }
   loadFieldSummary();
+  ladeDocFonts();
   const v = document.getElementById('viewer');
   v.innerHTML = '';
   for (let n = 0; n < info.pages; n++) v.appendChild(makePageEl(n));
@@ -710,6 +925,8 @@ function kOfZoom() { return BASE_DPI * zoom / 72; }
 function reposition(el, k) {
   if (el._pdfRect) positionRect(el, el._pdfRect, k);
   if (el._fs != null) el.style.fontSize = (el.classList.contains('winput') ? Math.max(9, el._fs * k / 1.1) : el._fs * k) + 'px';
+  if (el._annot && (el._annot.type === 'shape' || el._annot.type === 'markup'))
+    shapeObjZeichnen(el, el._annot, k);   // Strichdicke/Quads/Innenleben skalieren mit
 }
 
 function resizeWrap(w) {
@@ -933,7 +1150,8 @@ async function addAnnots(img) {
   const wrap = img.parentElement;
   for (const a of list) {
     const d = document.createElement('div');
-    d.className = 'annot ' + (a.type === 'sign' ? 'imgobj' : 'txtobj');
+    d.className = 'annot ' + (a.type === 'sign' ? 'imgobj' : a.type === 'text' ? 'txtobj'
+                    : a.type === 'shape' ? 'shapeobj' : 'markupobj' + ' ' + (a.sub || 'h'));
     d.dataset.xref = a.xref; d.dataset.page = n;
     d._pdfRect = a.rect; d._annot = a;
     if (a.type === 'sign') {
@@ -949,8 +1167,10 @@ async function addAnnots(img) {
         lock.style.cssText += ';display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:18px;color:#666';
         d.appendChild(lock);
       }
+    } else if (a.type === 'shape' || a.type === 'markup') {
+      shapeObjZeichnen(d, a, k);
     } else {
-      const [ff, fw, fs] = FAM_PREFIX[a.font] || FAM_PREFIX.helv;
+      const [ff, fw, fs] = famCss(a.font);
       d.style.fontFamily = ff; d.style.fontWeight = fw; d.style.fontStyle = fs;
       d._fs = a.size;
       d.style.fontSize = (a.size * k) + 'px';
@@ -963,7 +1183,7 @@ async function addAnnots(img) {
     const rz = document.createElement('div'); rz.className = 'rz'; d.appendChild(rz);
     const ro = document.createElement('div'); ro.className = 'ro'; ro.textContent = '\u21BB';
     ro.title = 'Drehen – ziehen (Umschalt-Taste rastet auf 15°-Schritte)';
-    d.appendChild(ro);
+    if (a.type === 'sign') d.appendChild(ro);
     d.addEventListener('mousedown', (ev) => startDrag(ev, d, a, n, k, 'move'));
     rz.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startDrag(ev, d, a, n, k, 'resize'); });
     ro.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startRotate(ev, d, a, n, k); });
@@ -971,6 +1191,121 @@ async function addAnnots(img) {
     d.addEventListener('click', (ev) => { ev.stopPropagation(); selectAnnot({div: d}); });
     wrap.appendChild(d);
   }
+}
+
+/* ---------- Formen & Markierungen: Overlay zeichnen (auch live beim Ziehen) ---------- */
+const SVGNS = 'http://www.w3.org/2000/svg';
+function hexRgba(hex, anteil) {
+  const h = (hex || '#000000').replace('#', '');
+  const r = parseInt(h.substr(0,2),16), g = parseInt(h.substr(2,2),16), b = parseInt(h.substr(4,2),16);
+  return `rgba(${r},${g},${b},${anteil})`;
+}
+function famCss(fontAlias) {
+  if ((fontAlias || '').startsWith('doc~')) {
+    const xref = fontAlias.split('~')[1];
+    return [`'pwdoc-${xref}', Helvetica, Arial, sans-serif`, 'normal', 'normal'];
+  }
+  return FAM_PREFIX[fontAlias] || FAM_PREFIX.helv;
+}
+function shapeObjZeichnen(div, a, k, rectOpt) {
+  const r = rectOpt || a.rect;
+  const rw = r[2] - r[0], rh = r[3] - r[1];
+  positionRect(div, r, k);
+  div.querySelectorAll('.shapeinner').forEach(e => e.remove());
+  div.style.opacity = (a.deckkraft != null && a.deckkraft < 100) ? (a.deckkraft / 100) : '';
+  if (a.type === 'shape') {
+    const farbe = '#' + (a.farbe || '000000');
+    const fuelle = (a.fuellung && a.fuellung !== '0') ? '#' + a.fuellung : null;
+    if (a.sub === 'rect' || a.sub === 'oval') {
+      const inn = document.createElement('div');
+      inn.className = 'shapeinner';
+      inn.style.position = 'absolute'; inn.style.inset = '0';
+      inn.style.border = Math.max(1, a.breite * k) + 'px solid ' + farbe;
+      if (a.sub === 'oval') inn.style.borderRadius = '50%';
+      if (fuelle) inn.style.background = fuelle;
+      div.appendChild(inn);
+    } else {
+      const svg = document.createElementNS(SVGNS, 'svg');
+      svg.classList.add('shapeinner');
+      svg.setAttribute('viewBox', `0 0 ${Math.max(1, rw * k)} ${Math.max(1, rh * k)}`);
+      const pt = (p) => [ (p[0] - r[0]) * k, (p[1] - r[1]) * k ];
+      const dicke = Math.max(1, a.breite * k);
+      if ((a.sub === 'line' || a.sub === 'arrow') && a.punkte && a.punkte.length >= 2) {
+        const [x1, y1] = pt(a.punkte[0]), [x2, y2] = pt(a.punkte[1]);
+        const ln = document.createElementNS(SVGNS, 'line');
+        ln.setAttribute('x1', x1); ln.setAttribute('y1', y1);
+        ln.setAttribute('x2', x2); ln.setAttribute('y2', y2);
+        ln.setAttribute('stroke', farbe); ln.setAttribute('stroke-width', dicke);
+        svg.appendChild(ln);
+        if (a.sub === 'arrow') {
+          const win = Math.atan2(y2 - y1, x2 - x1), laenge = Math.max(7, dicke * 4);
+          const kopf = document.createElementNS(SVGNS, 'polygon');
+          const p1 = [x2 - laenge * Math.cos(win - 0.42), y2 - laenge * Math.sin(win - 0.42)];
+          const p2 = [x2 - laenge * Math.cos(win + 0.42), y2 - laenge * Math.sin(win + 0.42)];
+          kopf.setAttribute('points', `${x2},${y2} ${p1[0]},${p1[1]} ${p2[0]},${p2[1]}`);
+          kopf.setAttribute('fill', farbe);
+          svg.appendChild(kopf);
+        }
+      } else if (a.sub === 'ink' && a.punkte && a.punkte.length) {
+        for (const st of a.punkte) {
+          if (!st || st.length < 2) continue;
+          const pl = document.createElementNS(SVGNS, 'polyline');
+          pl.setAttribute('points', st.map(p => pt(p).join(',')).join(' '));
+          pl.setAttribute('fill', 'none');
+          pl.setAttribute('stroke', farbe);
+          pl.setAttribute('stroke-width', dicke);
+          pl.setAttribute('stroke-linecap', 'round');
+          pl.setAttribute('stroke-linejoin', 'round');
+          svg.appendChild(pl);
+        }
+      }
+      div.appendChild(svg);
+    }
+  } else if (a.type === 'markup' && a.quads) {
+    const farbe = '#' + (a.farbe || 'FFD300');
+    const staerke = Math.max(1, (a.staerke || 1) * k);
+    for (const q of a.quads) {
+      const qq = document.createElement('div');
+      qq.className = 'mkq shapeinner';
+      qq.style.left = ((q[0] - r[0]) * k) + 'px';
+      qq.style.top = ((q[1] - r[1]) * k) + 'px';
+      qq.style.width = Math.max(1, (q[2] - q[0]) * k) + 'px';
+      qq.style.height = Math.max(1, (q[3] - q[1]) * k) + 'px';
+      if (a.sub === 'h') {
+        qq.style.background = hexRgba(farbe, 1);   // Deckkraft traegt der Container (opacity)
+      } else if (a.sub === 'u') {
+        qq.style.borderBottom = staerke.toFixed(1) + 'px solid ' + farbe;
+      } else if (a.sub === 's') {
+        const lin = document.createElement('div');
+        lin.style.position = 'absolute'; lin.style.left = '0'; lin.style.right = '0';
+        lin.style.top = '50%'; lin.style.borderTop = staerke.toFixed(1) + 'px solid ' + farbe;
+        qq.appendChild(lin);
+      } else if (a.sub === 'q') {
+        const w = (q[2] - q[0]) * k, h = (q[3] - q[1]) * k;
+        const svg = document.createElementNS(SVGNS, 'svg');
+        svg.setAttribute('viewBox', `0 0 ${Math.max(1, w)} ${Math.max(1, h)}`);
+        svg.style.position = 'absolute'; svg.style.inset = '0';
+        const pfad = document.createElementNS(SVGNS, 'path');
+        let px = 0, py = h - Math.min(3, h * 0.3), d = `M 0 ${py}`;
+        let i = 0;
+        while (px < w) { px += Math.max(3, w / 24); py += (i % 2 === 0 ? -1 : 1) * Math.min(2.5, h * 0.3); d += ` L ${px.toFixed(1)} ${py.toFixed(1)}`; i++; }
+        pfad.setAttribute('d', d);
+        pfad.setAttribute('fill', 'none');
+        pfad.setAttribute('stroke', farbe);
+        pfad.setAttribute('stroke-width', staerke.toFixed(1));
+        svg.appendChild(pfad);
+        qq.appendChild(svg);
+      }
+      div.appendChild(qq);
+    }
+  }
+}
+const TYP_NAME = {sign:'Signatur', text:'Text', shape:{rect:'Rechteck', oval:'Oval', line:'Linie', arrow:'Pfeil', ink:'Tinte'},
+                  markup:{h:'Marker', u:'Unterstrichen', s:'Durchgestrichen', q:'Wellenlinie'}};
+function annotTypName(a) {
+  if (!a) return 'Objekt';
+  if (a.type === 'shape' || a.type === 'markup') return (TYP_NAME[a.type] && TYP_NAME[a.type][a.sub]) || 'Objekt';
+  return TYP_NAME[a.type] || 'Objekt';
 }
 function selectAnnot(sel) {
   if (selAnnot && selAnnot.div) selAnnot.div.classList.remove('sel');
@@ -980,7 +1315,7 @@ function selectAnnot(sel) {
     sel.div.classList.add('sel');
     const r = sel.div._annot.rect;
     const isSign = sel.div._annot.type === 'sign';
-    document.getElementById('prTyp').textContent = isSign ? 'Signatur' : 'Text';
+    document.getElementById('prTyp').textContent = annotTypName(sel.div._annot);
     document.getElementById('prX').value = Math.round(r[0]);
     document.getElementById('prY').value = Math.round(r[1]);
     document.getElementById('prW').value = Math.round(r[2] - r[0]);
@@ -992,6 +1327,7 @@ function selectAnnot(sel) {
   } else {
     bar.style.display = 'none';
   }
+  kontextLeiste();
 }
 function syncProps() {
   if (selAnnot && selAnnot.div && selAnnot.div._annot) {
@@ -1017,15 +1353,71 @@ async function applyProps() {
   const rect = [x, y, x + w, y + h];
   const fd = new FormData();
   fd.append('page', selAnnot.page); fd.append('xref', a.xref);
+  const istForm = a.type === 'shape' || a.type === 'markup';
+  let url = '/api/annot/move/' + cur.id;
+  if (istForm) {
+    url = '/api/annot/shapemove/' + cur.id;
+    fd.append('alt', JSON.stringify(a.rect.map(v => Math.round(v * 10) / 10)));
+  }
   fd.append('rect', JSON.stringify(rect.map(v => Math.round(v * 10) / 10)));
-  const r = await fetch('/api/annot/move/' + cur.id, {method: 'POST', body: fd});
+  if (istForm) fd.append('neu', JSON.stringify(rect.map(v => Math.round(v * 10) / 10)));
+  const r = await fetch(url, {method: 'POST', body: fd});
   if (r.ok) {
     a.rect = rect; selAnnot.div._pdfRect = rect;
-    positionRect(selAnnot.div, rect, k);
+    if (istForm) shapeObjZeichnen(selAnnot.div, a, k);
+    else positionRect(selAnnot.div, rect, k);
     setDirty(true); stat('Position/Größe gesetzt – Speichern macht es dauerhaft.', true);
   } else stat('Fehler beim Setzen');
 }
 ['prX','prY','prW','prH'].forEach(id => document.getElementById(id).addEventListener('change', applyProps));
+
+/* Werkzeugleisten-Aenderungen sofort auf die SELEKTIERTE Form/Markierung
+   anwenden (wie beim Text: Objekt anklicken, Stil oben aendern). */
+let stilTimer = null;
+function stilAufSelektion() {
+  if (!selAnnot || !selAnnot.div || !selAnnot.div._annot) return;
+  const a = selAnnot.div._annot;
+  if (a.type !== 'shape' && a.type !== 'markup') return;
+  clearTimeout(stilTimer);
+  stilTimer = setTimeout(async () => {
+    const fd = new FormData();
+    fd.append('page', selAnnot.div.dataset.page);
+    fd.append('xref', a.xref);
+    if (a.type === 'markup') {
+      fd.append('farbe', document.getElementById('mkFarbe').value.slice(1).toUpperCase());
+      fd.append('deckkraft', document.getElementById('mkDeckkraft').value || '45');
+      fd.append('staerke', document.getElementById('mkStaerke').value || '1');
+    } else {
+      fd.append('breite', document.getElementById('dwBreite').value || '2');
+      fd.append('farbe', document.getElementById('dwFarbe').value.slice(1).toUpperCase());
+      fd.append('deckkraft', document.getElementById('dwDeckkraft').value || '100');
+      fd.append('fuellung', document.getElementById('dwFuellt').checked
+                ? document.getElementById('dwFuellung').value.slice(1).toUpperCase() : '0');
+    }
+    const r = await fetch('/api/annot/style/' + cur.id, {method: 'POST', body: fd});
+    if (r.ok) {
+      setDirty(true);
+      if (a.type === 'markup') {
+        a.farbe = fd.get('farbe'); a.deckkraft = parseFloat(fd.get('deckkraft')); a.staerke = parseFloat(fd.get('staerke'));
+      } else {
+        a.breite = parseFloat(fd.get('breite')); a.farbe = fd.get('farbe');
+        a.deckkraft = parseFloat(fd.get('deckkraft')); a.fuellung = fd.get('fuellung');
+      }
+      const img = document.querySelector('#page' + selAnnot.div.dataset.page + ' img');
+      shapeObjZeichnen(selAnnot.div, a, img ? parseFloat(img.dataset.k) : 1);
+      stat('Stil geändert – Strg+Z stellt den alten Stil wieder her.', true);
+    } else stat('Stil-Änderung fehlgeschlagen');
+  }, 300);
+}
+['mkArt','mkFarbe','mkDeckkraft','mkStaerke','dwBreite','dwFarbe','dwFuellung','dwFuellt','dwDeckkraft']
+  .forEach(id => document.getElementById(id).addEventListener('change', stilAufSelektion));
+/* Unter-/Durchstreichen ohne Deckkraft-Sinn, Marker ohne Staerke: Felder deaktivieren */
+function markFelderSchaerfen() {
+  const art = document.getElementById('mkArt').value;
+  document.getElementById('mkDeckkraft').disabled = art !== 'h';
+  document.getElementById('mkStaerke').disabled = art === 'h';
+}
+document.getElementById('mkArt').addEventListener('change', markFelderSchaerfen);
 document.getElementById('prRot').addEventListener('change', (ev) => {
   const ziel = parseFloat(ev.target.value);
   if (selAnnot && selAnnot.div) rotateAnnotTo(selAnnot.div, ziel);
@@ -1077,6 +1469,8 @@ document.addEventListener('contextmenu', (ev) => {
     eintrag('Drehen (90°)', '&#xE7A8;', () => rotateAnnot(div));
   if (div._annot.type === 'text')
     eintrag('Bearbeiten', '&#xE70F;', () => startInlineEdit(pageN, null, null, div._annot));
+  if (div._annot.type === 'markup' || div._annot.type === 'shape')
+    eintrag('Stil oben ändern', '&#xE790;', () => { selectAnnot({div}); stat('Stil in der Werkzeugleiste oben einstellen.', true); });
   eintrag('Löschen', '&#xE74D;', () => deleteAnnot(div), true);
   ctxMenu.style.display = 'block';
   const r = ctxMenu.getBoundingClientRect();
@@ -1090,11 +1484,11 @@ async function deleteAnnot(div) {
   fd.append('page', pageN); fd.append('xref', div.dataset.xref);
   const r = await fetch('/api/annot/delete/' + cur.id, {method:'POST', body: fd});
   if (r.ok) {
-    const isSign = div._annot.type === 'sign';
+    const name = annotTypName(div._annot);
     selectAnnot(null); setDirty(true);
     div.classList.add('fade-out');               // erst ausblenden ...
     setTimeout(async () => { await reloadAnnots(pageN); }, 170);   // ... dann Overlays neu bauen
-    stat((isSign ? 'Signatur' : 'Text') + ' gelöscht – Strg+Z holt es zurück.', true);
+    stat(name + ' gelöscht – Strg+Z holt es zurück.', true);
   } else stat('Löschen fehlgeschlagen');
 }
 async function rotateAnnot(div) {
@@ -1190,11 +1584,19 @@ document.addEventListener('mousemove', (ev) => {
   const r = drag.rect.slice();
   if (drag.kind === 'move') { r[0]+=dx; r[1]+=dy; r[2]+=dx; r[3]+=dy; }
   else {
-    const nw = Math.max(20, (r[2]-r[0]) + dx);
-    r[2] = r[0] + nw; r[3] = r[1] + nw * drag.aspect;
+    if (drag.a && drag.a.type === 'sign') {   // Signatur: Seitenverhaeltnis halten
+      const nw = Math.max(20, (r[2]-r[0]) + dx);
+      r[2] = r[0] + nw; r[3] = r[1] + nw * drag.aspect;
+    } else {                                  // Text/Form/Markierung: frei skalierbar
+      r[2] = Math.max(r[0] + 10, r[2] + dx);
+      r[3] = Math.max(r[1] + 10, r[3] + dy);
+    }
   }
   drag.newRect = r;
-  positionRect(drag.div, r, drag.k);
+  if (drag.a && (drag.a.type === 'shape' || drag.a.type === 'markup'))
+    shapeObjZeichnen(drag.div, drag.a, drag.k, r);   // Punkte/Quads live mitskalieren
+  else
+    positionRect(drag.div, r, drag.k);
 });
 document.addEventListener('mouseup', async () => {
   if (!drag) return;
@@ -1221,15 +1623,27 @@ document.addEventListener('mouseup', async () => {
     return;
   }
   if (!drag.newRect) { drag = null; return; }
+  const istForm = drag.a && (drag.a.type === 'shape' || drag.a.type === 'markup');
   const fd = new FormData();
   fd.append('page', drag.page); fd.append('xref', drag.xref);
-  fd.append('rect', JSON.stringify(drag.newRect.map(v => Math.round(v*10)/10)));
-  const r = await fetch('/api/annot/move/' + cur.id, {method:'POST', body: fd});
+  let url = '/api/annot/move/' + cur.id;
+  if (istForm) {
+    url = '/api/annot/shapemove/' + cur.id;
+    fd.append('alt', JSON.stringify(drag.rect.map(v => Math.round(v*10)/10)));
+    fd.append('neu', JSON.stringify(drag.newRect.map(v => Math.round(v*10)/10)));
+  } else {
+    fd.append('rect', JSON.stringify(drag.newRect.map(v => Math.round(v*10)/10)));
+  }
+  const r = await fetch(url, {method: 'POST', body: fd});
   if (r.ok) {
     if (drag.a) drag.a.rect = drag.newRect;          // Objektdaten aktuell halten (Fix: Sprung zur Alt-Position)
     drag.div._pdfRect = drag.newRect;
     setDirty(true); stat('Geändert – Speichern macht es dauerhaft.', true);
     syncProps();
+  } else {
+    if (istForm) shapeObjZeichnen(drag.div, drag.a, drag.k);   // zurueck auf den alten Zustand
+    else positionRect(drag.div, drag.rect, drag.k);
+    stat('Verschieben fehlgeschlagen');
   }
   drag = null;
 });
@@ -1239,11 +1653,38 @@ let inline = null;   // {xref, page, ta, delBtn, rect}
 
 function currentFontAlias() {
   // Familie + Stil zu gueltigem 4-Zeichen-Alias zusammenbauen (konsistent mit
-  // FONTS/FAM_PREFIX: helv, hebo, heit, hebi, tiro, tibo ... cour, coit, cobi)
-  const f = document.getElementById('teFam').value;
-  const base = ({ helv: 'he', tiro: 'ti', cour: 'co' })[f] || 'he';
+  // FONTS/FAM_PREFIX: helv, hebo, heit, hebi, tiro, tibo ... cour, coit, cobi).
+  // Eingebettete Dokument-Schriften ('doc~xref~Name') wandern 1:1 zum Server.
+  const fam = document.getElementById('teFam').value;
+  if (fam.startsWith('doc~')) return fam;
+  const base = ({ helv: 'he', tiro: 'ti', cour: 'co' })[fam] || 'he';
   const suffix = ({ '': '', b: 'bo', i: 'it', bi: 'bi' })[document.getElementById('teStil').value] || '';
-  return suffix ? base + suffix : f;
+  return suffix ? base + suffix : fam;
+}
+
+/* ---------- Eingebettete Schriften des Dokuments als Auswahl ---------- */
+let docFonts = [];
+async function ladeDocFonts() {
+  const sel = document.getElementById('teFam');
+  sel.querySelectorAll('optgroup').forEach(g => g.remove());
+  if (!cur) { docFonts = []; return; }
+  try { docFonts = await (await fetch('/api/fonts/' + cur.id)).json(); }
+  catch (e) { docFonts = []; return; }
+  const nutzbar = docFonts.filter(f => f.nutzbar);
+  if (!nutzbar.length) return;
+  const gr = document.createElement('optgroup');
+  gr.label = 'Aus dem Dokument';
+  for (const f of nutzbar) {
+    const o = document.createElement('option');
+    o.value = `doc~${f.xref}~${f.basefont}`;
+    o.textContent = f.name + (f.subset ? ' (Teilmenge)' : '');
+    gr.appendChild(o);
+    if (!document.fonts.check('12px pwdoc-' + f.xref)) {
+      const ff = new FontFace('pwdoc-' + f.xref, `/api/font/file/${cur.id}/${f.xref}`);
+      ff.load().then(geladen => document.fonts.add(geladen)).catch(() => {});
+    }
+  }
+  sel.appendChild(gr);
 }
 
 /* Mausrad ueber Groesse/Abstand: Werte aendern, ohne das Feld anzuklicken */
@@ -1264,7 +1705,7 @@ function currentFontAlias() {
 
 function applyFormatTo(ta, sizePt) {
   const k = parseFloat(ta.dataset.k) || 1;
-  const [ff, fw, fs] = FAM_PREFIX[currentFontAlias()] || FAM_PREFIX.helv;
+  const [ff, fw, fs] = famCss(currentFontAlias());
   ta.style.fontFamily = ff; ta.style.fontWeight = fw; ta.style.fontStyle = fs;
   ta.style.fontSize = (sizePt * k) + 'px';
   ta.style.letterSpacing = ((parseFloat(document.getElementById('teAbstand').value) || 0) * k) + 'px';
@@ -1322,12 +1763,18 @@ function startInlineEdit(pageN, pdfX, pdfY, existing, vorgabe) {
   ta.spellcheck = false;
   // Toolbar auf vorhandene Eigenschaften stellen
   if (existing) {
-    const fsMap = { helv: ['helv', ''], hebo: ['helv', 'b'], heit: ['helv', 'i'], hebi: ['helv', 'bi'],
-                    tiro: ['tiro', ''], tibo: ['tiro', 'b'], tiit: ['tiro', 'i'], tibi: ['tiro', 'bi'],
-                    cour: ['cour', ''], cobo: ['cour', 'b'], coit: ['cour', 'i'], cobi: ['cour', 'bi'] };
-    const [famOpt, stilOpt] = fsMap[(existing.font || 'helv').slice(0, 4)] || ['helv', ''];
-    document.getElementById('teFam').value = famOpt;
-    document.getElementById('teStil').value = stilOpt;
+    const vorhandene = existing.font || 'helv';
+    if (vorhandene.startsWith('doc~')) {
+      document.getElementById('teFam').value = vorhandene;   // Dokument-Schrift direkt waehlen
+      document.getElementById('teStil').value = '';
+    } else {
+      const fsMap = { helv: ['helv', ''], hebo: ['helv', 'b'], heit: ['helv', 'i'], hebi: ['helv', 'bi'],
+                      tiro: ['tiro', ''], tibo: ['tiro', 'b'], tiit: ['tiro', 'i'], tibi: ['tiro', 'bi'],
+                      cour: ['cour', ''], cobo: ['cour', 'b'], coit: ['cour', 'i'], cobi: ['cour', 'bi'] };
+      const [famOpt, stilOpt] = fsMap[vorhandene.slice(0, 4)] || ['helv', ''];
+      document.getElementById('teFam').value = famOpt;
+      document.getElementById('teStil').value = stilOpt;
+    }
     document.getElementById('teSize').value = Math.round(existing.size || 11);
     document.getElementById('teAbstand').value = (existing.spacing || 0);
     const c = existing.color || [0, 0, 0];
@@ -1375,12 +1822,14 @@ function startInlineEdit(pageN, pdfX, pdfY, existing, vorgabe) {
   ta.focus();
   if (existing) ta.select();
   autoGrow();
+  kontextLeiste();   // Schrifteleiste zeigen, solange getippt wird
 }
 function teardownInline() {
   if (!inline) return;
   inline.ta.remove();
   if (inline.delBtn) inline.delBtn.remove();
   inline = null;
+  kontextLeiste();
 }
 function cancelInline() { teardownInline(); }
 async function commitInline(keepMode) {
@@ -1535,6 +1984,7 @@ async function startOriginalEdit(pageN, lineDivs) {
   ta.focus();
   ta.select();
   autoGrow();
+  kontextLeiste();
 }
 function originalEditForm(pageN, rect, text) {
   const fd = new FormData();
@@ -1562,6 +2012,7 @@ function teardownOriginalEdit() {
   origEdit.ta.remove();
   origEdit.delBtn.remove();
   origEdit = null;
+  kontextLeiste();
 }
 function cancelOriginalEdit() { teardownOriginalEdit(); }
 async function commitOriginalEdit() {
@@ -2477,7 +2928,10 @@ function textRectStart(ev, img, n) {
    stattdessen die Freihand-Textauswahl aufgezogen. Ein stiller Klick bleibt
    Kopieren (Zeile anklicken) bzw. Doppelklick Editieren. */
 function paperDragStart(ev, img) {
-  if (mode !== 'normal' || ev.button !== 0) return;
+  if (ev.button !== 0) return;
+  if (mode === 'mark') { markDragStart(ev, img); return; }
+  if (mode === 'draw') { if (drawTool !== 'erase') drawDragStart(ev, img); return; }
+  if (mode !== 'normal') return;
   clearFreeSel();
   if (ev.altKey) {
     selDrag = {n: parseInt(img.dataset.page), img, startX: ev.clientX, startY: ev.clientY,
@@ -2489,11 +2943,247 @@ function paperDragStart(ev, img) {
   }
 }
 
+/* ---------- Markieren: Auswahl aufziehen -> Markierung setzen ---------- */
+let markDrag = null;
+function markVorEntfernen() { document.querySelectorAll('.markvor').forEach(e => e.remove()); markDrag = null; }
+function markDragStart(ev, img) {
+  const k = parseFloat(img.dataset.k);
+  if (!k || !isFinite(k)) return;
+  ev.preventDefault();
+  const wr = img.getBoundingClientRect();
+  markDrag = {n: parseInt(img.dataset.page), img, k, x0: ev.clientX - wr.left, y0: ev.clientY - wr.top,
+              x1: ev.clientX - wr.left, y1: ev.clientY - wr.top, div: null};
+}
+function markDragBewegen(ev) {
+  const wr = markDrag.img.getBoundingClientRect();
+  markDrag.x1 = Math.max(0, Math.min(wr.width, ev.clientX - wr.left));
+  markDrag.y1 = Math.max(0, Math.min(wr.height, ev.clientY - wr.top));
+  if (!markDrag.div) {
+    markDrag.div = document.createElement('div');
+    markDrag.div.className = 'markvor';
+    markDrag.img.parentElement.appendChild(markDrag.div);
+  }
+  markDrag.div.style.left = Math.min(markDrag.x0, markDrag.x1) + 'px';
+  markDrag.div.style.top = Math.min(markDrag.y0, markDrag.y1) + 'px';
+  markDrag.div.style.width = Math.abs(markDrag.x1 - markDrag.x0) + 'px';
+  markDrag.div.style.height = Math.abs(markDrag.y1 - markDrag.y0) + 'px';
+}
+async function markDragLoslassen() {
+  const md = markDrag;
+  markVorEntfernen();
+  // Ein waagerechter Zug entlang einer Textzeile (Hoehe ~0) ist die NATUERLICHE
+  // Geste zum Markieren - nur abweisen, wenn der Zug weder Breite noch Hoehe hat.
+  if (!md || (Math.abs(md.x1 - md.x0) < 4 && Math.abs(md.y1 - md.y0) < 4)) return;
+  const rx = Math.min(md.x0, md.x1) / md.k, ry = Math.min(md.y0, md.y1) / md.k;
+  const rw = Math.abs(md.x1 - md.x0) / md.k, rh = Math.abs(md.y1 - md.y0) / md.k;
+  let quads = [];
+  let text = '';
+  try {
+    const j = await (await fetch(`/api/textquads/${cur.id}/${md.n}?x0=${rx.toFixed(1)}&y0=${ry.toFixed(1)}&x1=${(rx+rw).toFixed(1)}&y1=${(ry+rh).toFixed(1)}`)).json();
+    quads = j.quads || []; text = j.text || '';
+  } catch (e) {}
+  if (!quads.length) quads = [[rx, ry, rx + rw, ry + rh]];   // kein Text (Scan): Auswahl als Flaeche
+  const fd = new FormData();
+  fd.append('page', md.n);
+  fd.append('art', document.getElementById('mkArt').value);
+  fd.append('quads', JSON.stringify(quads.map(q => q.map(v => Math.round(v * 10) / 10))));
+  fd.append('farbe', document.getElementById('mkFarbe').value.slice(1).toUpperCase());
+  fd.append('deckkraft', document.getElementById('mkDeckkraft').value || '45');
+  fd.append('staerke', document.getElementById('mkStaerke').value || '1');
+  const r = await fetch('/api/annot/markup/' + cur.id, {method: 'POST', body: fd});
+  if (r.ok) {
+    setDirty(true);
+    await reloadAnnots(md.n);
+    stat(text ? ('Markiert: ' + text.slice(0, 60)) : 'Bereich markiert (kein Text darunter – Scan).', true);
+  } else stat('Markieren fehlgeschlagen');
+}
+
+/* ---------- Zeichnen: Formen aufziehen, Tinte malen, Radiergummi ---------- */
+let drawDrag = null;
+const DRAW_BTN = {rect:'dwRect', oval:'dwOval', line:'dwLine', arrow:'dwArrow', ink:'dwInk', erase:'dwErase'};
+function drawVorEntfernen() { document.querySelectorAll('.drawvor').forEach(e => e.remove()); drawDrag = null; }
+function setDrawTool(t) {
+  drawTool = t;
+  Object.entries(DRAW_BTN).forEach(([key, id]) =>
+    document.getElementById(id)?.classList.toggle('active', key === t));
+  setPref('drawTool', t);
+  if (mode === 'draw')
+    stat(t === 'erase' ? 'Radiergummi: Objekte anklicken, um sie zu löschen.'
+     : {rect:'Rechteck aufziehen.', oval:'Oval aufziehen.', line:'Linie ziehen.',
+        arrow:'Pfeil ziehen.', ink:'Freihand zeichnen (Maustaste halten).'}[t], true);
+}
+Object.keys(DRAW_BTN).forEach(t =>
+  document.getElementById(DRAW_BTN[t])?.addEventListener('click', () => setDrawTool(t)));
+document.getElementById('dwBreite').addEventListener('wheel', (ev) => {
+  ev.preventDefault();
+  const el = document.getElementById('dwBreite');
+  const neu = Math.max(0.5, Math.min(12, (parseFloat(el.value) || 2) + (ev.deltaY < 0 ? 0.5 : -0.5)));
+  if (neu === parseFloat(el.value)) return;
+  el.value = neu;
+  el.dispatchEvent(new Event('change', {bubbles: true}));
+}, {passive: false});
+document.getElementById('mkStaerke').addEventListener('wheel', (ev) => {
+  ev.preventDefault();
+  const el = document.getElementById('mkStaerke');
+  const neu = Math.max(0.5, Math.min(8, (parseFloat(el.value) || 1) + (ev.deltaY < 0 ? 0.5 : -0.5)));
+  if (neu === parseFloat(el.value)) return;
+  el.value = neu;
+  el.dispatchEvent(new Event('change', {bubbles: true}));
+}, {passive: false});
+
+function drawDragStart(ev, img) {
+  const k = parseFloat(img.dataset.k);
+  if (!k || !isFinite(k)) return;
+  ev.preventDefault();
+  const wr = img.getBoundingClientRect();
+  drawDrag = {tool: drawTool, n: parseInt(img.dataset.page), img, k,
+              x0: ev.clientX - wr.left, y0: ev.clientY - wr.top,
+              x1: ev.clientX - wr.left, y1: ev.clientY - wr.top, div: null, punkte: []};
+}
+function drawDragBewegen(ev) {
+  const wr = drawDrag.img.getBoundingClientRect();
+  drawDrag.x1 = Math.max(0, Math.min(wr.width, ev.clientX - wr.left));
+  drawDrag.y1 = Math.max(0, Math.min(wr.height, ev.clientY - wr.top));
+  if (drawDrag.tool === 'ink') {
+    const px = drawDrag.x1 / drawDrag.k, py = drawDrag.y1 / drawDrag.k;
+    const letzte = drawDrag.punkte[drawDrag.punkte.length - 1];
+    if (!letzte || Math.hypot(letzte[0] - px, letzte[1] - py) > 1.2) drawDrag.punkte.push([px, py]);
+  }
+  drawVorZeichnen();
+}
+function drawVorZeichnen() {
+  if (!drawDrag.div) {
+    drawDrag.div = document.createElement('div');
+    drawDrag.div.className = 'drawvor';
+    drawDrag.img.parentElement.appendChild(drawDrag.div);
+  }
+  const farbe = document.getElementById('dwFarbe').value;
+  const dicke = Math.max(1, (parseFloat(document.getElementById('dwBreite').value) || 2) * drawDrag.k);
+  const x = Math.min(drawDrag.x0, drawDrag.x1), y = Math.min(drawDrag.y0, drawDrag.y1);
+  const w = Math.abs(drawDrag.x1 - drawDrag.x0), h = Math.abs(drawDrag.y1 - drawDrag.y0);
+  drawDrag.div.style.left = x + 'px'; drawDrag.div.style.top = y + 'px';
+  drawDrag.div.style.width = Math.max(2, w) + 'px'; drawDrag.div.style.height = Math.max(2, h) + 'px';
+  drawDrag.div.style.borderColor = farbe;
+  drawDrag.div.style.borderRadius = drawDrag.tool === 'oval' ? '50%' : '2px';
+  drawDrag.div.style.background = (drawDrag.tool === 'rect' || drawDrag.tool === 'oval') &&
+    document.getElementById('dwFuellt').checked ? document.getElementById('dwFuellung').value + '55' : 'transparent';
+  let svg = drawDrag.div.querySelector('svg');
+  const brauchSvg = drawDrag.tool === 'line' || drawDrag.tool === 'arrow' || drawDrag.tool === 'ink';
+  if (svg) svg.remove();
+  if (!brauchSvg) return;
+  svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${Math.max(2, w)} ${Math.max(2, h)}`);
+  const pt = (px, py) => [px * drawDrag.k - x, py * drawDrag.k - y];
+  if (drawDrag.tool === 'ink' && drawDrag.punkte.length > 1) {
+    const pl = document.createElementNS(SVGNS, 'polyline');
+    pl.setAttribute('points', drawDrag.punkte.map(p => pt(p[0], p[1]).map(v => v.toFixed(1)).join(',')).join(' '));
+    pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', farbe);
+    pl.setAttribute('stroke-width', dicke); pl.setAttribute('stroke-linecap', 'round');
+    pl.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(pl);
+  } else if (drawDrag.tool === 'line' || drawDrag.tool === 'arrow') {
+    const p1 = pt(drawDrag.x0 / drawDrag.k, drawDrag.y0 / drawDrag.k);
+    const p2 = pt(drawDrag.x1 / drawDrag.k, drawDrag.y1 / drawDrag.k);
+    const ln = document.createElementNS(SVGNS, 'line');
+    ln.setAttribute('x1', p1[0]); ln.setAttribute('y1', p1[1]);
+    ln.setAttribute('x2', p2[0]); ln.setAttribute('y2', p2[1]);
+    ln.setAttribute('stroke', farbe); ln.setAttribute('stroke-width', dicke);
+    svg.appendChild(ln);
+    if (drawDrag.tool === 'arrow') {
+      const win = Math.atan2(p2[1] - p1[1], p2[0] - p1[0]), laenge = Math.max(7, dicke * 4);
+      const kopf = document.createElementNS(SVGNS, 'polygon');
+      kopf.setAttribute('points', `${p2[0]},${p2[1]} ` +
+        `${p2[0] - laenge * Math.cos(win - 0.42)},${p2[1] - laenge * Math.sin(win - 0.42)} ` +
+        `${p2[0] - laenge * Math.cos(win + 0.42)},${p2[1] - laenge * Math.sin(win + 0.42)}`);
+      kopf.setAttribute('fill', farbe);
+      svg.appendChild(kopf);
+    }
+  }
+  drawDrag.div.appendChild(svg);
+}
+async function drawDragLoslassen() {
+  const dd = drawDrag;
+  drawVorEntfernen();
+  if (!dd) return;
+  const fd = new FormData();
+  fd.append('page', dd.n);
+  fd.append('typ', dd.tool);
+  fd.append('breite', document.getElementById('dwBreite').value || '2');
+  fd.append('farbe', document.getElementById('dwFarbe').value.slice(1).toUpperCase());
+  fd.append('deckkraft', document.getElementById('dwDeckkraft').value || '100');
+  fd.append('fuellung', document.getElementById('dwFuellt').checked
+            ? document.getElementById('dwFuellung').value.slice(1).toUpperCase() : '0');
+  if (dd.tool === 'ink') {
+    if (dd.punkte.length < 2) return;
+    fd.append('punkte', JSON.stringify([dd.punkte.map(p => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10])]));
+    fd.append('rect', JSON.stringify([0, 0, 0, 0]));
+  } else {
+    const x0 = Math.min(dd.x0, dd.x1) / dd.k, y0 = Math.min(dd.y0, dd.y1) / dd.k;
+    const w = Math.abs(dd.x1 - dd.x0) / dd.k, h = Math.abs(dd.y1 - dd.y0) / dd.k;
+    if ((dd.tool === 'rect' || dd.tool === 'oval') && (w < 5 || h < 5)) return;   // stiller Klick
+    if ((dd.tool === 'line' || dd.tool === 'arrow') && w + h < 6) return;
+    if (dd.tool === 'line' || dd.tool === 'arrow')
+      fd.append('punkte', JSON.stringify([[dd.x0 / dd.k, dd.y0 / dd.k], [dd.x1 / dd.k, dd.y1 / dd.k]]
+        .map(p => p.map(v => Math.round(v * 10) / 10))));
+    fd.append('rect', JSON.stringify([x0, y0, x0 + w, y0 + h].map(v => Math.round(v * 10) / 10)));
+  }
+  const r = await fetch('/api/annot/shape/' + cur.id, {method: 'POST', body: fd});
+  if (r.ok) {
+    setDirty(true);
+    await reloadAnnots(dd.n);
+    stat(TYP_NAME.shape[dd.tool] + ' gesetzt – Strg+Z macht es rückgängig.', true);
+  } else stat('Zeichnen fehlgeschlagen');
+}
+
+/* Radiergummi: Objekt unter dem Zeiger markieren, Klick loescht.
+   elementFromPoint hilft nicht - im Zeichen-Modus sind Annotationen per
+   pointer-events:none geschaltet (auch fuer elementFromPoint unsichtbar) -
+   deshalb Treffertest ueber die Bounding-Rects der Overlay-Divs. */
+function eraserZiel(x, y) {
+  let ziel = null;
+  document.querySelectorAll('.annot.shapeobj, .annot.markupobj').forEach(e => {
+    if (!e._annot) return;
+    const r = e.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) ziel = e;   // letzter Treffer = oben
+  });
+  return ziel;
+}
+let eraserZuletzt = 0;
+document.addEventListener('mousemove', (ev) => {
+  if (mode !== 'draw' || drawTool !== 'erase') {
+    document.querySelectorAll('.annot.eraserhover').forEach(e => e.classList.remove('eraserhover'));
+    return;
+  }
+  const ziel = eraserZiel(ev.clientX, ev.clientY);
+  document.querySelectorAll('.annot.eraserhover').forEach(e => { if (e !== ziel) e.classList.remove('eraserhover'); });
+  if (ziel) ziel.classList.add('eraserhover');
+});
+document.getElementById('viewer').addEventListener('click', (ev) => {
+  if (mode !== 'draw' || drawTool !== 'erase') return;
+  const ziel = eraserZiel(ev.clientX, ev.clientY);
+  if (!ziel || !ziel._annot) return;
+  const jetzt = Date.now();
+  if (jetzt - eraserZuletzt < 250) return;   // Debounce gegen Doppel-Loeschung
+  eraserZuletzt = jetzt;
+  deleteAnnot(ziel);
+});
+
+/* Globale Maussteuerung fuer Markieren/Zeichnen */
+document.addEventListener('mousemove', (ev) => {
+  if (markDrag) markDragBewegen(ev);
+  else if (drawDrag) drawDragBewegen(ev);
+});
+document.addEventListener('mouseup', () => {
+  if (markDrag) markDragLoslassen();
+  else if (drawDrag) drawDragLoslassen();
+});
+
 function clearFreeSel() {
   document.querySelectorAll('.line.linesel').forEach(e => e.classList.remove('linesel'));
   document.querySelectorAll('.seldrag').forEach(e => e.remove());   // haengen gebliebene Auswahlrechtecke
   document.getElementById('copyChip')?.remove();
   freeSel = [];
+  kiAuswahlAktualisieren();
 }
 function copyFreeSel() {
   if (!freeSel.length) return;
@@ -2588,6 +3278,7 @@ document.addEventListener('mouseup', (ev) => {
   sd.div?.remove();                       // Auswahlrechteck verschwindet beim Loslassen
   document.getElementById('copyChip')?.remove();
   if (wasActive && freeSel.length) {
+    kiAuswahlAktualisieren();
     const chip = document.createElement('button');
     chip.className = 'copyChip'; chip.id = 'copyChip';
     chip.textContent = 'Kopieren (' + freeSel.length + ' Zeilen)';
@@ -2637,6 +3328,327 @@ function buildThumbs() {
   }
 }
 
+/* ---------- OCR: unsichtbare Textebene fuer Scans ---------- */
+let ocrLaeuft = false, ocrStop = false;
+function ocrDialogOeffnen() {
+  if (!cur || ocrLaeuft) return;
+  const box = document.getElementById('ocrBox');
+  box.style.display = 'block';
+  const r = document.getElementById('btnOcr').getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 346, r.left)) + 'px';
+  box.style.top = (r.bottom + 6) + 'px';
+  document.getElementById('ocrBalken').style.width = '0%';
+  document.getElementById('ocrOk').style.display = '';
+  document.getElementById('ocrClose').style.display = 'none';
+  document.getElementById('ocrInfo').textContent = 'Prüfe Seiten …';
+  fetch('/api/ocr/info/' + cur.id).then(r2 => r2.json()).then(j => {
+    const ohne = (j.seiten_ohne_text || []).length;
+    document.getElementById('ocrInfo').innerHTML = ohne
+      ? `<b style="color:var(--text)">${ohne} von ${j.pages} Seiten</b> ohne Textebene (Scan/Foto) – nur diese werden bearbeitet.`
+      : 'Alle Seiten haben bereits Text – es gibt nichts zu erkennen.';
+    document.getElementById('ocrOk').disabled = !ohne;
+    box.dataset.ohne = JSON.stringify(j.seiten_ohne_text || []);
+    if (!j.tessdata.length)
+      document.getElementById('ocrInfo').innerHTML += '<br><span style="color:var(--danger)">Sprachdaten fehlen (tessdata-Ordner nicht gefunden).</span>';
+  });
+}
+document.getElementById('ocrCancel').addEventListener('click', () => {
+  ocrStop = true;
+  document.getElementById('ocrBox').style.display = 'none';
+});
+document.getElementById('ocrClose').addEventListener('click', () =>
+  document.getElementById('ocrBox').style.display = 'none');
+document.getElementById('ocrOk').addEventListener('click', async () => {
+  const ohne = JSON.parse(document.getElementById('ocrBox').dataset.ohne || '[]');
+  if (!ohne.length || ocrLaeuft) return;
+  ocrLaeuft = true; ocrStop = false;
+  const lang = document.getElementById('ocrLang').value;
+  const ok = document.getElementById('ocrOk');
+  ok.disabled = true; ok.textContent = 'Läuft …';
+  document.getElementById('ocrCancel').textContent = 'Abbrechen';
+  let fertig = 0, zeilen = 0;
+  for (const n of ohne) {
+    if (ocrStop) break;
+    document.getElementById('ocrInfo').textContent =
+      `Erkenne Seite ${n + 1} von ${cur.pages} … (${fertig}/${ohne.length} fertig)`;
+    try {
+      const fd = new FormData();
+      fd.append('page', n); fd.append('lang', lang); fd.append('dpi', '300');
+      const r = await fetch('/api/ocr/' + cur.id, {method: 'POST', body: fd});
+      if (r.ok) { const j = await r.json(); if (!j.skip) zeilen += j.zeilen || 0; refreshPage(n); }
+      else stat((await r.json().catch(() => ({}))).detail || 'OCR fehlgeschlagen');
+    } catch (e) { stat('OCR fehlgeschlagen: ' + e); }
+    fertig++;
+    document.getElementById('ocrBalken').style.width = Math.round(fertig / ohne.length * 100) + '%';
+  }
+  ocrLaeuft = false;
+  ok.disabled = false; ok.textContent = 'Starten';
+  document.getElementById('ocrCancel').textContent = 'Abbrechen';
+  document.getElementById('ocrClose').style.display = '';
+  document.getElementById('ocrInfo').textContent = ocrStop
+    ? 'Abgebrochen – bereits erkannte Seiten bleiben durchsuchbar.'
+    : `Fertig: ${zeilen} Textzeilen erkannt und unsichtbar eingebettet. Speichern macht sie dauerhaft.`;
+  stat(ocrStop ? 'OCR abgebrochen.' : `OCR fertig – ${zeilen} Zeilen eingebettet (nicht rückgängig machbar).`, true);
+  setDirty(true);
+});
+
+/* ---------- KI-Assistent (BYOK) ---------- */
+const KI_ANBIETER = {
+  openai:     {name: 'OpenAI', url: 'https://api.openai.com/v1', art: 'openai'},
+  zai:        {name: 'z.ai (GLM)', url: 'https://api.z.ai/api/paas/v4', art: 'openai'},
+  openrouter: {name: 'OpenRouter', url: 'https://openrouter.ai/api/v1', art: 'openai'},
+  anthropic:  {name: 'Anthropic (Claude)', url: 'https://api.anthropic.com', art: 'anthropic'},
+  google:     {name: 'Google (Gemini)', url: 'https://generativelanguage.googleapis.com/v1beta', art: 'google'},
+  ollama:     {name: 'Ollama (lokal, ohne Schlüssel)', url: 'http://localhost:11434/v1', art: 'openai'},
+  custom:     {name: 'OpenAI-kompatibel (eigene URL)', url: '', art: 'openai'},
+};
+const KI_AUFGABEN = {chat: 'Chatbot', zusammenfassen: 'Zusammenfassen', uebersetzen: 'Übersetzen'};
+let ki = {modelle: [], aufgaben: {chat: '', zusammenfassen: '', uebersetzen: ''}};
+let kiVerlauf = [];
+let kiLaeuft = false;
+
+function kiLaden() {
+  const p = prefs.ki;
+  if (p && Array.isArray(p.modelle)) ki.modelle = p.modelle;
+  if (p && p.aufgaben) ki.aufgaben = Object.assign(ki.aufgaben, p.aufgaben);
+  kiPanelAufbauen();
+}
+function kiSpeichern() {
+  setPref('ki', {modelle: ki.modelle, aufgaben: ki.aufgaben});
+  kiPanelAufbauen();
+}
+function kiModellFuer(aufgabe) {
+  return ki.modelle.find(m => m.id === ki.aufgaben[aufgabe]) || ki.modelle[0] || null;
+}
+function kiPanelUmschalten() {
+  const p = document.getElementById('kiPanel');
+  p.classList.toggle('offen');
+}
+function kiPanelAufbauen() {
+  const leer = document.getElementById('kiLeer');
+  const sel = document.getElementById('kiChatModell');
+  sel.innerHTML = '';
+  for (const m of ki.modelle) {
+    const o = document.createElement('option');
+    o.value = m.id; o.textContent = m.name;
+    sel.appendChild(o);
+  }
+  const chatM = kiModellFuer('chat');
+  if (chatM) sel.value = chatM.id;
+  if (leer) leer.style.display = ki.modelle.length ? 'none' : '';
+  document.getElementById('kiUebersetzen').disabled = !ki.modelle.length;
+}
+function kiBlase(rolle, text) {
+  const log = document.getElementById('kiLog');
+  const leer = document.getElementById('kiLeer');
+  if (leer) leer.style.display = 'none';
+  const b = document.createElement('div');
+  b.className = 'kiblase ' + (rolle === 'user' ? 'kiblase-user' : 'kiblase-ki');
+  b.textContent = text || '';
+  log.appendChild(b);
+  log.scrollTop = log.scrollHeight;
+  return b;
+}
+async function kiSystemPrompt() {
+  let sys = 'Du bist der KI-Assistent der PDF-App Blattwerk. Antworte präzise und auf Deutsch.';
+  if (document.getElementById('kiKontext')?.checked && cur) {
+    try {
+      const j = await (await fetch('/api/fulltext/' + cur.id)).json();
+      if (j.text) {
+        const max = 48000;
+        sys += '\n\nDokument "' + cur.name + '" (' + j.seiten + ' Seiten):\n' +
+               (j.text.length > max ? j.text.slice(0, max) + '\n[… abgeschnitten, Dokument ist länger]' : j.text);
+      } else {
+        sys += '\n\nDas Dokument enthält keine Textebene (Scan) – OCR kann helfen.';
+      }
+    } catch (e) {}
+  }
+  return sys;
+}
+async function kiAnfrage(aufgabe, nutzerFrage, antwortIntro) {
+  const modell = kiModellFuer(aufgabe);
+  if (!modell) { stat('Kein KI-Modell eingerichtet – KI-Konfiguration öffnen.'); kiConfigOeffnen(); return; }
+  if (kiLaeuft) { stat('Eine KI-Anfrage läuft bereits.'); return; }
+  kiLaeuft = true;
+  if (antwortIntro) kiBlase('user', antwortIntro);
+  const blase = kiBlase('ki', '');
+  blase.classList.add('denkt');
+  try {
+    const fd = new FormData();
+    fd.append('mid', modell.id);
+    fd.append('system', await kiSystemPrompt());
+    fd.append('nachrichten', JSON.stringify(aufgabe === 'chat' ? kiVerlauf.concat([{role: 'user', content: nutzerFrage}])
+                                                             : [{role: 'user', content: nutzerFrage}]));
+    const r = await fetch('/api/ai/chat', {method: 'POST', body: fd});
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let ganz = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      ganz += dec.decode(value, {stream: true});
+      blase.textContent = ganz;
+      document.getElementById('kiLog').scrollTop = 1e9;
+    }
+    if (aufgabe === 'chat') {
+      kiVerlauf.push({role: 'user', content: nutzerFrage});
+      kiVerlauf.push({role: 'assistant', content: ganz});
+      if (kiVerlauf.length > 30) kiVerlauf = kiVerlauf.slice(-30);
+    }
+    blase.classList.remove('denkt');
+  } catch (e) {
+    blase.textContent = '⚠ Anfrage fehlgeschlagen: ' + e;
+    blase.classList.remove('denkt');
+  }
+  kiLaeuft = false;
+}
+async function kiSenden() {
+  const ta = document.getElementById('kiText');
+  const frage = ta.value.trim();
+  if (!frage) return;
+  ta.value = '';
+  kiBlase('user', frage);
+  await kiAnfrage('chat', frage);
+}
+document.getElementById('kiSenden').addEventListener('click', kiSenden);
+document.getElementById('kiText').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); kiSenden(); }
+});
+async function kiZusammenfassen() {
+  if (!cur) { stat('Kein Dokument geöffnet.'); return; }
+  await kiAnfrage('zusammenfassen',
+    'Fasse das Dokument strukturiert zusammen: 1) Kernaussage in einem Satz, ' +
+    '2) die wichtigsten Punkte als Liste, 3) enthaltene Zahlen/Daten/Fristen, falls vorhanden.',
+    'Bitte fasse das ganze Dokument zusammen.');
+}
+async function kiAuswahlUebersetzen() {
+  if (!freeSel.length) { stat('Zuerst Zeilen auswählen: Alt + ziehen (oder Zeilen anklicken).'); return; }
+  const text = freeSel.map(el => el._text).join('\n');
+  const ziel = document.getElementById('kiZielSprache').value;
+  await kiAnfrage('uebersetzen',
+    `Übersetze den folgenden Text nach ${ziel}. Gib NUR die Übersetzung aus, ohne Erklärungen:\n\n${text}`,
+    `Auswahl nach ${ziel} übersetzen (${freeSel.length} Zeilen)`);
+}
+/* Auswahl-Zustand: Übersetzen-Knopf freigeben */
+function kiAuswahlAktualisieren() {
+  document.getElementById('kiUebersetzen').disabled = !ki.modelle.length || !freeSel.length;
+}
+
+/* KI-Konfiguration (Adobe-Vorbild: Aufgaben->Modell + Modellliste) */
+function kiConfigOeffnen() {
+  const box = document.getElementById('kiConfBox');
+  const aufgaben = document.getElementById('kiAufgaben');
+  aufgaben.innerHTML = '';
+  for (const [schluessel, name] of Object.entries(KI_AUFGABEN)) {
+    const zeile = document.createElement('div');
+    zeile.className = 'kiconf-aufgabe';
+    zeile.innerHTML = `<span style="min-width:110px">${name}</span>`;
+    const sel = document.createElement('select');
+    const leer = document.createElement('option');
+    leer.value = ''; leer.textContent = '– kein Modell –';
+    sel.appendChild(leer);
+    for (const m of ki.modelle) {
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = `${m.name} (${m.model})`;
+      sel.appendChild(o);
+    }
+    sel.value = ki.aufgaben[schluessel] || '';
+    sel.addEventListener('change', () => { ki.aufgaben[schluessel] = sel.value; kiSpeichern(); });
+    zeile.appendChild(sel);
+    aufgaben.appendChild(zeile);
+  }
+  const liste = document.getElementById('kiModellListe');
+  liste.innerHTML = '';
+  if (!ki.modelle.length) liste.innerHTML = '<div class="muted" style="font-size:12px">Noch keine Modelle.</div>';
+  for (const m of ki.modelle) {
+    const z = document.createElement('div');
+    z.className = 'kiconf-zeile';
+    z.innerHTML = `<b>${m.name}</b><span class="muted">${m.model}</span>`;
+    const del = document.createElement('button');
+    del.className = 'del'; del.innerHTML = '&#xE74D;'; del.title = 'Modell entfernen';
+    del.onclick = () => { ki.modelle = ki.modelle.filter(x => x.id !== m.id);
+                          for (const k of Object.keys(ki.aufgaben)) if (ki.aufgaben[k] === m.id) ki.aufgaben[k] = '';
+                          kiSpeichern(); kiConfigOeffnen(); };
+    z.appendChild(del);
+    liste.appendChild(z);
+  }
+  box.style.display = 'block';
+  const r = document.getElementById('btnAi').getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 376, r.left - 200)) + 'px';
+  box.style.top = (r.bottom + 6) + 'px';
+}
+document.getElementById('kiConfOk').addEventListener('click', () =>
+  document.getElementById('kiConfBox').style.display = 'none');
+document.getElementById('kiAddOpen').addEventListener('click', () => {
+  document.getElementById('kiConfBox').style.display = 'none';
+  const sel = document.getElementById('kiAnbieter');
+  sel.innerHTML = '';
+  for (const [k, v] of Object.entries(KI_ANBIETER)) {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = v.name;
+    sel.appendChild(o);
+  }
+  kiAnbieterGewechselt();
+  document.getElementById('kiName').value = '';
+  document.getElementById('kiKey').value = '';
+  document.getElementById('kiModell').innerHTML = '<option value="">– Anbieter-Modell –</option>';
+  document.getElementById('kiAddHinweis').textContent = '';
+  const box = document.getElementById('kiAddBox');
+  box.style.display = 'block';
+  const r = document.getElementById('btnAi').getBoundingClientRect();
+  box.style.left = Math.max(8, Math.min(window.innerWidth - 376, r.left - 200)) + 'px';
+  box.style.top = (r.bottom + 6) + 'px';
+});
+function kiAnbieterGewechselt() {
+  const p = KI_ANBIETER[document.getElementById('kiAnbieter').value] || KI_ANBIETER.custom;
+  document.getElementById('kiUrl').value = p.url;
+  document.getElementById('kiUrl').disabled = false;
+}
+document.getElementById('kiAnbieter').addEventListener('change', kiAnbieterGewechselt);
+document.getElementById('kiAddCancel').addEventListener('click', () =>
+  document.getElementById('kiAddBox').style.display = 'none');
+document.getElementById('kiModelleLaden').addEventListener('click', async () => {
+  const hinweis = document.getElementById('kiAddHinweis');
+  hinweis.textContent = 'Lade Modellliste …';
+  try {
+    const art = (KI_ANBIETER[document.getElementById('kiAnbieter').value] || {}).art || 'openai';
+    const q = `?url=${encodeURIComponent(document.getElementById('kiUrl').value.trim())}` +
+              `&key=${encodeURIComponent(document.getElementById('kiKey').value.trim())}&art=${art}`;
+    const j = await (await fetch('/api/ai/models' + q)).json();
+    const sel = document.getElementById('kiModell');
+    sel.innerHTML = '';
+    for (const id of (j.modelle || [])) {
+      const o = document.createElement('option');
+      o.value = id; o.textContent = id;
+      sel.appendChild(o);
+    }
+    hinweis.textContent = (j.modelle || []).length + ' Modelle gefunden.';
+  } catch (e) {
+    const detail = (await e.json?.().catch(() => ({}))) || {};
+    hinweis.textContent = 'Fehler: ' + (detail.detail || e.message || e);
+  }
+});
+document.getElementById('kiAddOk').addEventListener('click', () => {
+  const name = document.getElementById('kiName').value.trim() ||
+    ((KI_ANBIETER[document.getElementById('kiAnbieter').value] || {}).name || 'Modell');
+  const modell = document.getElementById('kiModell').value;
+  if (!modell) { document.getElementById('kiAddHinweis').textContent = 'Bitte Modell auswählen (Liste aktualisieren).'; return; }
+  const anbieter = document.getElementById('kiAnbieter').value;
+  ki.modelle.push({
+    id: 'm' + Date.now().toString(36),
+    name, anbieter,
+    url: document.getElementById('kiUrl').value.trim(),
+    key: document.getElementById('kiKey').value.trim(),
+    art: (KI_ANBIETER[anbieter] || {}).art || 'openai',
+    model: modell,
+  });
+  if (!ki.aufgaben.chat) ki.aufgaben.chat = ki.modelle[ki.modelle.length - 1].id;
+  kiSpeichern();
+  document.getElementById('kiAddBox').style.display = 'none';
+  stat('KI-Modell hinzugefügt: ' + name + ' (' + modell + ')', true);
+  kiConfigOeffnen();
+});
+
 /* ---------- Start ---------- */
 /* Toolbar passt sich an: 1. Beschriftungen aus (nur Icons), 2. Marke aus, 3. zweite Reihe.
    Gemessen wird die .kopfzeile (der Inhaltstraeger) - der Header selbst scrollt nicht. */
@@ -2685,6 +3697,9 @@ loadSignatures();
   if (prefs.sb === '0') setSbVisible(false);
   if (prefs.thumbs === '0') setThumbsVisible(false);
   updatePanelIcons();
+  kiLaden();                       // KI-Modelle/Aufgaben aus den Server-Einstellungen
+  if (prefs.drawTool) setDrawTool(prefs.drawTool);
+  markFelderSchaerfen();
   document.getElementById('btnNormal').classList.add('active');   // Startwerkzeug
   movePill();
   new ResizeObserver(() => movePill()).observe(document.getElementById('topbar'));

@@ -1207,6 +1207,13 @@ def _font_xref(doc, basefont):
     return x
 
 
+def _base14_name(font):
+    """Font-Angabe fuer add_freetext_annot: nur Base14-Aliase sind erlaubt.
+    Dokument-Schriften ('doc~...') erzeugen dort nur den Platzhalter-AP - das
+    echte Aussehen setzt _freetext_ap_mit_abstand sofort danach."""
+    return font if font in FONTS else "helv"
+
+
 def _pdf_string(text):
     """Text als PDF-Literalstring (WinAnsi-Bytes, Klammern/Backslash escaped)."""
     out = bytearray(b"(")
@@ -1360,7 +1367,7 @@ async def annot_text(did: str, page: int = Form(...), rect: str = Form(...), tex
             o_spacing = _txt_spacing(old_nm)
             o_leading = _txt_leading(old_nm)
             pg.delete_annot(old)
-    a = pg.add_freetext_annot(r, text, fontsize=float(size), fontname=font, text_color=col)
+    a = pg.add_freetext_annot(r, text, fontsize=float(size), fontname=_base14_name(font), text_color=col)
     a.update()
     # Eigenschaften im NM-Marker konservieren (PyMuPDF-Ruecklesen ist unzuverlaessig)
     marker = f"PDFW-TXT:{font}:{size}:{col[0]},{col[1]},{col[2]}:{spacing_f}:{leading_f}"
@@ -1485,7 +1492,7 @@ def undo(did: str):
             pg.delete_annot(an)
         o = e["old"]
         a = pg.add_freetext_annot(pymupdf.Rect(o["rect"]), o["text"], fontsize=o["size"],
-                                  fontname=o["font"], text_color=tuple(o["color"]))
+                                  fontname=_base14_name(o["font"]), text_color=tuple(o["color"]))
         a.update()
         sp = float(o.get("spacing") or 0)
         ld = float(o.get("leading") or 0)
@@ -1519,7 +1526,7 @@ def undo(did: str):
                 an.set_rect(pymupdf.Rect(e["rect"]))
     elif op == "text-recreate":
         a = pg.add_freetext_annot(pymupdf.Rect(e["rect"]), e["text"], fontsize=e["size"],
-                                  fontname=e["font"], text_color=tuple(e["color"]))
+                                  fontname=_base14_name(e["font"]), text_color=tuple(e["color"]))
         a.update()
         sp = float(e.get("spacing") or 0)
         ld = float(e.get("leading") or 0)
@@ -1779,13 +1786,23 @@ def textquads(did: str, n: int, x0: float, y0: float, x1: float, y1: float):
         raise HTTPException(404, "Seite existiert nicht")
     pg = d[n]
     sel = pymupdf.Rect(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+    sel_h = max(0.1, sel.y1 - sel.y0)
     treffer = []
     for w in pg.get_text("words"):
         wr = pymupdf.Rect(w[:4])
         ix = min(wr.x1, sel.x1) - max(wr.x0, sel.x0)
+        if ix <= 0:
+            continue
         iy = min(wr.y1, sel.y1) - max(wr.y0, sel.y0)
-        flaeche = (wr.x1 - wr.x0) * (wr.y1 - wr.y0)
-        if ix > 0 and iy > 0 and ix * iy >= 0.25 * flaeche:
+        wr_h = wr.y1 - wr.y0
+        zy = (wr.y0 + wr.y1) / 2
+        # Duennes Auswahlband (waagerechter Zug entlang einer Zeile - die natuerliche
+        # Geste zum Markieren): Wort zaehlt, wenn sein Hoehenzentrum im leicht
+        # erweiterten Band liegt oder es die Haelfte der KLEINEREN Hoehe ueberlappt.
+        # Dicke Auswahl: uebliche 25%-Flaechen-Regel.
+        trifft = (sel.y0 - 2 <= zy <= sel.y1 + 2) or iy >= 0.5 * min(sel_h, wr_h) \
+                 or (iy > 0 and ix * iy >= 0.25 * (wr.x1 - wr.x0) * wr_h)
+        if trifft:
             treffer.append([round(wr.x0, 2), round(wr.y0, 2), round(wr.x1, 2), round(wr.y1, 2), w[4]])
     treffer.sort(key=lambda q: (q[1], q[0]))
     return {"quads": [q[:4] for q in treffer], "text": " ".join(q[4] for q in treffer)}
