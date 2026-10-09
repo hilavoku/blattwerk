@@ -875,11 +875,14 @@ def annots(did: str, n: int):
                 breite = daten["breite"] if daten else (a.border_width or 2)
             except Exception:
                 breite = 2.0
+            stil = (daten.get("stil") if daten else "") or ("C0" if typ == "arrow" else ("N0" if typ == "line" else ""))
             out.append({"xref": a.xref, "type": "shape", "sub": typ, "rect": list(a.rect),
                         "breite": float(breite),
                         "farbe": (daten["strich"] if daten else None) or _farbe_zu_hex(a.colors.get("stroke")),
                         "fuellung": (daten["fuellung"] if daten else "") or "0",
                         "deckkraft": float(daten["deckkraft"]) if daten else round((a.opacity or 1) * 100),
+                        "spitze": (stil[:-1] or "N") if stil else "N",
+                        "linienstil": stil[-1] if stil else "0",
                         "punkte": (daten.get("punkte") if daten else []) or []})
         elif t in MARKUP_ART.values():
             art = [k for k, v in MARKUP_ART.items() if v == t][0]
@@ -1004,7 +1007,8 @@ def _shape_recreate_daten(d, pg, xref, page, old_rect):
             "breite": float(breite),
             "farbe": (daten["strich"] if daten else None) or _farbe_zu_hex(an.colors.get("stroke")) or "000000",
             "fuellung": (daten["fuellung"] if daten else "") or "0",
-            "deckkraft": float(daten["deckkraft"]) if daten else round((an.opacity or 1) * 100)}
+            "deckkraft": float(daten["deckkraft"]) if daten else round((an.opacity or 1) * 100),
+            "stil": (daten.get("stil") if daten else "") or ("C0" if typ == "arrow" else ("N0" if typ == "line" else ""))}
 
 
 def _span_in_rect(pg, rect):
@@ -1572,7 +1576,7 @@ def undo(did: str):
         try:
             _shape_anlegen(d, pg, e["typ"], pymupdf.Rect(e["rect"]), e.get("punkte") or [],
                            e.get("breite", 2), e.get("farbe", "000000"),
-                           e.get("fuellung", "0"), e.get("deckkraft", 100))
+                           e.get("fuellung", "0"), e.get("deckkraft", 100), e.get("stil", ""))
         except HTTPException:
             raise
         except Exception as ex:
@@ -1637,18 +1641,33 @@ def _zahlen_aus(s):
     return [float(v) for v in re.findall(r"-?\d+\.?\d*", s)]
 
 
-def _shape_nm(typ, breite, strich, fuellung, deckkraft, punkte=""):
-    return f"PDFW-SHAPE:{typ}:{breite:g}:{strich}:{fuellung}:{round(deckkraft)}:{punkte}"
+def _shape_nm(typ, breite, strich, fuellung, deckkraft, stil="", punkte=""):
+    return f"PDFW-SHAPE:{typ}:{breite:g}:{strich}:{fuellung}:{round(deckkraft)}:{stil}:{punkte}"
 
 
 def _shape_nm_teile(nm):
-    """NM-Marker -> dict oder None (fremde Annotation ohne Marker)."""
+    """NM-Marker -> dict oder None (fremde Annotation ohne Marker).
+    stil: Pfeilspitzen (C=gefuellt, O=offen, N=keine; 1 Zeichen = Endspitze,
+    2 Zeichen = Anfang+Ende) + Linienstil (0=durchgezogen, 1=gestrichelt,
+    2=gepunktet), z. B. 'C0', 'OO1'. Alte Marker (vor v0.18.5) ohne Stil-
+    Feld: arrow -> C0, line -> N0."""
     if not (nm or "").startswith("PDFW-SHAPE:"):
         return None
     try:
-        _, typ, breite, strich, fuellung, deckkraft, punkte = nm.split(":", 6)
+        teile = nm.split(":")   # Felder enthalten nie ':' (Farben hex, Zahlen, Punkte)
+        if len(teile) == 7:      # alter Marker (vor v0.18.5): ohne Stil-Feld
+            _, typ, breite, strich, fuellung, deckkraft, punkte = teile
+            stil = ""
+        elif len(teile) >= 8:
+            _, typ, breite, strich, fuellung, deckkraft, stil, punkte = teile[:7] + [":".join(teile[7:])]
+        else:
+            raise ValueError("PDFW-SHAPE-Marker zu kurz")
         daten = {"typ": typ, "breite": float(breite), "strich": strich,
                  "fuellung": fuellung, "deckkraft": float(deckkraft)}
+        if not stil:
+            daten["stil"] = "C0" if typ == "arrow" else ("N0" if typ == "line" else "")
+        else:
+            daten["stil"] = stil
         if typ in ("line", "arrow"):
             daten["punkte"] = [[float(v) for v in p.split(",")] for p in punkte.split(";")] if punkte else []
         elif typ == "ink":
@@ -1669,9 +1688,39 @@ def _punkte_zu_nm(typ, punkte):
     return ""
 
 
-def _shape_anlegen(doc, pg, typ, rect_r, punkte, breite, strich, fuellung, deckkraft):
+LE_PDF = {"C": "/ClosedArrow", "O": "/OpenArrow", "N": "/None"}
+
+
+def _stil_teile(stil):
+    """'C0'/'OO1'/... -> (startspitze, endspitze, linienstil)."""
+    stil = stil or ""
+    if len(stil) >= 2:
+        return stil[0], stil[1], stil[-1]
+    if len(stil) == 1:
+        return "N", stil[0], "0"
+    return "N", "N", "0"
+
+
+def _line_stil_anwenden(doc, a, breite, stil):
+    """/LE (Pfeilspitzen) und /Border mit Dash-Muster direkt setzen (vor update())."""
+    start, ende, linienstil = _stil_teile(stil)
+    if start != "N" or ende != "N":
+        doc.xref_set_key(a.xref, "LE", f"[{LE_PDF.get(start, '/None')} {LE_PDF.get(ende, '/None')}]")
+    b = max(0.2, float(breite))
+    if linienstil == "1":
+        doc.xref_set_key(a.xref, "Border", f"[0 0 {b:g} [5 4]]")
+    elif linienstil == "2":
+        doc.xref_set_key(a.xref, "Border", f"[0 0 {b:g} [0.6 2.6]]")
+
+
+def _shape_anlegen(doc, pg, typ, rect_r, punkte, breite, strich, fuellung, deckkraft, stil=""):
     """Form-Annotation anlegen (auch fuer Undo-Neuaufbau). punkte: line/arrow
-    [[x1,y1],[x2,y2]], ink [[ [x,y],... ],...], sonst []."""
+    [[x1,y1],[x2,y2]], ink [[ [x,y],... ],...], sonst []. stil: Spitzen+Linienstil
+    fuer line/arrow (leer = Voreinstellung: arrow C0, line N0)."""
+    if typ == "arrow":
+        stil = stil or "C0"
+    elif typ == "line":
+        stil = stil or "N0"
     farbe = _hex_zu_farbe(strich) or (0, 0, 0)
     fuellung = (fuellung or "0").strip()
     fill = _hex_zu_farbe(fuellung) if fuellung not in ("", "0") else None
@@ -1693,11 +1742,11 @@ def _shape_anlegen(doc, pg, typ, rect_r, punkte, breite, strich, fuellung, deckk
             a.set_opacity(max(0.05, float(deckkraft) / 100))
     except Exception:
         pass  # fremde/leere Objekte: Stil so gut wie moeglich setzen
-    if typ == "arrow":
-        doc.xref_set_key(a.xref, "LE", "[/None /ClosedArrow]")
+    if typ in ("line", "arrow"):
+        _line_stil_anwenden(doc, a, breite, stil)
     a.update()   # Standard-AP aus den Eigenschaften erzeugen (nur Stamp-AP nie updaten!)
     doc.xref_set_key(a.xref, "NM",
-                     f"({_shape_nm(typ, float(breite), strich, fuellung, float(deckkraft), _punkte_zu_nm(typ, punkte))})")
+                     f"({_shape_nm(typ, float(breite), strich, fuellung, float(deckkraft), stil, _punkte_zu_nm(typ, punkte))})")
     return a
 
 
@@ -1812,7 +1861,8 @@ def textquads(did: str, n: int, x0: float, y0: float, x1: float, y1: float):
 async def annot_shape(did: str, page: int = Form(...), typ: str = Form(...),
                       rect: str = Form(...), punkte: str = Form("[]"),
                       breite: float = Form(2), farbe: str = Form("000000"),
-                      fuellung: str = Form("0"), deckkraft: float = Form(100)):
+                      fuellung: str = Form("0"), deckkraft: float = Form(100),
+                      spitze: str = Form(""), linienstil: str = Form("")):
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
@@ -1840,7 +1890,13 @@ async def annot_shape(did: str, page: int = Form(...), typ: str = Form(...),
         xs = [p[0] for st in pts for p in st]; ys = [p[1] for st in pts for p in st]
         rect_r = pymupdf.Rect(min(xs), min(ys), max(xs), max(ys))
     rect_r = rect_r | pymupdf.Rect(rect_r.x0, rect_r.y0, rect_r.x0 + 2, rect_r.y0 + 2)  # Mindestgroesse
-    a = _shape_anlegen(d, pg, typ, rect_r, pts, breite, farbe, fuellung, deckkraft)
+    stil = ""
+    if typ in ("line", "arrow"):
+        spitze = spitze if spitze in ("C", "O", "N", "CC", "OO", "CO", "OC", "CN", "NC", "ON", "NO") else ("C" if typ == "arrow" else "N")
+        if linienstil not in ("0", "1", "2"):
+            linienstil = "0"
+        stil = spitze + linienstil
+    a = _shape_anlegen(d, pg, typ, rect_r, pts, breite, farbe, fuellung, deckkraft, stil)
     push_undo(did, {"op": "annot-delete", "page": page, "xref": a.xref})
     return {"ok": True, "xref": a.xref, "rect": list(a.rect)}
 
@@ -1952,11 +2008,14 @@ def _style_lesen(d, pg, xref):
                 "deckkraft": round((an.opacity or 1) * 100),
                 "staerke": bord[2] if len(bord) >= 3 and bord[2] > 0 else 1.0}
     daten = _shape_nm_teile(an.info.get("id", "") or "") or {}
-    return {"art": "shape", "sub": daten.get("typ") or {v: k for k, v in SHAPE_ART.items()}.get(t, "rect"),
+    typ = daten.get("typ") or {v: k for k, v in SHAPE_ART.items()}.get(t, "rect")
+    stil = daten.get("stil") or ("C0" if typ == "arrow" else ("N0" if typ == "line" else ""))
+    return {"art": "shape", "sub": typ,
             "farbe": daten.get("strich") or _farbe_zu_hex(an.colors.get("stroke")),
             "fuellung": daten.get("fuellung", "0"),
             "deckkraft": daten.get("deckkraft", round((an.opacity or 1) * 100)),
-            "breite": daten.get("breite", 2.0)}
+            "breite": daten.get("breite", 2.0),
+            "stil": stil}
 
 
 def _style_setzen(doc, pg, xref, werte):
@@ -1985,6 +2044,37 @@ def _style_setzen(doc, pg, xref, werte):
                                farbe or _farbe_zu_hex(an.colors.get("stroke")),
                                float(werte.get("staerke") or 1), H)
         return
+    if t == "Line":
+        # Spitzen (/LE) und Linienstil (/Border mit Dash) direkt setzen - width
+        # steckt mit im Border-Array, set_border wuerde das Dash wieder loeschen.
+        daten = _shape_nm_teile(an.info.get("id", "") or "") or {}
+        alt_stil = daten.get("stil") or "N0"
+        if werte.get("stil"):
+            stil = werte["stil"]          # Undo-Eintrag traegt den GESAMTEN alten Stil
+        else:
+            spitze = werte.get("spitze") if werte.get("spitze") else alt_stil[:-1]
+            linienstil = werte.get("linienstil") if werte.get("linienstil") else alt_stil[-1]
+            stil = (spitze or "N") + (linienstil or "0")
+        if hexf is not None:
+            try:
+                an.set_colors(stroke=hexf)
+            except Exception:
+                pass
+        if deckkraft < 100:
+            try:
+                an.set_opacity(max(0.05, deckkraft / 100))
+            except Exception:
+                pass
+        breite = float(werte.get("breite") or daten.get("breite") or 2)
+        _line_stil_anwenden(doc, an, breite, stil)
+        an.update()
+        doc.xref_set_key(xref, "NM", "(" + _shape_nm(
+            daten.get("typ", "line"), breite,
+            werte.get("farbe") or daten.get("strich") or "000000",
+            werte.get("fuellung") if werte.get("fuellung") is not None else daten.get("fuellung", "0"),
+            deckkraft if werte.get("deckkraft") is not None else daten.get("deckkraft", 100),
+            stil, _punkte_zu_nm(daten.get("typ", "line"), daten.get("punkte", []))) + ")")
+        return
     if hexf is not None or werte.get("fuellung") is not None:
         fill = None
         if (werte.get("fuellung") or "0") not in ("", "0"):
@@ -2006,12 +2096,14 @@ def _style_setzen(doc, pg, xref, werte):
     an.update()
     alt = _shape_nm_teile(an.info.get("id", "") or "") or {}
     typ = alt.get("typ") or {v: k for k, v in SHAPE_ART.items()}.get(t, "rect")
+    alt_stil = alt.get("stil") or ("C0" if typ == "arrow" else ("N0" if typ == "line" else ""))
     doc.xref_set_key(xref, "NM", "(" + _shape_nm(
         typ,
         float(werte.get("breite") or alt.get("breite") or 2),
         werte.get("farbe") or alt.get("strich") or "000000",
         werte.get("fuellung") if werte.get("fuellung") is not None else alt.get("fuellung", "0"),
         deckkraft if werte.get("deckkraft") is not None else alt.get("deckkraft", 100),
+        werte.get("stil") or alt_stil,
         _punkte_zu_nm(typ, alt.get("punkte", []))) + ")")
 
 
@@ -2035,7 +2127,8 @@ async def annot_shapemove(did: str, page: int = Form(...), xref: int = Form(...)
 async def annot_style(did: str, page: int = Form(...), xref: int = Form(...),
                       breite: str = Form(""), farbe: str = Form(""),
                       fuellung: str = Form(""), deckkraft: str = Form(""),
-                      staerke: str = Form("")):
+                      staerke: str = Form(""), spitze: str = Form(""),
+                      linienstil: str = Form("")):
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
@@ -2045,7 +2138,8 @@ async def annot_style(did: str, page: int = Form(...), xref: int = Form(...),
     alt = _style_lesen(d, pg, xref)
     neu = {}
     for k, v in (("breite", breite), ("farbe", farbe), ("fuellung", fuellung),
-                 ("deckkraft", deckkraft), ("staerke", staerke)):
+                 ("deckkraft", deckkraft), ("staerke", staerke),
+                 ("spitze", spitze), ("linienstil", linienstil)):
         if v != "":
             neu[k] = v
     if not neu:

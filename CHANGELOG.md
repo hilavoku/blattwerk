@@ -2,6 +2,25 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-09.
 
+## v0.18.5 — Pfeil-Fix: Verschieben/Skalieren + Spitzen, Linienstil, Dicke
+- **Pfeil, Linie und Tinte lassen sich wieder verschieben/skalieren (Nutzer-
+  Meldung: Rahmen erscheint, der Pfeil passiert nichts):** Beim Verschieben
+  wurde nur der Kasten gesetzt, die im Overlay geführten Punkte blieben — die
+  Strichform zeichnete sich relativ zum neuen Kasten wieder an der ALTEN
+  Stelle (der Rahmen „entfernte" sich sichtbar vom Objekt). Punkte und Quads
+  werden jetzt beim Ziehen live mittransformiert und beim Loslassen
+  dauerhaft nachgezogen (betrifft auch Markierungen und Tinte).
+- **Pfeilspitzen und Linienstil einstellbar:** Neue Auswahlfelder in der
+  Zeichen-Leiste (sichtbar bei Linie/Pfeil): Spitze gefüllt/offen/keine/
+  beidseitig gefüllt/offen sowie Durchgezogen/Gestrichelt/Gepunktet. Wirken
+  beim Zeichnen und auf das ausgewählte Objekt (neben Strichdicke und
+  Farbe, die schon gingen). Der Stil zieht mit ins PDFW-SHAPE-NM-Marker
+  (8. Feld, z. B. „OO1"), Undo stellt ihn komplett wieder her, alte Marker
+  bleiben lesbar (arrow → C0, line → N0).
+- Server: /api/annot/shape und /api/annot/style nehmen spitze/linienstil;
+  /LE + /Border-Dash direkt gesetzt (MuPDF rendert beides korrekt, Probe
+  mit Pixel-Differenz bestätigt).
+
 ## v0.18.4 — Markier-Leiste: Symbole statt Dropdown + Mausrad für Deckkraft
 - **Art der Markierung als Symbolknöpfe:** Das Dropdown (Marker/Unterstrichen/
   Durchgestrichen/Wellenlinie) ist durch vier kleine Symbole ersetzt — Stift
