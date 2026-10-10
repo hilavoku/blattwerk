@@ -119,6 +119,10 @@ py -3.14 tests\pdfwerkstatt_test.py
 
 - **Keine Telemetrie**, keine Update-Pings, keine Konten, keine Cloud.
 - PDFs verlassen den Rechner nie.
+- **Passwortgeschützte Signaturen** werden verschlüsselt gespeichert (AES; der
+  Schlüssel wird aus dem Passwort abgeleitet). Das Passwort selbst wird nie
+  gespeichert, und das entschlüsselte Signaturbild liegt nur im Arbeitsspeicher —
+  so lange die App läuft.
 - Der KI-Assistent ist standardmäßig aus; schaltet man ihn frei, gehen nur die
   selbst formulierten Anfragen direkt (vom lokalen Server) zum selbst gewählten
   Anbieter. Der API-Schlüssel wird nur lokal in der Konfigurationsdatei gespeichert.
