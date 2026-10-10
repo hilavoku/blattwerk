@@ -1,4 +1,4 @@
-# Blattwerk (Projekt: PDF-Werkstatt) - lokaler PDF-Server
+# FederPDF (Projekt: PDF-Werkstatt) - lokaler PDF-Server
 # Läuft auf 127.0.0.1, wird vom WebView2-Wrapper (PdfWerkstatt.exe) gestartet.
 import os
 import re
@@ -32,9 +32,9 @@ PREFS_FILE = os.path.join(os.path.dirname(BASE) if getattr(sys, "frozen", False)
 os.makedirs(UPLOADS, exist_ok=True)
 os.makedirs(SIGN_DIR, exist_ok=True)
 
-app = FastAPI(title="Blattwerk")
+app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.19.3"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
+APP_VERSION = "0.20.0"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -152,7 +152,7 @@ def _ensure_demo():
     doc = pymupdf.open()
     toc = []
     p = doc.new_page()
-    p.insert_text((72, 90), "Blattwerk Demo-Dokument", fontsize=18)
+    p.insert_text((72, 90), "FederPDF Demo-Dokument", fontsize=18)
     p.insert_text((72, 120), "Seite 1: Markiere mich - diese Zeile ist zum Kopieren da.", fontsize=11)
     p.insert_text((72, 140), "Klicke auf eine Zeile, um sie in die Zwischenablage zu legen.", fontsize=11)
     toc.append([1, "Einleitung", 1])
@@ -196,7 +196,7 @@ def favicon():
 
 @app.get("/logo.png")
 def logo():
-    """Logo in Originalgroesse fuer den Über-Dialog (Klick auf Logo/Blattwerk)."""
+    """Logo in Originalgroesse fuer den Über-Dialog (Klick auf Logo/FederPDF)."""
     path = os.path.join(STATIC, "logo.png")
     if not os.path.isfile(path):
         raise HTTPException(404)
@@ -210,8 +210,8 @@ def health():
 
 @app.get("/api/version")
 def version():
-    """Eckdaten für den Über-Dialog (Klick auf Logo/Blattwerk in der Kopfzeile)."""
-    return {"name": "Blattwerk", "version": APP_VERSION,
+    """Eckdaten für den Über-Dialog (Klick auf Logo/FederPDF in der Kopfzeile)."""
+    return {"name": "FederPDF", "version": APP_VERSION,
             "pymupdf": pymupdf.__version__, "lokal": True}
 
 

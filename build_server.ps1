@@ -1,4 +1,4 @@
-# Baut den Blattwerk-Server (PyInstaller).
+# Baut den FederPDF-Server (PyInstaller).
 # Ortunabhängig: liegt im Projektordner, nutzt $PSScriptRoot.
 $ErrorActionPreference = "Continue"
 $ProgressPreference = "SilentlyContinue"

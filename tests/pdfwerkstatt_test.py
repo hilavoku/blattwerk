@@ -1,4 +1,4 @@
-# Blattwerk-Testsuite: startet den gebauten Server und prueft die API
+# FederPDF-Testsuite: startet den gebauten Server und prueft die API
 # end-to-end (89 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
@@ -50,9 +50,9 @@ try:
         sys.exit(1)
     check("Server hochgefahren", True)
 
-    # Über-Dialog (Klick auf Logo/Blattwerk): Versions-Endpunkt + Logo-Route
+    # Über-Dialog (Klick auf Logo/FederPDF): Versions-Endpunkt + Logo-Route
     v = requests.get(BASE + "/api/version", timeout=5).json()
-    check("Versions-Endpunkt", v.get("name") == "Blattwerk" and len(v.get("version", "")) >= 5 and bool(v.get("pymupdf")), str(v))
+    check("Versions-Endpunkt", v.get("name") == "FederPDF" and len(v.get("version", "")) >= 5 and bool(v.get("pymupdf")), str(v))
     r = requests.get(BASE + "/logo.png", timeout=5)
     check("Logo fuer Über-Dialog", r.status_code == 200 and r.headers.get("content-type") == "image/png")
 
@@ -250,7 +250,7 @@ try:
 
     # --- Originaltext editieren (echter Text, kein Bild) ---
     import json as _json
-    alter = "Blattwerk Demo-Dokument"
+    alter = "FederPDF Demo-Dokument"
     zeilen0 = requests.get(f"{BASE}/api/text/{did}/0", timeout=5).json()["lines"]
     zeile = next((l for l in zeilen0 if alter in l["t"]), None)
     r = requests.get(f"{BASE}/api/textspan/{did}/0",
@@ -259,7 +259,7 @@ try:
     check("Textspanne erkannt (Groesse/Farbe)", abs(r.get("size", 0) - 18) < 3 and r.get("color") == [0, 0, 0], str(r))
     r = requests.post(f"{BASE}/api/text/replace/{did}", data={
         "page": "0", "rect": _json.dumps([zeile["x0"], zeile["y0"], zeile["x1"], zeile["y1"]]),
-        "text": "Blattwerk Demo GEANDERT"}, timeout=15)
+        "text": "FederPDF Demo GEANDERT"}, timeout=15)
     check("Originaltext ersetzt", r.ok and r.json().get("size", 0) > 10, str(r.status_code))
     t0 = requests.get(f"{BASE}/api/text/{did}/0", timeout=5).json()["lines"]
     check("Neuer Text im Seiteninhalt", any("GEANDERT" in l["t"] for l in t0), str(t0[:2]))

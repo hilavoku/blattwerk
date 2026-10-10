@@ -26,7 +26,7 @@ internal static class Program
         {
             MessageBox.Show(
                 "PdfWerkstattServer.exe wurde nicht gefunden:\n" + serverExe,
-                "Blattwerk", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                "FederPDF", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
 
@@ -49,8 +49,8 @@ internal static class Program
         var form = new HauptForm
         {
             Text = pdfPath != null
-                ? "Blattwerk - " + Path.GetFileName(pdfPath)
-                : "Blattwerk",
+                ? "FederPDF - " + Path.GetFileName(pdfPath)
+                : "FederPDF",
             Width = 1450,
             Height = 940,
             StartPosition = FormStartPosition.CenterScreen,
@@ -206,7 +206,7 @@ internal static class Program
                 MessageBox.Show(
                     "WebView2 konnte nicht geladen werden:\n" + ex.Message +
                     "\n\nBitte das \"WebView2 Runtime\"-Paket installieren.",
-                    "Blattwerk", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "FederPDF", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 form.Close();
             }
         };
@@ -233,7 +233,7 @@ internal static class Program
                 {
                     var again = MessageBox.Show(
                         "Speichern fehlgeschlagen. Trotzdem schließen?",
-                        "Blattwerk", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
+                        "FederPDF", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
                     if (again == DialogResult.No) e.Cancel = true;
                 }
             }
@@ -304,7 +304,7 @@ internal static class Program
         .bar{width:140px;height:3px;background:#2c313a;border-radius:2px;margin:18px auto 0;overflow:hidden}
         .bar i{display:block;width:40%;height:100%;background:#4cc2ff;border-radius:2px;animation:sl 1.1s infinite linear}
         @keyframes sl{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
-        </style></head><body><div class="c">__LOGO__<h1>Blattwerk</h1><p>wird gestartet &hellip;</p><div class="bar"><i></i></div></div></body></html>
+        </style></head><body><div class="c">__LOGO__<h1>FederPDF</h1><p>wird gestartet &hellip;</p><div class="bar"><i></i></div></div></body></html>
         """.Replace("__LOGO__", LogoHtml(84));
 
     private static string ErrorHtml() => """
@@ -317,7 +317,7 @@ internal static class Program
         h1{font-weight:600;margin:0 0 10px}
         p{color:#97a0af;line-height:1.6;margin:0}
         </style></head><body><div class="c">__LOGO__<h1>&#9888;&#65039; Server nicht erreichbar</h1>
-        <p>Der Blattwerk-Server konnte nicht gestartet werden.<br>Bitte das Programm schlie\u00dfen und neu starten.<br>Besteht das Problem, den Ordner <b>server</b> im Programmverzeichnis <b>pr\u00fcfen</b>.</p></div></body></html>
+        <p>Der FederPDF-Server konnte nicht gestartet werden.<br>Bitte das Programm schlie\u00dfen und neu starten.<br>Besteht das Problem, den Ordner <b>server</b> im Programmverzeichnis <b>pr\u00fcfen</b>.</p></div></body></html>
         """.Replace("__LOGO__", LogoHtml(64));
 
     private static bool SaveCurrent()

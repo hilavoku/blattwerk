@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <link rel="icon" type="image/png" href="/favicon.ico">
-<title>Blattwerk</title>
+<title>FederPDF</title>
 <style>
   :root {
     /* Dark Theme in Schwarz-Rot-Gold: tiefschwarze Flaechen, Gold als Akzent,
@@ -457,7 +457,7 @@
   <div id="modePill"></div>
   <div class="kopfzeile">
   <div class="griff" title="Ziehen verschiebt das Fenster"></div>
-  <div class="brand" id="brand" title="Über Blattwerk – Programm- und Versionsinfo"><div class="logo"><img src="/favicon.ico" alt="" draggable="false"></div><span class="name">Blattwerk</span></div>
+  <div class="brand" id="brand" title="Über FederPDF – Programm- und Versionsinfo"><div class="logo"><img src="/favicon.ico" alt="" draggable="false"></div><span class="name">FederPDF</span></div>
   <div class="griff"></div>
   <input type="file" id="file" accept=".pdf" style="display:none">
   <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
@@ -556,7 +556,7 @@
     <div class="fensterkn">
     <button id="knMin" title="Minimieren" onclick="window.chrome?.webview?.postMessage('fenster|min')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg></button>
     <button id="knMax" title="Maximieren / Wiederherstellen" onclick="window.chrome?.webview?.postMessage('fenster|max')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5h9v9h-9z" fill="none" stroke="currentColor" stroke-width="1"/></svg></button>
-    <button id="knZu" title="Blattwerk schließen" onclick="window.chrome?.webview?.postMessage('fenster|zu')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1.1"/></svg></button>
+    <button id="knZu" title="FederPDF schließen" onclick="window.chrome?.webview?.postMessage('fenster|zu')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1.1"/></svg></button>
   </div>
 </header>
 
@@ -714,7 +714,7 @@
   <div style="display:flex; align-items:center; gap:14px">
     <img src="/logo.png" alt="" style="width:64px; height:64px; border-radius:14px; flex:none">
     <div>
-      <div style="font-size:17px; font-weight:700">Blattwerk</div>
+      <div style="font-size:17px; font-weight:700">FederPDF</div>
       <div style="font-size:12.5px; margin-top:3px">Version <b id="infoVersion">…</b></div>
       <div class="muted" style="font-size:11px; margin-top:2px" id="infoEngine"></div>
     </div>
@@ -3310,7 +3310,7 @@ document.addEventListener('keydown', (ev) => {
   }
 });
 
-/* ---------- Über-Dialog: Klick auf Logo/„Blattwerk" in der Kopfzeile ---------- */
+/* ---------- Über-Dialog: Klick auf Logo/„FederPDF" in der Kopfzeile ---------- */
 function infoBoxOeffnen() {
   const box = document.getElementById('infoBox');
   if (box.style.display === 'block') { box.style.display = 'none'; return; }   // erneuter Klick schliesst
@@ -4040,7 +4040,7 @@ function kiBlase(rolle, text) {
   return b;
 }
 async function kiSystemPrompt() {
-  let sys = 'Du bist der KI-Assistent der PDF-App Blattwerk. Antworte präzise und auf Deutsch.';
+  let sys = 'Du bist der KI-Assistent der PDF-App FederPDF. Antworte präzise und auf Deutsch.';
   if (document.getElementById('kiKontext')?.checked && cur) {
     try {
       const j = await (await fetch('/api/fulltext/' + cur.id)).json();

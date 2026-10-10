@@ -31,3 +31,6 @@ AGENTS.md
 2026-10-09 ToDo.md
 signatures/
 demo/
+
+# PyInstaller generiert die Spec bei jedem Build neu (Build-Artefakt)
+app/*.spec

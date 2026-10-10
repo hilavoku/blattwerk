@@ -1,8 +1,8 @@
-# Blattwerk
+# FederPDF
 
 **Der freie PDF-Editor für Windows — deutsch, lokal, ohne Cloud, ohne Telemetrie.**
 
-Blattwerk ist ein vollwertiges PDF-Programm: öffnen, lesen, bearbeiten, signieren,
+FederPDF ist ein vollwertiges PDF-Programm: öffnen, lesen, bearbeiten, signieren,
 markieren, schwärzen, OCR — alles läuft auf dem eigenen Rechner. Kein Konto, kein
 Hintergrunddienst, keine Internetverbindung nötig (außer man schaltet den optionalen
 KI-Assistenten mit seinem eigenen API-Schlüssel frei).
@@ -11,7 +11,7 @@ KI-Assistenten mit seinem eigenen API-Schlüssel frei).
 
 ## English summary
 
-**Blattwerk** is a free, local PDF editor for Windows with a German-language UI.
+**FederPDF** is a free, local PDF editor for Windows with a German-language UI.
 It edits text, adds signatures (including password-protected ones), markup, shapes,
 form fields and page operations, runs offline OCR (German/English) and includes
 full-text search and an optional bring-your-own-key AI assistant. Architecture: a
@@ -38,7 +38,7 @@ Licensed under **GNU AGPL-3.0** (see LICENSE). UI and documentation are in Germa
 
 ## Wie es funktioniert (Architektur)
 
-Blattwerk ist ein normales Windows-Programm mit zwei Teilen:
+FederPDF ist ein normales Windows-Programm mit zwei Teilen:
 
 1. **Fenster** (C#/WinForms, WebView2) — Zeichnen der Oberfläche, Fenster-Verwaltung, Datei-Dialoge
 2. **lokaler PDF-Server** (Python, FastAPI + PyMuPDF) — wird als unsichtbarer Kindprozess gestartet, lauscht **nur auf 127.0.0.1**, wird beim Schließen beendet

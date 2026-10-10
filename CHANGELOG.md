@@ -1,6 +1,24 @@
-# Blattwerk — Changelog
+# FederPDF — Changelog
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
+
+## v0.20.0 — Umbenennung: FederPDF (vorher Blattwerk)
+- Die App heißt jetzt **FederPDF** — die Feder steht fürs Schreiben und
+  Unterschreiben, das „PDF"-Präfix für das, was es ist. Grund: Der bisherige
+  Name Blattwerk (seit v0.14.0) kollidiert mit einem bereits existierenden
+  PDF-Tool gleichen Namens (GitHub, seit August 2026) sowie weiteren
+  gleichnamigen Angeboten — vor der Veröffentlichung als Open Source
+  umgestellt, damit das Projekt von Anfang an eindeutig auffindbar ist.
+- Umgestellt: Fenstertitel/Taskbar, Splash-Screen, Kopfzeilen-Brand,
+  HTML-Titel, Über-Dialog, Demo-Dokument („FederPDF Demo-Dokument"),
+  Fehler-/Hinweisdialoge, FastAPI-Titel, csproj <Product>, README,
+  KI-Systemprompt. **Bewusst unverändert** (wie schon bei v0.14.0): Exe-Namen
+  PdfWerkstatt.exe/PdfWerkstattServer.exe, Namespace, Projektordner
+  pdf-werkstatt, Buildskripte — Deploy-Pfade und Dateizuordnung laufen
+  unverändert weiter. Das GitHub-Repo heißt jetzt `federpdf` (bleibt bis auf
+  Weiteres privat; Veröffentlichung folgt mit dem neuen Icon).
+- App-Logik/Verhalten unverändert. Suite 89 PASS gegen das neue Deployment
+  (Vollswap wegen geändertem Wrapper).
 
 ## v0.19.3 — Open-Source-Vorbereitung (AGPL-3.0)
 - Blattwerk wird als freie Software veröffentlicht — Lizenz: **GNU AGPL-3.0**

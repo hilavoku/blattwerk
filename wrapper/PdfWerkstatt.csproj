@@ -12,7 +12,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>false</PublishSingleFile>
     <Version>0.5.2</Version>
-    <Product>Blattwerk</Product>
+    <Product>FederPDF</Product>
     <!-- Zwingend fuer WebView2: sonst landen echte Mausklicks bei gemischter
          Monitor-Skalierung versetzt in der Seite (Knöpfe "tun nichts") -->
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
