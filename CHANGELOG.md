@@ -2,6 +2,57 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.19.1 — Bilder skalieren und drehen
+- **Eingebettete Bilder sind jetzt vollwertige Objekte** (bisher nur verschiebbar):
+  Ecke unten rechts ziehen skaliert proportional (Anker oben links, wie bei
+  Signaturen), der runde ↻-Griff über dem Bild dreht frei (Umschalt rastet auf
+  15°), Rechtsklick bietet „Drehen (90°)“ und „Drehen (−90°)“, und die
+  Eigenschaftenleiste zeigt X/Y/Breite/Höhe zum exakten Setzen. Bilder bleiben
+  angeklickt ausgewählt (gestrichelter Rahmen + Griffe), Klick aufs Papier hebt
+  ab. Scans/Ganzseitenbilder bleiben fix (wie bisher).
+- **Technik:** Skalieren geht über den bestehenden `/api/image/move`-Weg
+  (weiß überdecken + `insert_image` in das Ziel-Rect — das streckt bereits,
+  Skalieren war serverseitig also gratis). Drehen ist neu (`/api/image/rotate`):
+  Bildbytes werden vom jetzigen Zustand um den DELTA-Winkel vorgedreht
+  (eingebettete Bilder tragen keine Rotations-Metadaten wie der Signatur-NM-
+  Marker), alte Stelle weiß überdeckt, gedrehte Hülle um die alte Kastenmitte
+  gesetzt. Beides mit Undo (Strg+Z). Bildbytes mit Transparenz (SMask) werden
+  korrekt kombiniert (`_bild_bytes_vom_xref`); derselbe Endpunkt `/api/image/file`
+  liefert die Live-Vorschau beim Drehen (Bild im Kasten, CSS dreht mit).
+  Das Winkel-Feld bleibt Signaturen vorbehalten — bei Bildern ist der
+  aufkumulierte Winkel nach dem Neuladen unbekannt.
+- **Suite um 9 Checks erweitert** (Bildinfo, PNG mit Alpha, Skalierung,
+  90°-Hülle inkl. Rückgabe-Rect, Undo ×2, 30°-Drehung mit Datei-Level-Beweis:
+  gespeicherte Datei frisch mit PyMuPDF geöffnet, Hülle 243×221 um 180/190
+  verifiziert). Suite 89 PASS, deployed. E2E im Browser: Auswahl/Griffe,
+  Resize (+30 pt proportional), Kontextmenü-90°, Drehgriff mit Live-Vorschau,
+  Abwahl per Papier-Klick — am Quell-Server und am Deployment bewiesen.
+  Unterwegs gefunden und behoben: Bild-Overlays trugen kein `data-page`
+  (Kontextmenü-Drehung schickte page=NaN → FastAPI 422).
+
+## v0.19.0 — Lesemodus: die App startet ruhig
+- **Neuer Startzustand:** Beim Öffnen eines PDFs ruht das Papier — kein
+  Block-Highlight beim Überfahren, kein Doppelklick-Originaltext-Editor,
+  Bilder/Formularfelder nicht greifbar (Nutzer-Wunsch: das sofortige
+  Hover-Markieren „kann irritierend wirken“). Suche, Zoom, Seitenwahl
+  funktionieren wie gehabt. Ein Klick auf den neuen Kopfzeilen-Knopf
+  **„Bearbeiten“** (Stift, links neben „Auswahl“) schaltet das heutige
+  Verhalten frei; derselbe Knopf oder der neue Kontextmenü-Eintrag kehrt in
+  den Lesemodus zurück.
+- **Keine Sackgasse:** Wer im Lesemodus ein Werkzeug wählt (Text, Markieren,
+  Zeichnen, Löschen), eine Signatur aufs Papier zieht oder OCR startet,
+  schaltet die Bearbeitung automatisch frei (Auto-Promotion) — sichtbar am
+  aufleuchtenden Knopf. Der Knopf nutzt den Such-Lupen-Zustand `.an` (nicht
+  `.active`), die gleitende Modus-Pill bleibt unberührt.
+- **Aufräumen mit Esc-Semantik:** Abschalten verwirft offene Text-Editoren
+  (kein heimlicher Commit), wählt Objekte ab und bringt die Modus-Pill auf
+  „Auswahl“ zurück. Bewährt im E2E gefunden: setMode allein ließ den
+  Originaltext-Editor offen — jetzt schließen `cancelOriginalEdit` +
+  `cancelInline` vorab. Startzustand bewusst nicht persistiert (deterministisch).
+- Kurzhilfe um „Lesemodus“ ergänzt; Doppelklick-/Bild-Handler tragen Guards
+  (dispatched Events ignorieren pointer-events). E2E: Startzustand, Hover an/
+  aus, Editor + Esc, Promotion, Kontextmenü bewiesen. .zcode/ in .gitignore.
+
 ## v0.18.13 — Suche wie bei PDFgear: Knopf + schwebendes Feld statt Dauer-Leiste
 - **Suchleiste raus aus der Kopfzeile (Nutzer-Wunsch nach PDFgear-Screenshot):**
   Statt der breiten Such-Leiste (Eingabe 150 px + Zähler + zwei Pfeile, dauerhaft

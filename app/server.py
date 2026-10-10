@@ -33,7 +33,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="Blattwerk")
 
-APP_VERSION = "0.19.0"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
+APP_VERSION = "0.19.1"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
 
 
 @app.middleware("http")
@@ -420,6 +420,85 @@ async def image_move(did: str, page: int = Form(...), xref: int = Form(...),
     push_undo(did, {"op": "image-move", "page": page, "xref": xref,
                     "alt": list(alt_r), "neu": list(neu_r)})
     return {"ok": True}
+
+
+def _bild_bytes_vom_xref(d, xref: int) -> bytes:
+    """Eingebettetes Bild als RGBA-PNG ziehen. SMask (Transparenz) kombiniert
+    (PyMuPDF-FaQ-Rezept Pixmap(basis, maske)), exotische Formate (CMYK, J2K)
+    via Pixmap -> PNG. Fuer Live-Vorschau und Drehen."""
+    info = d.extract_image(xref)
+    if info.get("smask", 0) > 0:
+        try:
+            basis = pymupdf.Pixmap(d, xref)
+            if not basis.alpha:
+                basis = pymupdf.Pixmap(basis, pymupdf.Pixmap(d, info["smask"]))
+            if basis.colorspace and basis.colorspace.n > 3:
+                basis = pymupdf.Pixmap(pymupdf.csRGB, basis)
+            return basis.tobytes("png")
+        except Exception:
+            pass   # unten der PIL-/Pixmap-Fallback
+    from PIL import Image
+    try:
+        with Image.open(io.BytesIO(info["image"])) as im:
+            im.load()
+            if im.mode not in ("RGB", "RGBA"):
+                im = im.convert("RGBA")
+            buf = io.BytesIO()
+            im.save(buf, format="PNG")
+            return buf.getvalue()
+    except Exception:
+        pix = pymupdf.Pixmap(d, xref)
+        if pix.colorspace and pix.colorspace.n > 3:
+            pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+        return pix.tobytes("png")
+
+
+@app.get("/api/image/file/{did}/{page}/{xref}")
+def image_file(did: str, page: int, xref: int):
+    """Bildbytes eines eingebetteten Bildes (fuer die Live-Vorschau beim
+    Skalieren/Drehen im Client)."""
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    if xref <= 0:
+        raise HTTPException(400, "Dieses Bild ist nicht abrufbar")
+    try:
+        png = _bild_bytes_vom_xref(d, xref)
+    except Exception:
+        raise HTTPException(404, "Bild konnte nicht extrahiert werden")
+    return Response(content=png, media_type="image/png")
+
+
+@app.post("/api/image/rotate/{did}")
+async def image_rotate(did: str, page: int = Form(...), xref: int = Form(...),
+                       alt: str = Form(...), winkel: float = Form(...)):
+    """Eingebettetes Bild um DELTA-Grad weiterdrehen (Uhrzeigersinn positiv).
+    Eingebettete Bilder tragen keine Rotations-Metadaten (anders als Signatur-
+    NM-Marker) - daher wird immer der JETZTige Bildzustand um den Delta-Winkel
+    vorgedreht (expand), die alte Stelle weiss ueberdeckt und die gedrehte
+    Huelle um die alte Kastenmitte gesetzt."""
+    d = _doc(did)
+    if page < 0 or page >= d.page_count:
+        raise HTTPException(404, "Seite existiert nicht")
+    if xref <= 0:
+        raise HTTPException(400, "Dieses Bild ist nicht drehbar")
+    alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
+    png = _bild_bytes_vom_xref(d, xref)
+    from PIL import Image
+    rot = float(winkel) % 360.0
+    with Image.open(io.BytesIO(png)) as im:
+        gedreht = im.rotate(-rot, expand=True, resample=Image.BICUBIC)
+    buf = io.BytesIO()
+    gedreht.save(buf, format="PNG")
+    hw, hh = _bbox_gedreht(alt_r.width, alt_r.height, rot)
+    cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
+    neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
+    pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
+    pg.draw_rect(alt_r, color=None, fill=(1, 1, 1), overlay=True)
+    pg.insert_image(neu_r, stream=buf.getvalue())
+    push_undo(did, {"op": "image-rotate", "page": page, "xref": xref,
+                    "alt": list(alt_r), "neu": list(neu_r)})
+    return {"ok": True, "rect": [round(v, 1) for v in neu_r]}
 
 
 @app.post("/api/save/{did}")
@@ -1555,7 +1634,7 @@ def undo(did: str):
         d.xref_set_key(a.xref, "NM",
                        f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]}:{sp}:{ld})")
         _freetext_ap_mit_abstand(d, a, pg.rect.height, sp, ld)   # immer eigener AP
-    elif op == "image-move":
+    elif op in ("image-move", "image-rotate"):   # invers: neue Stelle weiss, Original zurueck
         o = e
         pg.draw_rect(pymupdf.Rect(*o["neu"]), color=None, fill=(1, 1, 1), overlay=True)
         pg.insert_image(pymupdf.Rect(*o["alt"]), xref=o["xref"])

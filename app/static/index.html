@@ -248,16 +248,16 @@
   .mode-sign .annot, .mode-text .annot { cursor:default; }
   #viewer.sigdrop { box-shadow: inset 0 0 0 2px var(--accent); }
   .annot.sel { outline:2px dashed var(--accent); }
-  .annot .rz { position:absolute; right:-5px; bottom:-5px; width:11px; height:11px; background:var(--accent);
+  .annot .rz, .imgobj .rz { position:absolute; right:-5px; bottom:-5px; width:11px; height:11px; background:var(--accent);
                border:1px solid #123; border-radius:2px; cursor:nwse-resize; display:none; }
-  .annot.sel .rz { display:block; }
-  .annot .ro { position:absolute; left:50%; top:-26px; width:20px; height:20px; margin-left:-10px;
+  .annot.sel .rz, .imgobj.imgsel .rz { display:block; }
+  .annot .ro, .imgobj .ro { position:absolute; left:50%; top:-26px; width:20px; height:20px; margin-left:-10px;
                background:var(--accent); border:1px solid #123; border-radius:50%; cursor:grab;
                display:none; color:#0b1620; font-size:14px; line-height:18px; text-align:center;
                font-family:'Segoe UI',sans-serif; user-select:none; }
-  .annot.sel .ro { display:block; }
-  .annot .ro:active { cursor:grabbing; }
-  .annot.imgobj { background-size:100% 100%; background-repeat:no-repeat; }
+  .annot.sel .ro, .imgobj.imgsel .ro { display:block; }
+  .annot .ro:active, .imgobj .ro:active { cursor:grabbing; }
+  .imgobj { background-size:100% 100%; background-repeat:no-repeat; }
   .annot.txtobj { overflow:hidden; padding:1px 2px; background:rgba(255,255,255,.01); white-space:pre-wrap; }
   .winput { position:absolute; z-index:3; }
   .winput input { width:100%; height:100%; border:1px solid var(--feld-border); background:rgba(255,255,244,.93);
@@ -598,7 +598,7 @@
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
       <b>Suchen:</b> Lupe in der Leiste oder Strg+F – Eingabe springt auf Treffer, Enter/Umschalt+Enter blättert weiter, Esc schließt.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
-      <b>Bild:</b> eingebettete Grafiken anklicken und ziehen – die alte Stelle wird weiß überdeckt (Scans bleiben fix).<br>
+      <b>Bild:</b> eingebettete Grafiken anklicken und ziehen – die alte Stelle wird weiß überdeckt (Scans bleiben fix). Anker unten rechts skaliert proportional, runder Griff dreht (Umschalt = 15°-Raster), Rechtsklick dreht in 90°-Schritten; Größe/Position exakt in der Leiste oben.<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
       Alles wird erst mit <b>Speichern</b> dauerhaft.
     </p>
@@ -1538,6 +1538,7 @@ function annotTypName(a) {
   return TYP_NAME[a.type] || 'Objekt';
 }
 function selectAnnot(sel) {
+  bildAbwaehlen();   // Bild- und Objektauswahl schliessen sich gegenseitig aus (v0.19.1)
   if (selAnnot && selAnnot.div) selAnnot.div.classList.remove('sel');
   selAnnot = sel;
   const bar = document.getElementById('propsBar');
@@ -1560,7 +1561,37 @@ function selectAnnot(sel) {
   }
   kontextLeiste();
 }
+/* ---------- Auswahl eingebetteter Bilder (v0.19.1) ----------
+   Eigene, leichte Auswahl neben selAnnot: Klick waehlt sofort aus (Klick-Falle
+   v0.17.8: nicht aufs mouseup warten), Griffe rz/ro erscheinen, Eigenschaften-
+   leiste zeigt X/Y/B/H (Winkelfeld bleibt Signaturen vorbehalten - eingebettete
+   Bilder tragen keine Rotations-Metadaten, nach Reload ist der Winkel unbekannt). */
+let bildSel = null;
+function bildProps(div) {
+  const r = div._pdfRect;
+  document.getElementById('prTyp').textContent = 'Bild';
+  document.getElementById('prX').value = Math.round(r[0]);
+  document.getElementById('prY').value = Math.round(r[1]);
+  document.getElementById('prW').value = Math.round(r[2] - r[0]);
+  document.getElementById('prH').value = Math.round(r[3] - r[1]);
+  document.getElementById('prRotLbl').style.display = 'none';
+  document.getElementById('prRot').style.display = 'none';
+  document.getElementById('propsBar').style.display = 'flex';
+}
+function selectBild(div) {
+  selectAnnot(null);   // raeumt Objektauswahl UND alte Bildauswahl ab
+  bildSel = div;
+  div.classList.add('imgsel');
+  bildProps(div);
+}
+function bildAbwaehlen() {
+  if (!bildSel) return;
+  bildSel.classList.remove('imgsel');
+  bildSel = null;
+  document.getElementById('propsBar').style.display = 'none';
+}
 function syncProps() {
+  if (bildSel) { bildProps(bildSel); return; }
   if (selAnnot && selAnnot.div && selAnnot.div._annot) {
     const r = selAnnot.div._annot.rect;
     document.getElementById('prX').value = Math.round(r[0]);
@@ -1572,6 +1603,7 @@ function syncProps() {
   }
 }
 async function applyProps() {
+  if (bildSel) { await bildPropsAnwenden(); return; }
   if (!selAnnot || !selAnnot.div || !selAnnot.div._annot) return;
   const a = selAnnot.div._annot;
   const img = document.querySelector('#page' + selAnnot.page + ' img');
@@ -1599,6 +1631,31 @@ async function applyProps() {
     else positionRect(selAnnot.div, rect, k);
     setDirty(true); stat('Position/Größe gesetzt – Speichern macht es dauerhaft.', true);
   } else stat('Fehler beim Setzen');
+}
+/* Bild verschieben/skalieren: Commit an /api/image/move (der Server streckt via
+   insert_image in das Ziel-Rect - skalieren ist dort kein Sonderfall). */
+async function bildCommitMove(div, pageN, alt, neu) {
+  const fd = new FormData();
+  fd.append('page', pageN); fd.append('xref', div._xref);
+  fd.append('alt', JSON.stringify(alt.map(v => Math.round(v * 10) / 10)));
+  fd.append('neu', JSON.stringify(neu.map(v => Math.round(v * 10) / 10)));
+  const r = await fetch(`/api/image/move/${cur.id}`, {method: 'POST', body: fd});
+  return r.ok;
+}
+async function bildPropsAnwenden() {
+  const div = bildSel, pageN = parseInt(div.dataset.page);
+  const x = parseFloat(document.getElementById('prX').value);
+  const y = parseFloat(document.getElementById('prY').value);
+  const w = Math.max(8, parseFloat(document.getElementById('prW').value) || 20);
+  const h = Math.max(8, parseFloat(document.getElementById('prH').value) || 20);
+  if ([x, y].some(v => isNaN(v))) return;
+  const alt = div._pdfRect.slice();
+  const neu = [x, y, x + w, y + h];
+  if (neu.every((v, i) => Math.abs(v - alt[i]) < 0.5)) return;
+  if (!(await bildCommitMove(div, pageN, alt, neu))) { stat('Fehler beim Setzen'); return; }
+  div._pdfRect = neu.slice(); div._imgbox = neu.slice();
+  setDirty(true); bildAbwaehlen(); refreshPage(pageN);
+  stat('Position/Größe gesetzt – Speichern macht es dauerhaft.', true);
 }
 ['prX','prY','prW','prH'].forEach(id => document.getElementById(id).addEventListener('change', applyProps));
 
@@ -1705,6 +1762,7 @@ document.addEventListener('contextmenu', (ev) => {
   ev.preventDefault();                                 // kein WebView2-Bildmenü ("Bild speichern" etc.)
   if (mode === 'text' && !ev.target.closest('.annot')) { setMode('normal'); return; }   // Rechtsklick daneben: Text-Modus beenden
   const div = ev.target.closest('.annot');
+  const bildDiv = div ? null : (ev.target.closest('.imgobj'));
   ctxMenu.innerHTML = '';
   const eintrag = (label, icon, fn, danger) => {
     const b = document.createElement('button');
@@ -1727,6 +1785,12 @@ document.addEventListener('contextmenu', (ev) => {
     eintrag('Löschen', '&#xE74D;', () => deleteAnnot(div), true);
     if (mode !== 'normal')
       eintrag('Werkzeug: Auswahl & Verschieben', '', () => setMode('normal'));
+  } else if (bildDiv && bildDiv._xref) {
+    // Eingebettetes Bild (kein Annotation-Overlay): Auswahl + 90°-Schritte
+    selectBild(bildDiv);
+    const bildSeite = parseInt(bildDiv.dataset.page);
+    eintrag('Drehen (90°)', '&#xE7A8;', () => bildDrehen(bildDiv, bildSeite, 90));
+    eintrag('Drehen (−90°)', '&#xE7A8;', () => bildDrehen(bildDiv, bildSeite, -90));
   } else if (cur && ev.target.closest('#viewer')) {
     // Kontextmenü auf dem Papier: letzte Aktion weiterbearbeiten + Werkzeug wechseln
     const letzteDiv = letzteForm
@@ -2710,43 +2774,128 @@ async function addImageInfos(img) {
     d._pdfRect = inf.bbox.slice();
     d._imgbox = inf.bbox.slice();
     d._xref = inf.xref;
-    d.title = 'Bild – greifen und ziehen zum Verschieben';
+    d.dataset.page = n;   // Kontextmenü/Undo braucht die Seite am Element
+    d.title = 'Bild – ziehen verschiebt, Anker unten rechts skaliert, ↻ dreht (Rechtsklick: 90°-Schritte)';
     positionRect(d, inf.bbox, k2);
-    d.addEventListener('mousedown', (ev) => startImageDrag(ev, d, n, k2));
+    const rz = document.createElement('div'); rz.className = 'rz'; d.appendChild(rz);
+    const ro = document.createElement('div'); ro.className = 'ro'; ro.textContent = '\u21BB';
+    ro.title = 'Drehen – ziehen (Umschalt-Taste rastet auf 15°-Schritte)';
+    d.appendChild(ro);
+    d.addEventListener('mousedown', (ev) => startBildDrag(ev, d, n, k2, 'move'));
+    rz.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startBildDrag(ev, d, n, k2, 'resize'); });
+    ro.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startBildRotate(ev, d, n, k2); });
     wrap.appendChild(d);
     idx++;
   }
 }
-function startImageDrag(ev, div, pageN, k) {
+
+/* ---------- Eingebettete Bilder: verschieben, skalieren, drehen (v0.19.1) ----------
+   Verschieben wie bisher (weiss ueberdecken + an neuer Stelle einsetzen, der
+   Server streckt insert_image in das Ziel-Rect - skalieren ist kein Sonderfall).
+   Drehen: Bildbytes werden serverseitig vom JETZTigen Zustand um den DELTA-
+   Winkel vorgedreht (eingebettete Bilder tragen keine Rotations-Metadaten wie
+   Signatur-NM-Marker - daher Delta statt Absolutwinkel), Huelle um die alte
+   Kastenmitte. Live-Vorschau: Bild in den Kasten laden + CSS mitdrehen. */
+function startBildDrag(ev, div, pageN, k, kind) {
   if (mode !== 'normal' || !bearb || ev.button !== 0) return;   // Lesemodus: Bilder ruhen
   ev.preventDefault(); ev.stopPropagation();
-  div.classList.add('imgsel');
+  selectBild(div);
   const box = div._pdfRect.slice();
   const sx = ev.clientX, sy = ev.clientY;
   const bewege = (ev2) => {
     const dx = (ev2.clientX - sx) / k, dy = (ev2.clientY - sy) / k;
-    div._neu = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
-    positionRect(div, div._neu, k);
+    let neu;
+    if (kind === 'resize') {   // Ecke unten rechts: proportional, Anker oben links (wie Signatur)
+      const aspect = (box[3] - box[1]) / (box[2] - box[0] || 1);
+      const nb = Math.max(8, (box[2] - box[0]) + dx);
+      neu = [box[0], box[1], box[0] + nb, box[1] + nb * aspect];
+    } else {
+      neu = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
+    }
+    div._neu = neu;
+    positionRect(div, neu, k);
   };
   const hoch = async (ev2) => {
     document.removeEventListener('mousemove', bewege);
     document.removeEventListener('mouseup', hoch);
-    div.classList.remove('imgsel');
-    if (Math.abs(ev2.clientX - sx) + Math.abs(ev2.clientY - sy) < 5) return;   // stiller Klick
+    if (kind === 'move' && Math.abs(ev2.clientX - sx) + Math.abs(ev2.clientY - sy) < 5) return;   // stiller Klick = Auswahl bleibt
     const neu = div._neu || box;
-    div._pdfRect = neu.slice(); div._imgbox = neu.slice();
-    const fd = new FormData();
-    fd.append('page', pageN); fd.append('xref', div._xref);
-    fd.append('alt', JSON.stringify(box.map(v => Math.round(v * 10) / 10)));
-    fd.append('neu', JSON.stringify(neu.map(v => Math.round(v * 10) / 10)));
-    const r = await fetch(`/api/image/move/${cur.id}`, {method:'POST', body: fd});
-    if (r.ok) {
-      setDirty(true); refreshPage(pageN);
-      stat('Bild verschoben – Speichern macht es dauerhaft.', true);
-    } else stat('Verschieben fehlgeschlagen');
+    div._neu = null;
+    if (neu.every((v, i) => Math.abs(v - box[i]) < 0.15)) return;   // praktisch unveraendert
+    if (!(await bildCommitMove(div, pageN, box, neu))) {
+      positionRect(div, box, k);
+      stat('Änderung fehlgeschlagen');
+      return;
+    }
+    setDirty(true); bildAbwaehlen(); refreshPage(pageN);   // Raster neu aufbauen - Auswahl lebt im Neuaufbau nicht weiter
+    stat(kind === 'resize' ? 'Bild skaliert – Speichern macht es dauerhaft.' :
+         'Bild verschoben – Speichern macht es dauerhaft.', true);
   };
   document.addEventListener('mousemove', bewege);
   document.addEventListener('mouseup', hoch);
+}
+
+function startBildRotate(ev, div, pageN, k) {
+  if (mode !== 'normal' || !bearb || ev.button !== 0) return;   // Lesemodus: Bilder ruhen
+  ev.preventDefault(); ev.stopPropagation();
+  selectBild(div);
+  // Live-Vorschau: Bild in den Kasten laden und per CSS mitdrehen. Das Raster
+  // unten zeigt bis zum Commit noch die alte Platzierung - der weisse
+  // Auswahlton (.imgsel) ueberdeckt sie sichtbar.
+  div.style.backgroundImage = `url(/api/image/file/${cur.id}/${pageN}/${div._xref})`;
+  const r = div.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const winkelStart = Math.atan2(-(ev.clientY - cy), ev.clientX - cx);
+  let deltaGesamt = 0;
+  const bewege = (ev2) => {
+    const winkel = Math.atan2(-(ev2.clientY - cy), ev2.clientX - cx);
+    let delta = -(winkel - winkelStart) * 180 / Math.PI;   // Screen- zu Uhrzeigersinn
+    if (ev2.shiftKey) delta = Math.round(delta / 15) * 15;
+    deltaGesamt = delta;
+    div.style.transform = 'rotate(' + delta + 'deg)';
+    stat('Winkel: ' + (Math.round(delta * 10) / 10) + '\u00B0');
+  };
+  const hoch = async () => {
+    document.removeEventListener('mousemove', bewege);
+    document.removeEventListener('mouseup', hoch);
+    if (Math.abs(deltaGesamt) < 0.05) {   // kaum gedreht: ruhig zuruecksetzen
+      div.style.transform = ''; div.style.backgroundImage = '';
+      return;
+    }
+    // transform bleibt STEHEN bis der neue Zustand da ist (kein Rueckflack,
+    // gleiches Muster wie bei Signaturen).
+    const ziel = Math.round(deltaGesamt * 100) / 100;
+    const fd = new FormData();
+    fd.append('page', pageN); fd.append('xref', div._xref);
+    fd.append('alt', JSON.stringify(div._pdfRect.map(v => Math.round(v * 10) / 10)));
+    fd.append('winkel', ziel);
+    const rr = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
+    if (rr.ok) {
+      setDirty(true); bildAbwaehlen(); refreshPage(pageN);
+      stat('Bild um ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', true);
+    } else {
+      div.style.transform = ''; div.style.backgroundImage = '';
+      const j = await rr.json().catch(() => ({}));
+      stat(typeof j.detail === 'string' ? j.detail : 'Drehen fehlgeschlagen');
+    }
+  };
+  document.addEventListener('mousemove', bewege);
+  document.addEventListener('mouseup', hoch);
+}
+
+async function bildDrehen(div, pageN, winkel) {   // Kontextmenü: 90°-Schritte
+  const fd = new FormData();
+  fd.append('page', pageN); fd.append('xref', div._xref);
+  fd.append('alt', JSON.stringify(div._pdfRect.map(v => Math.round(v * 10) / 10)));
+  fd.append('winkel', winkel);
+  const r = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
+  if (r.ok) {
+    setDirty(true); bildAbwaehlen(); refreshPage(pageN);
+    stat('Bild um ' + winkel + '\u00B0 gedreht – Strg+Z dreht zurück.', true);
+  } else {
+    const j = await r.json().catch(() => ({}));
+    stat(typeof j.detail === 'string' ? j.detail : 'Drehen fehlgeschlagen');
+  }
 }
 
 /* ---------- Signaturen: Galerie mit Vorschau, Umbenennen, Loeschen ---------- */
@@ -3293,6 +3442,7 @@ function paperDragStart(ev, img) {
   if (mode === 'draw') { if (drawTool !== 'erase') drawDragStart(ev, img); return; }
   if (mode !== 'normal') return;
   clearFreeSel();
+  bildAbwaehlen();   // Klick aufs freie Papier: Bild-Auswahl aufheben (v0.19.1)
   if (ev.altKey) {
     selDrag = {n: parseInt(img.dataset.page), img, startX: ev.clientX, startY: ev.clientY,
                active: false, div: null};
