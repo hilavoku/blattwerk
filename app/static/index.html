@@ -438,7 +438,7 @@
   <div id="modePill"></div>
   <div class="kopfzeile">
   <div class="griff" title="Ziehen verschiebt das Fenster"></div>
-  <div class="brand" id="brand" title="Über Blattwerk – Programm- und Versionsinfo"><div class="logo"><img src="/favicon.ico" alt=""></div><span class="name">Blattwerk</span></div>
+  <div class="brand" id="brand" title="Über Blattwerk – Programm- und Versionsinfo"><div class="logo"><img src="/favicon.ico" alt="" draggable="false"></div><span class="name">Blattwerk</span></div>
   <div class="griff"></div>
   <input type="file" id="file" accept=".pdf" style="display:none">
   <button class="tbtn" onclick="document.getElementById('file').click()" title="PDF öffnen (Strg+O)"><span class="i">&#xE8E5;</span><span class="lbl">Öffnen</span></button>
@@ -3109,6 +3109,11 @@ document.addEventListener('pointerup', (ev) => {
   if (gezogen <= 6) infoBoxOeffnen();   // Loslassen ohne Bewegung = Klick
 });
 document.addEventListener('pointercancel', () => { markeDrueckt = null; });
+/* Natives Drag&Drop an der Marke unterbinden: Das Logo-<img> ist vom Browser
+   her ziehbar - sobald ein HTML5-Drag startet, verstummen die pointermove-
+   Events und die Schwelle erreicht den Rahmen-Move NIEMALS (Nutzer-Meldung
+   v0.18.12; gleiche Klasse wie die Signatur-Kacheln v0.17.10). */
+document.getElementById('brand').addEventListener('dragstart', (ev) => ev.preventDefault());
 document.getElementById('infoOk').addEventListener('click', infoBoxSchliessen);
 /* Klick neben den Dialog schliesst ihn (Klick auf die Marke macht das Toggle selbst) */
 document.addEventListener('pointerdown', (ev) => {

@@ -2,6 +2,24 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.18.12 — Fenster an der Marke ziehen: nun wirklich (Native-Drag-Falle)
+- **Folgefix zu v0.18.11 (Nutzer-Meldung: „Fenster lässt sich an der Marke
+  immer noch nicht ziehen“):** Die Schwellen-Logik war in Ordnung, aber das
+  Logo ist ein <img> — der Browser startet beim Ziehen darauf ein natives
+  HTML5-Drag&Drop, das die Pointer-Ereigniskette abbricht, bevor die
+  6-px-Schwelle den Rahmen-Move auslösen kann (gleiche Klasse wie die
+  Signatur-Kacheln v0.17.10). Fix: dragstart an der Marke preventDefault
+  + Logo-Img draggable=„false“. Nutzer bestätigt: Ziehen funktioniert.
+- **Test-Lektionen (in AGENTS.md/Gedächtnis festgehalten):** Synthetische
+  PointerEvents umgehen das native DnD — sie bewiesen die Logik, nicht das
+  Verhalten; echte OS-Eingaben brauchen SetProcessDpiAwareness(2). Fenster-
+  Testpositionen NUR nach Abfrage der Monitor-Topologie wählen (Monitore
+  überlappen: Zweitmonitor beginnt bei x=−264 — Testfenster davor stand
+  offscreen, Nutzer-Kritik). Deployment-Kontrolle: robocopy-Erfolg per
+  Datei-Existenz prüfen, nie per echo-Kette (ein fehlgeschlagener Swap
+  ließ server\ leer und die App mit „Server nicht gefunden“-Dialog starten).
+- Suite 80 PASS.
+
 ## v0.18.11 — Schlankerer Fensterrand, Fenster wieder an der Marke ziehbar
 - **Fensterrand 6 → 4 px (Nutzer-Wunsch „etwas dünner“):** Der Rahmen
   (Größe-Zonen + Trikolore-Band) geht auf 4 px zurück; WM_NCHITTEST und
