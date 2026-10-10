@@ -42,6 +42,10 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
+        // Fensterrand = Groesse-Zonen + Trikolore-Rahmen (frueher 6, Nutzer:
+        // "etwas duenner" v0.18.11); WM_NCHITTEST/OnPaint lesen Padding dynamisch
+        const int randBreite = 4;
+
         var form = new HauptForm
         {
             Text = pdfPath != null
@@ -53,7 +57,7 @@ internal static class Program
             Font = new Font("Segoe UI", 9f),
             FormBorderStyle = FormBorderStyle.None,
             BackColor = System.Drawing.Color.FromArgb(23, 25, 29),
-            Padding = new Padding(6, 6, 6, 6)
+            Padding = new Padding(randBreite, randBreite, randBreite, randBreite)
         };
 
         // Fenstergroesse/-position wiederherstellen (fenster.json neben der EXE)
@@ -85,10 +89,10 @@ internal static class Program
 
         form.Resize += (_, _) =>
         {
-            // Maximiert: randlos ueber den Bildschirm; sonst 6px-Groesse-Rand rundum
+            // Maximiert: randlos ueber den Bildschirm; sonst schmalen Groesse-Rand rundum
             form.Padding = form.WindowState == FormWindowState.Maximized
                 ? Padding.Empty
-                : new Padding(6, 6, 6, 6);
+                : new Padding(randBreite, randBreite, randBreite, randBreite);
             WebViewAufInnenflaecheSetzen(form, webView);
         };
 

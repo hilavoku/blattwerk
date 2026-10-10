@@ -2,6 +2,24 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.18.11 — Schlankerer Fensterrand, Fenster wieder an der Marke ziehbar
+- **Fensterrand 6 → 4 px (Nutzer-Wunsch „etwas dünner“):** Der Rahmen
+  (Größe-Zonen + Trikolore-Band) geht auf 4 px zurück; WM_NCHITTEST und
+  OnPaint lesen das Padding dynamisch, die Zieh-Greifzonen schrumpfen mit
+  und bleiben greifbar. Gemessen in der echten App: Farbband gleichmäßig
+  7 px (vorher 10) auf ganzer Breite inkl. Fensterknopf-Zone.
+- **Marke zieht wieder (Nutzer-Wunsch):** Logo/„Blattwerk“ behält den
+  Info-Klick UND verschiebt das Fenster beim Ziehen — wie eine native
+  Titelleistenecke: Erst ab 6 px Bewegung wird der Rahmen-Move gestartet
+  (dessen modaler Loop schluckt das Loslassen, v0.17.7/8), ohne Bewegung
+  zählt das Loslassen als Klick und öffnet den Über-Dialog. Die Ausnahme
+  der Marke in der Kopfzeilen-Ziehfläche bleibt (sie regelt Klick/Zug
+  selbst); Doppelklick auf die Marke maximiert weiterhin nicht.
+- Beweis im Browser (synthetische PointerEvents, chrome-Mock): Klick →
+  Dialog ohne Nachricht; 30-px-Zug → genau ein „fenster|drag“, kein
+  Dialog; 3-px-Kurzzug → Dialog; Doppelklick → keine Nachricht.
+- Suite 80 PASS. Wrapper (Padding) + UI; beide neu gebaut und deployed.
+
 ## v0.18.10 — Logo mit Original-Transparenz (wirkt freundlicher)
 - **Die Eckenmaske fliegt raus (Nutzer-Wunsch):** Das Logo/Ikon wurde bisher
   auf ein abgerundetes Quadrat (22 %) maskiert — gegen den dunklen Chrome
