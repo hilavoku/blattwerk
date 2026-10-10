@@ -13,10 +13,11 @@ Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
   HTML-Titel, Über-Dialog, Demo-Dokument („FederPDF Demo-Dokument"),
   Fehler-/Hinweisdialoge, FastAPI-Titel, csproj <Product>, README,
   KI-Systemprompt. **Bewusst unverändert** (wie schon bei v0.14.0): Exe-Namen
-  PdfWerkstatt.exe/PdfWerkstattServer.exe, Namespace, Projektordner
-  pdf-werkstatt, Buildskripte — Deploy-Pfade und Dateizuordnung laufen
-  unverändert weiter. Das GitHub-Repo heißt jetzt `federpdf` (bleibt bis auf
-  Weiteres privat; Veröffentlichung folgt mit dem neuen Icon).
+  PdfWerkstatt.exe/PdfWerkstattServer.exe, Namespace, Buildskripte —
+  Deploy-Pfade und Dateizuordnung laufen unverändert weiter. Auch der
+  Projektordner heißt jetzt `federpdf` (statt pdf-werkstatt; venv und
+  Build-Ausgaben wurden dabei regeneriert). Das GitHub-Repo heißt `federpdf`
+  (bleibt bis auf Weiteres privat; Veröffentlichung folgt mit dem neuen Icon).
 - App-Logik/Verhalten unverändert. Suite 89 PASS gegen das neue Deployment
   (Vollswap wegen geändertem Wrapper).
 

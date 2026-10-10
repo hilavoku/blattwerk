@@ -1,4 +1,4 @@
-# FederPDF (Projekt: PDF-Werkstatt) - lokaler PDF-Server
+# FederPDF - lokaler PDF-Server (technische Namen PdfWerkstatt)
 # Läuft auf 127.0.0.1, wird vom WebView2-Wrapper (PdfWerkstatt.exe) gestartet.
 import os
 import re
