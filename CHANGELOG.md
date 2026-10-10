@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.19.3 — Open-Source-Vorbereitung (AGPL-3.0)
+- Blattwerk wird als freie Software veröffentlicht — Lizenz: **GNU AGPL-3.0**
+  (Pflicht wegen PyMuPDF; siehe LICENSE und „Drittanbieter“ im README).
+- README (deutsch mit englischer Kurzfassung) und LICENSE ergänzt; die
+  Testsuite liegt im Repo (`tests/pdfwerkstatt_test.py`, erzeugt ihre
+  Fixtures jetzt selbst).
+- `server.py`: Entwicklungs-BASE ist skriptrelativ statt absolut;
+  `PdfWerkstattServer.spec`: Icon-Pfad über SPECPATH statt absolut. Das
+  App-Verhalten ist unverändert, Suite 89 PASS gegen das Deployment.
+
 ## v0.19.2 — Umschalter Lesen/Bearbeiten: Auge ↔ Stift-auf-Dokument
 - **Icon-Verwechslung behoben (Nutzer-Hinweis):** Der Bearbeiten-Knopf trug
   einen Stift — zu ähnlich zum Stift-Symbol des Werkzeugs „Markieren“. Der

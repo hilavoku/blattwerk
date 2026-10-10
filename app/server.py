@@ -17,7 +17,8 @@ if getattr(sys, "frozen", False):
     BASE = os.path.dirname(sys.executable)
     STATIC = os.path.join(getattr(sys, "_MEIPASS", BASE), "static")
 else:
-    BASE = r"<Projektordner>"
+    # Quellcode-Ausführung: Projektwurzel ist eine Ebene über app/
+    BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     STATIC = os.path.join(BASE, "app", "static")
 
 UPLOADS = os.path.join(BASE, "uploads")
@@ -33,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="Blattwerk")
 
-APP_VERSION = "0.19.2"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
+APP_VERSION = "0.19.3"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
 
 
 @app.middleware("http")

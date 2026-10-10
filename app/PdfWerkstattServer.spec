@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('static', 'static')]
@@ -47,7 +48,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['<Projektordner>/wrapper/pdfwerkstatt_icon.ico'],
+    icon=[os.path.abspath(os.path.join(SPECPATH, '..', 'wrapper', 'pdfwerkstatt_icon.ico'))],
 )
 coll = COLLECT(
     exe,

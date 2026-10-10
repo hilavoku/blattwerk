@@ -25,3 +25,9 @@ uploads/
 app/static/logo_alt.png
 wrapper/pdfwerkstatt_icon_alt.ico
 .zcode/
+
+# Lokale/private Projektdateien (bewusst nicht veröffentlicht)
+AGENTS.md
+2026-10-09 ToDo.md
+signatures/
+demo/
