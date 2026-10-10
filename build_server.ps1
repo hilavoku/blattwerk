@@ -29,7 +29,9 @@ if ($mp -eq "multipart") { $pargs += @("--collect-all","multipart") }
 if ($mp -eq "python_multipart") { $pargs += @("--collect-all","python_multipart") }
 
 Write-Host "=== PyInstaller-Build ==="
-& "$venv\pyinstaller.exe" @pargs server.py 2>&1 | Select-Object -Last 3
+# python -m statt pyinstaller.exe-Shim: der Shim traegt eine absolute Python-
+# Pfadangabe und bricht, wenn der Projektordner verschoben/umbenannt wurde.
+& "$venv\python.exe" -m PyInstaller @pargs server.py 2>&1 | Select-Object -Last 5
 Write-Host "pyinstaller exit: $LASTEXITCODE"
 
 $dist = Join-Path $root "app\dist\PdfWerkstattServer\PdfWerkstattServer.exe"

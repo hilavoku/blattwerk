@@ -7,6 +7,20 @@ markieren, schwärzen, OCR — alles läuft auf dem eigenen Rechner. Kein Konto,
 Hintergrunddienst, keine Internetverbindung nötig (außer man schaltet den optionalen
 KI-Assistenten mit seinem eigenen API-Schlüssel frei).
 
+## Screenshots
+
+| Lesemodus — ruhig zum Lesen | Bearbeitungsmodus — signieren & markieren |
+|:---:|:---:|
+| ![Lesemodus](docs/screenshots/lesemodus.png) | ![Bearbeitungsmodus](docs/screenshots/bearbeiten.png) |
+
+## Download
+
+Fertige Windows-Version (portable ZIP, keine Installation):
+**[github.com/hilavoku/federpdf/releases](https://github.com/hilavoku/federpdf/releases)** —
+ZIP entpacken, `PdfWerkstatt.exe` starten, fertig. Enthält OCR-Sprachdaten
+(Deutsch/Englisch); benötigt die [WebView2-Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+(auf Windows 11 vorinstalliert). Oder aus den Quellen bauen — siehe unten.
+
 ---
 
 ## English summary
