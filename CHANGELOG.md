@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.19.2 — Umschalter Lesen/Bearbeiten: Auge ↔ Stift-auf-Dokument
+- **Icon-Verwechslung behoben (Nutzer-Hinweis):** Der Bearbeiten-Knopf trug
+  einen Stift — zu ähnlich zum Stift-Symbol des Werkzeugs „Markieren“. Der
+  Umschalter zeigt jetzt ICON + BESCHRIFTUNG je Zustand (Anzeige = Zustand):
+  **Auge + „Lesen“** im Lesemodus, **Dokument mit Stift (MDL2 QuickNote,
+  E70B) + „Bearbeiten“** im Bearbeitungsmodus (der Auge↔Stift-Gegensatz aus
+  der Icon-Recherche des Nutzers; der Titel-Tooltip wechselt mit).
+- Kurzhilfe-Zeile angepasst („Knopf ‚Lesen/Bearbeiten‘ (Auge ↔ Stift)“).
+  Server/Verhalten unverändert, Suite 89 PASS gegen das Deployment.
+
 ## v0.19.1 — Bilder skalieren und drehen
 - **Eingebettete Bilder sind jetzt vollwertige Objekte** (bisher nur verschiebbar):
   Ecke unten rechts ziehen skaliert proportional (Anker oben links, wie bei

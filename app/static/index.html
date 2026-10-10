@@ -470,7 +470,7 @@
   </button>
   <div id="sigPanel"></div>
   <input type="file" id="sigFile" accept=".png,.jpg,.jpeg" style="display:none">
-  <button class="tbtn" id="btnBearb" onclick="bearbUmschalten()" title="Bearbeiten einschalten – Text, Bilder, Signaturen und Formen bearbeiten (aus = Lesemodus: die Seite bleibt ruhig)"><span class="i">&#xE70F;</span><span class="lbl">Bearbeiten</span></button>
+  <button class="tbtn" id="btnBearb" onclick="bearbUmschalten()" title="Lesemodus – Klicken schaltet die Bearbeitung frei (Text, Bilder, Signaturen, Formen)"><span class="i" id="bearbIco">&#xE7B3;</span><span class="lbl" id="bearbLbl">Lesen</span></button>
   <button class="tbtn" id="btnNormal" onclick="setMode('normal')" title="Auswahl & Verschieben – beendet Text-/Löschen-Modus (Esc)"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M2.5 1 L2.5 14.4 L5.6 11.5 L7.5 15.7 L9.6 14.8 L7.7 10.7 L11.7 10.7 Z" fill="currentColor"/></svg><span class="lbl">Auswahl</span></button>
   <button class="tbtn" id="btnText" onclick="setMode('text')" title="Aufs Papier klicken und direkt tippen"><span style="font-weight:600">T</span><span class="lbl">Text</span></button>
   <button class="tbtn" id="btnMark" onclick="setMode('mark')" title="Text aufziehen und markieren – Marker, Unterstreichen, Durchstreichen"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M1 15 L2.8 11 L12 1 L14 3.5 L4.8 13.4 Z M1 15 L3.5 14" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 14.5 L1.5 15 L1.8 13.4 Z" fill="currentColor"/></svg><span class="lbl">Markieren</span></button>
@@ -580,7 +580,7 @@
     <div id="fields" class="muted">&ndash;</div>
     <h3>Kurzhilfe</h3>
     <p class="muted">
-      <b>Lesemodus:</b> Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Bearbeiten“ in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch.<br>
+      <b>Lesemodus:</b> Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Lesen/Bearbeiten“ (Auge ↔ Stift) in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch.<br>
       <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
       <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
       <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.<br>
@@ -875,12 +875,17 @@ function bearbSetzen(an, still) {
   document.body.classList.toggle('bearb-aus', !bearb);
   const b = document.getElementById('btnBearb');
   b.classList.toggle('an', bearb);
+  // Anzeige = Zustand: Auge + "Lesen" im Lesemodus, Dokument-mit-Stift +
+  // "Bearbeiten" im Bearbeitungsmodus (Stift allein war dem Markierer zu ähnlich,
+  // Nutzer-Hinweis v0.19.2)
+  document.getElementById('bearbIco').innerHTML = bearb ? '&#xE70B;' : '&#xE7B3;';
+  document.getElementById('bearbLbl').textContent = bearb ? 'Bearbeiten' : 'Lesen';
   b.title = bearb
-    ? 'Bearbeiten aus = Lesemodus (die Seite bleibt ruhig)'
-    : 'Bearbeiten einschalten – Text, Bilder, Signaturen und Formen bearbeiten (aus = Lesemodus: die Seite bleibt ruhig)';
+    ? 'Bearbeiten aktiv – Klicken schaltet zurück in den Lesemodus (die Seite ruht)'
+    : 'Lesemodus – Klicken schaltet die Bearbeitung frei (Text, Bilder, Signaturen, Formen)';
   if (!still) stat(bearb
     ? 'Bearbeiten aktiv – Objekte lassen sich greifen.'
-    : 'Lesemodus – die Seite bleibt ruhig. „Bearbeiten“ schaltet die Bearbeitung frei.', true);
+    : 'Lesemodus – die Seite bleibt ruhig. „Lesen/Bearbeiten“ schaltet die Bearbeitung frei.', true);
 }
 function bearbUmschalten() { bearbSetzen(!bearb); }
 function bearbSicherstellen() { if (!bearb) bearbSetzen(true); }   // Promotion: Werkzeug-/Signatur-/OCR-Absicht
