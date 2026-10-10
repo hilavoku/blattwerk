@@ -2,6 +2,25 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
 
+## v0.18.13 — Suche wie bei PDFgear: Knopf + schwebendes Feld statt Dauer-Leiste
+- **Suchleiste raus aus der Kopfzeile (Nutzer-Wunsch nach PDFgear-Screenshot):**
+  Statt der breiten Such-Leiste (Eingabe 150 px + Zähler + zwei Pfeile, dauerhaft
+  sichtbar) gibt es nur noch einen kleinen Lupen-Knopf in der Leiste. Er öffnet
+  ein kompaktes schwebendes Suchfeld unter der Kopfzeile rechts: Lupe, Eingabe,
+  Trefferzähler (x/y), Hoch/Runter-Pfeile und Schließen-X — eins zu eins das
+  PDFgear-Muster. Die Kopazeile gewinnt ~230 px Platz für die Werkzeuge.
+- **Strg+F** öffnet die Suche (wie PDFgear/Word) und fokussiert die Eingabe;
+  **Eingabe** springt zum nächsten Treffer, **Umschalt+Eingabe** zum vorherigen,
+  **Esc** (im Feld) schließt. Schließen räumt auf: Eingabe leer, Treffer-
+  Markierungen weg, Zähler leer, Knopf-Zustand aus. Suchlogik (runSearch/
+  hitNav, debounce 350 ms, Sprung zum Treffer) unverändert.
+- Kurzhilfe um eine Zeile „Suchen" ergänzt (Funktion ist jetzt hinter dem
+  Knopf verborgen). Such-Knopf nutzt eigenen Zustand `.an` (nicht `.active`,
+  damit die gleitende Modus-Pill ihn nicht ansteuert).
+- E2E im Browser: Knopf öffnet/fokussiert, „Seite" findet 21 Treffer mit
+  Markierungen, Eingabe blättert 1→2→3, Esc schließt+räumt, Strg+F bewiesen;
+  Deployment per Feature-Token verifiziert. Suite 80 PASS.
+
 ## v0.18.12 — Fenster an der Marke ziehen: nun wirklich (Native-Drag-Falle)
 - **Folgefix zu v0.18.11 (Nutzer-Meldung: „Fenster lässt sich an der Marke
   immer noch nicht ziehen“):** Die Schwellen-Logik war in Ordnung, aber das

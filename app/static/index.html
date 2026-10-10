@@ -34,7 +34,6 @@
   header.wrap .kopfzeile { flex-wrap:wrap; overflow-x:visible; row-gap:5px; }
   header.compact .tbtn .lbl { display:none; }
   header.compact .tbtn { padding:6px 8px; }
-  header.compact .searchwrap input { width:88px; }
   header.slim .brand b { display:none; }
   header.slim .tbtn { padding:5px 6px; }
   header.slim .fmtbar select { max-width:110px; }
@@ -190,13 +189,22 @@
   ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
   .siglock { width:72px; height:36px; flex:none; border-radius:5px; background:var(--chrome2); display:flex;
              align-items:center; justify-content:center; color:var(--muted); font-family:var(--icon); font-size:16px; }
-  .searchwrap { display:flex; align-items:center; background:var(--chrome2); border:1px solid var(--border);
-                border-radius:6px; padding:2px 8px; gap:6px; }
-  .searchwrap .i { font-family:var(--icon); font-size:13px; color:var(--muted); }
-  .searchwrap input { background:transparent; border:none; outline:none; color:var(--text); width:150px; font-size:12.5px; }
-  .searchwrap .hits { color:var(--muted); font-size:11.5px; min-width:44px; text-align:center; }
-  .searchwrap .nav { background:none; border:none; color:var(--muted); cursor:pointer; font-family:var(--icon); font-size:12px; padding:2px; }
-  .searchwrap .nav:hover { color:var(--text); }
+  /* Schwebende Suche (v0.18.13, PDFgear-Art): Knopf in der Leiste, Feld oeffnet
+     darunter - die alte Dauer-Leiste nahm der Kopfzeile zu viel Platz weg */
+  .suchbox { position:fixed; z-index:320; display:none; align-items:center; gap:4px;
+             background:var(--chrome); border:1px solid var(--border); border-radius:9px;
+             padding:5px 7px; box-shadow:0 12px 40px rgba(0,0,0,.55); }
+  .suchbox.offen { display:flex; }
+  .suchbox .i { font-family:var(--icon); font-size:13px; color:var(--muted); }
+  .suchbox input { background:var(--chrome2); border:1px solid var(--border); border-radius:6px;
+                   outline:none; color:var(--text); width:150px; font-size:12.5px; padding:4px 8px; }
+  .suchbox input:focus { border-color:var(--accent-dim); }
+  .suchbox .hits { color:var(--muted); font-size:11.5px; min-width:40px; text-align:center; }
+  .suchbox .nav, .suchbox .zu { background:none; border:none; color:var(--muted); cursor:pointer;
+                                font-family:var(--icon); font-size:12px; padding:3px; border-radius:4px; }
+  .suchbox .nav:hover { color:var(--text); background:var(--hover); }
+  .suchbox .zu:hover { color:var(--danger); background:var(--hover); }
+  .tbtn.an { background:var(--accent-dim); color:#fff; border-color:var(--accent); }   /* Such-Knopf offen (NICHT .active - modePill) */
   .spacer { flex:1; }   /* ungenutzt seit v0.16.8 (Theme-Knopf in der fixen Zone) */
 
   /* ---------- Hauptbereich ---------- */
@@ -529,13 +537,7 @@
     <span class="lbl">pt</span>
   </div>
   <div class="sep"></div>
-  <div class="searchwrap">
-    <span class="i">&#xE721;</span>
-    <input id="searchBox" placeholder="Suchen…">
-    <span class="hits" id="hitInfo"></span>
-    <button class="nav" onclick="hitNav(-1)" title="Vorheriger Treffer">&#xE76B;</button>
-    <button class="nav" onclick="hitNav(1)" title="Nächster Treffer">&#xE76C;</button>
-  </div>
+  <button class="tbtn" id="btnSuche" onclick="sucheUmschalten()" title="Im Dokument suchen (Strg+F)"><span class="i">&#xE721;</span></button>
   </div>
   <div class="fensterzone">
     <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
@@ -581,6 +583,7 @@
       <b>Text:</b> Bereich mit gedrückter Maustaste aufziehen oder Punkt anklicken – direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe, Abstand oben änderbar). Beenden: Esc, Rechtsklick oder Klick neben das Feld. Kopfzeile: Griffe/Logo ziehen verschiebt das Fenster, Doppelklick max/min.<br>
       <b>Originaltext ändern:</b> Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt. Danach ist der Text ein verschiebbares Objekt.<br>
       <b>Formulare:</b> Felder direkt im Dokument ausfüllen.<br>
+      <b>Suchen:</b> Lupe in der Leiste oder Strg+F – Eingabe springt auf Treffer, Enter/Umschalt+Enter blättert weiter, Esc schließt.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
       <b>Bild:</b> eingebettete Grafiken anklicken und ziehen – die alte Stelle wird weiß überdeckt (Scans bleiben fix).<br>
       <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
@@ -729,8 +732,16 @@
   </div>
 </div>
 
-<div id="kiPanel">
-  <div class="kizieh" id="kiZieh" title="Ziehen ändert die Breite"></div>
+<div class="suchbox" id="suchFeld">
+  <span class="i">&#xE721;</span>
+  <input id="searchBox" placeholder="Suchen…">
+  <span class="hits" id="hitInfo"></span>
+  <button class="nav" onclick="hitNav(-1)" title="Vorheriger Treffer (Umschalt+Eingabe)">&#xE76B;</button>
+  <button class="nav" onclick="hitNav(1)" title="Nächster Treffer (Eingabe)">&#xE76C;</button>
+  <button class="zu" onclick="sucheSchliessen()" title="Suche schließen (Esc)">&#xE711;</button>
+</div>
+
+<div id="kiPanel">  <div class="kizieh" id="kiZieh" title="Ziehen ändert die Breite"></div>
   <div class="kikopf">
     <span class="i" style="font-family:var(--icon)">&#xE945;</span><b>KI-Assistent</b>
     <span class="spacer"></span>
@@ -1630,11 +1641,11 @@ kopfleiste.addEventListener('mousedown', (ev) => {
   if (ev.button !== 0) return;
   // .brand ausgenommen: sie regelt Klick (Über-Dialog) vs. Ziehen selbst per
   // Bewegungsschwelle - hier duerfte der Rahmen-Move nicht sofort starten
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, #hitInfo, .fensterzone, #sigPanel, .miniBox, #renameBox, #ctxMenu, .brand')) return;   // Panel haengt im Kopfzeilen-Baum: Ziehen darf Kachel-Drag&Drop nicht fressen
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .fensterzone, #sigPanel, .miniBox, #renameBox, #ctxMenu, .brand')) return;   // Panel haengt im Kopfzeilen-Baum: Ziehen darf Kachel-Drag&Drop nicht fressen
   window.chrome?.webview?.postMessage('fenster|drag');
 });
 kopfleiste.addEventListener('dblclick', (ev) => {
-  if (ev.target.closest('button, input, select, textarea, .fmtbar, .searchwrap, .hits, .fensterzone, .brand')) return;
+  if (ev.target.closest('button, input, select, textarea, .fmtbar, .fensterzone, .brand')) return;
   window.chrome?.webview?.postMessage('fenster|max');
 });
 window.pwMaximiert = (max) => {
@@ -2463,11 +2474,31 @@ async function saveWidget(f, value) {
   else stat('Fehler bei Feld ' + f.name);
 }
 
-/* ---------- Suche ---------- */
+/* ---------- Suche (schwebendes Feld, PDFgear-Art; Logik unverändert) ---------- */
 let searchTimer = null;
+function sucheUmschalten() {
+  const f = document.getElementById('suchFeld');
+  if (f.classList.contains('offen')) { sucheSchliessen(); return; }
+  f.classList.add('offen');
+  f.style.top = (document.querySelector('header').offsetHeight + 8) + 'px';
+  f.style.right = '10px';
+  document.getElementById('btnSuche').classList.add('an');
+  const inp = document.getElementById('searchBox');
+  inp.focus(); inp.select();
+}
+function sucheSchliessen() {
+  document.getElementById('suchFeld').classList.remove('offen');
+  document.getElementById('btnSuche').classList.remove('an');
+  document.getElementById('searchBox').value = '';
+  runSearch('');   // entfernt Treffer-Markierungen und Zaehler
+}
 document.getElementById('searchBox').addEventListener('input', (ev) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => runSearch(ev.target.value), 350);
+});
+document.getElementById('searchBox').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') { ev.preventDefault(); hitNav(ev.shiftKey ? -1 : 1); }
+  else if (ev.key === 'Escape') { ev.stopPropagation(); sucheSchliessen(); }
 });
 async function runSearch(q) {
   document.querySelectorAll('.hit').forEach(e => e.remove());
@@ -3060,6 +3091,11 @@ document.addEventListener('keydown', (ev) => {
   else if (ev.ctrlKey && (ev.key === 'c' || ev.key === 'C')) {
     const ae = document.activeElement;
     if (freeSel.length && !(ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA'))) { ev.preventDefault(); copyFreeSel(); }
+  }
+  else if (ev.ctrlKey && (ev.key === 'f' || ev.key === 'F')) {
+    ev.preventDefault();
+    if (!document.getElementById('suchFeld').classList.contains('offen')) sucheUmschalten();
+    else document.getElementById('searchBox').focus();
   }
   else if (ev.key === 'Escape') {
     if (ctxMenu.style.display === 'block') hideCtxMenu();
