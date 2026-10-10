@@ -24,3 +24,4 @@ uploads/
 # Alte Icon-Versionen (Backups, bleiben unversioniert)
 app/static/logo_alt.png
 wrapper/pdfwerkstatt_icon_alt.ico
+.zcode/

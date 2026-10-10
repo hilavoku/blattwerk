@@ -33,7 +33,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="Blattwerk")
 
-APP_VERSION = "0.18.13"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
+APP_VERSION = "0.19.0"   # wird im Über-Dialog (Klick auf Logo/Blattwerk) angezeigt
 
 
 @app.middleware("http")

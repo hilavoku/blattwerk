@@ -205,6 +205,17 @@
   .suchbox .nav:hover { color:var(--text); background:var(--hover); }
   .suchbox .zu:hover { color:var(--danger); background:var(--hover); }
   .tbtn.an { background:var(--accent-dim); color:#fff; border-color:var(--accent); }   /* Such-Knopf offen (NICHT .active - modePill) */
+
+  /* ---------- Lesemodus (v0.19.0): body.bearb-aus = Papier ruht ----------
+     Kein Hover-Markieren, kein Doppelklick-Originaltext-Edit, keine Bild-
+     Zieherei, keine Formularfeld-Eingaben. Suche/Zoom/Seitenwahl bleiben
+     voll bedienbar. Umschalter #btnBearb mit .an (wie Suche, nicht .active:
+     modePill-Freiheit). Bearbeitung startet trotzdem automatisch, sobald
+     der Nutzer ein Werkzeug waehlt oder eine Signatur aufs Papier zieht
+     (Promotion, bearbSicherstellen). */
+  body.bearb-aus .pagewrap, body.bearb-aus .pagewrap img { cursor: default; }
+  body.bearb-aus .pagewrap .line, body.bearb-aus .pagewrap .annot,
+  body.bearb-aus .pagewrap .imgobj, body.bearb-aus .pagewrap .winput { pointer-events: none !important; }
   .spacer { flex:1; }   /* ungenutzt seit v0.16.8 (Theme-Knopf in der fixen Zone) */
 
   /* ---------- Hauptbereich ---------- */
@@ -459,6 +470,7 @@
   </button>
   <div id="sigPanel"></div>
   <input type="file" id="sigFile" accept=".png,.jpg,.jpeg" style="display:none">
+  <button class="tbtn" id="btnBearb" onclick="bearbUmschalten()" title="Bearbeiten einschalten – Text, Bilder, Signaturen und Formen bearbeiten (aus = Lesemodus: die Seite bleibt ruhig)"><span class="i">&#xE70F;</span><span class="lbl">Bearbeiten</span></button>
   <button class="tbtn" id="btnNormal" onclick="setMode('normal')" title="Auswahl & Verschieben – beendet Text-/Löschen-Modus (Esc)"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M2.5 1 L2.5 14.4 L5.6 11.5 L7.5 15.7 L9.6 14.8 L7.7 10.7 L11.7 10.7 Z" fill="currentColor"/></svg><span class="lbl">Auswahl</span></button>
   <button class="tbtn" id="btnText" onclick="setMode('text')" title="Aufs Papier klicken und direkt tippen"><span style="font-weight:600">T</span><span class="lbl">Text</span></button>
   <button class="tbtn" id="btnMark" onclick="setMode('mark')" title="Text aufziehen und markieren – Marker, Unterstreichen, Durchstreichen"><svg width="14" height="16" viewBox="0 0 14 16" style="flex:none"><path d="M1 15 L2.8 11 L12 1 L14 3.5 L4.8 13.4 Z M1 15 L3.5 14" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 14.5 L1.5 15 L1.8 13.4 Z" fill="currentColor"/></svg><span class="lbl">Markieren</span></button>
@@ -568,6 +580,7 @@
     <div id="fields" class="muted">&ndash;</div>
     <h3>Kurzhilfe</h3>
     <p class="muted">
+      <b>Lesemodus:</b> Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Bearbeiten“ in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch.<br>
       <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
       <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
       <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.<br>
@@ -843,6 +856,35 @@ function setPref(key, value) {
 const MODUS_BTN = {text:'btnText', mark:'btnMark', draw:'btnDraw', delete:'btnDel'};
 let drawTool = 'rect';   // Unterauswahl im Zeichnen-Modus: rect/oval/line/arrow/ink/erase
 
+/* ---------- Bearbeiten-Schalter (v0.19.0) ----------
+   Startzustand ist der LESMODUS (bearb=false, body.bearb-aus): das Papier ruht,
+   kein Hover-Markieren, kein Doppelklick-Edit. Werkzeuge/Signatur-Zug/OCR
+   promovieren automatisch in den Bearbeitungszustand (bearbSicherstellen). */
+let bearb = false;
+
+function bearbSetzen(an, still) {
+  if (bearb === an) return;
+  if (!an) {   // in den Lesemodus hinein: offene Editoren VERWERFEN (Esc-Semantik, kein heimlicher
+               // Commit), dann setMode('normal') fuer Werkzeug-Aufräumen/Auswahl/ModePill
+               // (beide cancel-Funktionen räumen zustandserst-aus-then-DOM, blur-Falle v0.16.3)
+    cancelOriginalEdit();
+    cancelInline();
+    setMode('normal');
+  }
+  bearb = an;
+  document.body.classList.toggle('bearb-aus', !bearb);
+  const b = document.getElementById('btnBearb');
+  b.classList.toggle('an', bearb);
+  b.title = bearb
+    ? 'Bearbeiten aus = Lesemodus (die Seite bleibt ruhig)'
+    : 'Bearbeiten einschalten – Text, Bilder, Signaturen und Formen bearbeiten (aus = Lesemodus: die Seite bleibt ruhig)';
+  if (!still) stat(bearb
+    ? 'Bearbeiten aktiv – Objekte lassen sich greifen.'
+    : 'Lesemodus – die Seite bleibt ruhig. „Bearbeiten“ schaltet die Bearbeitung frei.', true);
+}
+function bearbUmschalten() { bearbSetzen(!bearb); }
+function bearbSicherstellen() { if (!bearb) bearbSetzen(true); }   // Promotion: Werkzeug-/Signatur-/OCR-Absicht
+
 function modusKlassenSetzen() {
   document.querySelectorAll('.pagewrap').forEach(w => {
     w.classList.remove('mode-sign','mode-text','mode-mark','mode-draw','mode-delete');
@@ -870,6 +912,7 @@ function werkzeugFuerObjektSetzen(a) {
 }
 
 function setMode(m) {
+  if (m !== 'normal') bearbSicherstellen();   // Werkzeugwahl = Bearbeitungs-Absicht (Promotion, v0.19.0)
   mode = (mode === m) ? 'normal' : m;
   document.getElementById('btnDelGo')?.remove();
   marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
@@ -1162,7 +1205,7 @@ async function addLines(img) {
     d.addEventListener('mouseleave', () => blockHover(img, d.dataset.b, false));
     d.addEventListener('dblclick', (ev) => {
       ev.stopPropagation();
-      if (mode !== 'normal') return;
+      if (mode !== 'normal' || !bearb) return;   // Lesemodus: kein Originaltext-Edit (Hover/Griffe ruhen ohnehin)
       const markiert = origMarkAufSeite(img);
       const divs = markiert.length ? markiert : blockZeilen(img, d.dataset.b);
       startOriginalEdit(n, divs);
@@ -1691,6 +1734,7 @@ document.addEventListener('contextmenu', (ev) => {
       : null;
     if (letzteDiv)
       eintrag('Letzte Form bearbeiten (Stil, Größe …)', '', () => selectAnnot({div: letzteDiv}));
+    eintrag(bearb ? 'Lesemodus (Papier ruht)' : 'Bearbeiten aktivieren', bearb ? '&#xE7A8;' : '&#xE70F;', () => bearbUmschalten());
     modusEintrag('Werkzeug: Auswahl & Verschieben', 'normal');
     modusEintrag('Werkzeug: Zeichnen (Formen & Freihand)', 'draw');
     modusEintrag('Werkzeug: Markieren', 'mark');
@@ -2417,6 +2461,7 @@ sigDropViewer.addEventListener('drop', async (ev) => {
   sigSelected = file; updateSigButton();
   document.getElementById('sigPanel').style.display = 'none';
   const page = parseInt(wrap.dataset.page), px = (ev.clientX - wr.left) / k, py = (ev.clientY - wr.top) / k;
+  bearbSicherstellen();   // Signatur aufs Papier gezogen = Bearbeitungs-Absicht (Promotion, v0.19.0)
   const eintrag = sigList.find(s => s.file === file);
   if (eintrag && eintrag.locked && !eintrag.unlocked) {
     // Geschuetzte Signatur aufs Papier gezogen: Passwort JETZT abfragen und
@@ -2673,7 +2718,7 @@ async function addImageInfos(img) {
   }
 }
 function startImageDrag(ev, div, pageN, k) {
-  if (mode !== 'normal' || ev.button !== 0) return;
+  if (mode !== 'normal' || !bearb || ev.button !== 0) return;   // Lesemodus: Bilder ruhen
   ev.preventDefault(); ev.stopPropagation();
   div.classList.add('imgsel');
   const box = div._pdfRect.slice();
@@ -3726,6 +3771,7 @@ document.getElementById('ocrClose').addEventListener('click', () =>
 document.getElementById('ocrOk').addEventListener('click', async () => {
   const ohne = JSON.parse(document.getElementById('ocrBox').dataset.ohne || '[]');
   if (!ohne.length || ocrLaeuft) return;
+  bearbSicherstellen();   // OCR schreibt eine Textebene = Bearbeitungs-Absicht (Promotion, v0.19.0)
   ocrLaeuft = true; ocrStop = false;
   const lang = document.getElementById('ocrLang').value;
   const ok = document.getElementById('ocrOk');
@@ -4077,6 +4123,7 @@ document.getElementById('file').addEventListener('change', async (ev) => {
 loadSignatures();
 (async () => {
   await loadPrefs();                      // Einstellungen zuerst (Theme, Leisten) ...
+  document.body.classList.add('bearb-aus');   // Startzustand: Lesemodus (v0.19.0, bewusst nicht persistiert)
   if (prefs.theme === 'light') document.body.classList.add('light');
   window.chrome?.webview?.postMessage('theme|' + (document.body.classList.contains('light') ? 'light' : 'dark'));
   // alte Gesammt-Seitenwahl (vor v0.12.3) auf die neuen Einzelprefs mappen
