@@ -1211,8 +1211,21 @@ async function addLines(img) {
     d.addEventListener('dblclick', (ev) => {
       ev.stopPropagation();
       if (mode !== 'normal' || !bearb) return;   // Lesemodus: kein Originaltext-Edit (Hover/Griffe ruhen ohnehin)
-      const markiert = origMarkAufSeite(img);
-      const divs = markiert.length ? markiert : blockZeilen(img, d.dataset.b);
+      // Eine existierende Sammlung darf den Doppelklick NICHT kapern (Nutzer-Fall
+      // v0.20.1: jeder Doppelklick oeffnete ploetzlich die gesammelte Zeile). Klick
+      // auf eine gesammelte Zeile = alle bearbeiten; Klick auf irgendeine andere
+      // Zeile = Sammlung verwerfen, die angeklickte Zeile (bzw. ihren Block) oeffnen.
+      const gesammelt = origMarkAufSeite(img);
+      let divs;
+      if (d.classList.contains('origmark')) {
+        divs = gesammelt;
+      } else if (gesammelt.length) {
+        origmarkLeeren();
+        stat('Sammlung verworfen – bearbeite die angeklickte Zeile.');
+        divs = blockZeilen(img, d.dataset.b);
+      } else {
+        divs = blockZeilen(img, d.dataset.b);
+      }
       startOriginalEdit(n, divs);
     });
     d.onclick = async (ev) => {
@@ -1221,7 +1234,7 @@ async function addLines(img) {
       if (ev.detail > 1) return; // Doppelklick = editieren, nicht kopieren
       if (ev.shiftKey) {         // Umschalt+Klick: Zeile zum gemeinsamen Editieren sammeln
         d.classList.toggle('origmark');
-        stat(d.classList.contains('origmark') ? 'Zeile gesammelt – Doppelklick auf eine gesammelte Zeile bearbeitet alle.' :
+        stat(d.classList.contains('origmark') ? 'Zeile gesammelt – Doppelklick auf eine gesammelte Zeile bearbeitet alle (Doppelklick auf eine andere Zeile oder Esc verwirft).' :
              'Zeile aus der Sammlung entfernt.');
         return;
       }
@@ -1247,6 +1260,9 @@ function blockZeilen(img, b) {
 }
 function origMarkAufSeite(img) {
   return [...img.parentElement.querySelectorAll('.line.origmark')];
+}
+function origmarkLeeren() {
+  document.querySelectorAll('.line.origmark').forEach(x => x.classList.remove('origmark'));
 }
 function blockHover(img, b, an) {
   img.parentElement.querySelectorAll(`.line[data-b="${b}"]`).forEach(x => x.classList.toggle('blockhover', an));
@@ -2367,6 +2383,7 @@ function teardownOriginalEdit() {
   origEdit.ta.remove();
   origEdit.delBtn.remove();
   origEdit = null;
+  origmarkLeeren();   // Abbruch raumt auch die Sammlung weg (v0.20.1)
   kontextLeiste();
 }
 function cancelOriginalEdit() { teardownOriginalEdit(); }
@@ -2380,6 +2397,7 @@ async function commitOriginalEdit() {
   origEdit = null;
   st.ta.remove();
   st.delBtn.remove();
+  origmarkLeeren();   // Sammlung war das Arbeitspapier dieses Editors: mit Abschluss weg (v0.20.1)
   const normalisiere = (t) => t.split('\n').map(zeile => zeile.replace(/[ \t]+/g, ' ').trim())
                                .join('\n').replace(/\n{3,}/g, '\n\n').trim();
   const text = normalisiere(st.ta.value);   // Zeilenumbrueche bleiben erhalten
@@ -3302,6 +3320,7 @@ document.addEventListener('keydown', (ev) => {
     else if (inline) cancelInline();
     else if (origEdit) cancelOriginalEdit();
     else if (freeSel.length) clearFreeSel();
+    else if (document.querySelector('.line.origmark')) { origmarkLeeren(); stat('Zeilen-Sammlung geleert.'); }
     else if (mode !== 'normal') setMode(mode);
   }
   else if (ev.key === 'Delete' && selAnnot && selAnnot.div) {

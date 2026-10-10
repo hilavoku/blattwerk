@@ -1,6 +1,22 @@
 # FederPDF — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-10.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
+
+## v0.20.1 — Fix: Zeilen-Sammlung kaperte den Doppelklick des Originaltext-Editors
+- **Nutzer-Fall:** Nach dem Sammeln einer Zeile (Umschalt+Klick, hellblaue
+  Markierung) öffnete ein Doppelklick auf eine ANDERE Zeile immer den Editor
+  der gesammelten Zeile — kein anderer Text war noch editierbar, und die
+  Sammlung ließ sich nicht sichtbar loswerden (nur Umschalt+Klick auf genau
+  diese Zeile).
+- **Fix (Doppelklick entscheidet, was geöffnet wird):** Doppelklick auf eine
+  gesammelte Zeile bearbeitet weiterhin alle gesammelten (das Sammel-Feature
+  bleibt). Doppelklick auf irgendeine andere Zeile verwirft die Sammlung und
+  öffnet die angeklickte Zeile (bzw. ihren Block) — mit Statusmeldung.
+- **Aufräumschranken:** Esc leert die Sammlung (neue Stufe in der Esc-Kette,
+  bevor der Modus zurückgesetzt wird), und jeder Abschluss des
+  Originaltext-Editors (Commit, Abbruch, Entfernen) räumt die Sammlung mit weg.
+- E2E am Quellstand: 5 Szenarien (Bug-Reproduktion, Fix, Esc, Sammel-Feature,
+  Commit-Flow) bestanden; Suite gegen den neuen Build ALLE PASS.
 
 ## v0.20.0 — Umbenennung: FederPDF (vorher Blattwerk)
 - Die App heißt jetzt **FederPDF** — die Feder steht fürs Schreiben und
