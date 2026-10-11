@@ -2,6 +2,24 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.21.0 — Sprachumschalter: Oberfläche auf Deutsch oder Englisch
+- **DE/EN-Umschalter in der Kopfzeile** (neben dem Design-Knopf): Die gesamte
+  Oberfläche — Werkzeugleisten, Kontextmenüs, Dialoge, Kurzhlfe, Statuszeile,
+  Tooltipps — steht auf Deutsch und Englisch zur Verfügung. Die Wahl wird wie
+  alle Einstellungen serverseitig gespeichert und beim nächsten Start
+  wiederhergestellt.
+- **Technik:** Deutsch bleibt die Quellsprache (steht unverändert im Markup).
+  Ein Wörterkatalog tauscht statische Texte/Kurzinfos/Platzhalter beim
+  Umschalten (Originaltexte werden gemerkt), dynamisch erzeugte Texte holen
+  ihre Sprache über einen zweisprachigen Helfer direkt an der Entstehungsstelle.
+  Fehlt eine Übersetzung, erscheint der deutsche Text — nichts bricht.
+- **Auch der Fenster-Wrapper folgt:** Startbildschirm, Fehlerseite und der
+  „ungespeicherte Änderungen“-Dialog beim Schließen sprechen mit (Startwert
+  aus den Einstellungen, laufend per Nachricht von der UI nachgezogen).
+- Die KI-Antwortsprache folgt der Umschaltung (Systemprompt), die
+  Übersetzungs-Zielsprachen heißen auch auf Englisch richtig — der Inhalt von
+  Dokumenten (Demo, Texte) bleibt natürlich unverändert.
+
 ## v0.20.4 — Ein Name überall: EXE und Namespace heißen FederPDF
 - **Letzte Alt-Namen beseitigt:** Die Programm-EXE (`PdfWerkstatt.exe`), der
   Hintergrundserver (`PdfWerkstattServer.exe`) und der .NET-Namespace trugen

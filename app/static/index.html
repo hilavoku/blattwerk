@@ -30,9 +30,10 @@
   header { position:relative; display:flex; padding:0; background:var(--chrome);
            border-bottom:1px solid var(--border); }
   .kopfzeile { flex:1; min-width:0; display:flex; gap:4px; align-items:center;
-               padding:9px 200px 9px 10px; flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
+               padding:9px 246px 9px 10px; flex-wrap:nowrap; overflow-x:auto; overflow-y:visible; }
   header.wrap .kopfzeile { flex-wrap:wrap; overflow-x:visible; row-gap:5px; }
   header.compact .tbtn .lbl { display:none; }
+  header.compact #sprBtn .lbl { display:inline; }   /* Sprachknopf: Label IST der Inhalt (kein Icon) */
   header.compact .tbtn { padding:6px 8px; }
   header.slim .brand b { display:none; }
   header.slim .tbtn { padding:5px 6px; }
@@ -223,6 +224,7 @@
   #viewer { flex:1; overflow:auto; background:var(--bg); padding:20px 12px 40px; position:relative; }
   #viewer.dragover::after { content:"PDF hier ablegen"; position:sticky; top:40%; left:0; display:block; text-align:center;
         font-size:22px; color:var(--accent); pointer-events:none; }
+  body.en #viewer.dragover::after { content:"Drop PDF here"; }
   .pagewrap { margin:0 auto 22px; position:relative; background:white; box-shadow:0 1px 4px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
               width:fit-content; }
   .pagewrap img { display:block; cursor:grab; }
@@ -557,6 +559,7 @@
     <span class="lbl">pt</span>
   </div>
   <div class="fensterzone">
+    <button class="tbtn" id="sprBtn" onclick="spracheUmschalten()" title="Sprache wechseln / Switch language"><span class="lbl" id="sprLbl" style="font-weight:600; font-size:11px">EN</span></button>
     <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
     <div class="fensterkn">
     <button id="knMin" title="Minimieren" onclick="window.chrome?.webview?.postMessage('fenster|min')"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1"/></svg></button>
@@ -772,7 +775,7 @@
     <button id="kiZusammen" onclick="kiZusammenfassen()" title="Ganzes Dokument zusammenfassen">Zusammenfassen</button>
     <button id="kiUebersetzen" onclick="kiAuswahlUebersetzen()" disabled title="Markierte Zeilen übersetzen (Alt+Ziehen auswählen)">Auswahl übersetzen</button>
     <select id="kiZielSprache" title="Zielsprache für Übersetzungen" style="max-width:100px">
-      <option>Deutsch</option><option>Englisch</option><option>Französisch</option><option>Spanisch</option><option>Italienisch</option>
+      <option value="Deutsch">Deutsch</option><option value="Englisch">Englisch</option><option value="Französisch">Französisch</option><option value="Spanisch">Spanisch</option><option value="Italienisch">Italienisch</option>
     </select>
     <label class="chk" style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)" title="Gesamttext des Dokuments als Kontext mitschicken">
       <input type="checkbox" id="kiKontext" checked>Dokument als Kontext
@@ -857,6 +860,280 @@ function setPref(key, value) {
                        body: JSON.stringify(prefs)}).catch(() => {});
 }
 
+/* ---------- Sprache (v0.21.0): DE/EN-Umschalter ----------
+   Deutsch ist die Quellsprache: Alle Texte stehen deutsch im Markup und im
+   Code. Der Umschalter tauscht STATISCHE Textknoten/Attribute ueber den
+   WOERTER-Katalog (Originaltexte werden gemerkt, Zurueckschalten stellt sie
+   wieder her); dynamisch erzeugte Strings rufen E(deutsch, englisch) und
+   fallen bei fehlender Uebersetzung auf Deutsch zurueck. Gespeichert wie
+   alle Einstellungen serverseitig (prefs.sprache), nie in localStorage. */
+let sprache = 'de';
+const _textOriginal = new WeakMap();   // Textknoten -> Originaltext
+const _attrOriginal = new WeakMap();   // Element -> {attribut: Originalwert}
+
+function E(de, en) { return (sprache === 'en' && en != null) ? en : de; }
+/* Mehrsprachige Konstanten: A(['Deutsch','English']) -> je Sprache */
+function A(v) { return Array.isArray(v) ? (sprache === 'en' ? v[1] : v[0]) : v; }
+/* Uebersetzungsziele der KI (Wert im Select bleibt deutsch, Anzeige wandert) */
+const ZIELSPRACHEN = {'Deutsch':['Deutsch','German'],'Englisch':['Englisch','English'],
+                      'Französisch':['Französisch','French'],'Spanisch':['Spanisch','Spanish'],
+                      'Italienisch':['Italienisch','Italian']};
+
+function spracheUmschalten() { spracheSetzen(sprache === 'de' ? 'en' : 'de'); }
+function spracheSetzen(s) {
+  if (s !== 'de' && s !== 'en') return;
+  sprache = s;
+  document.documentElement.lang = s;
+  document.body.classList.toggle('en', s === 'en');
+  spracheDomAufbringen();
+  const lbl = document.getElementById('sprLbl');
+  if (lbl) lbl.textContent = s === 'de' ? 'EN' : 'DE';
+  hideCtxMenu();
+  bearbSetzen(bearb, true);        // dynamische Dauer-Beschriftungen nachziehen
+  updateSigButton();
+  fitToolbar();
+  setPref('sprache', s);
+  try { window.chrome?.webview?.postMessage('sprache|' + s); } catch (e) {}   // Wrapper-Dialoge mitziehen
+}
+function spracheDomAufbringen() {
+  // Textknoten: exakte Treffer im Katalog tauschen (Fuehrendes/nachlaufendes
+  // Weiss bleibt erhalten), Original im WeakMap fuer die Rueckreise
+  const laufer = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const knoten = [];
+  while (laufer.nextNode()) knoten.push(laufer.currentNode);
+  for (const k of knoten) {
+    const original = k.nodeValue, kern = original.trim();
+    if (!kern) continue;
+    if (sprache === 'en') {
+      const ziel = WOERTER[kern];
+      if (ziel && ziel !== kern) {
+        if (!_textOriginal.has(k)) _textOriginal.set(k, original);
+        const vorn = original.slice(0, original.length - original.trimStart().length);
+        const hinten = original.slice(original.trimEnd().length);
+        k.nodeValue = vorn + ziel + hinten;
+      }
+    } else {
+      const gemerkt = _textOriginal.get(k);
+      if (gemerkt != null) k.nodeValue = gemerkt;
+    }
+  }
+  // title-/placeholder-Attribute derselben Behandlung
+  for (const el of document.body.querySelectorAll('*')) {
+    for (const attr of ['title', 'placeholder']) {
+      const wert = el.getAttribute && el.getAttribute(attr);
+      if (!wert) continue;
+      const kern = wert.trim();
+      if (sprache === 'en') {
+        const ziel = WOERTER[kern];
+        if (ziel && ziel !== kern) {
+          if (!_attrOriginal.has(el)) _attrOriginal.set(el, {});
+          const gem = _attrOriginal.get(el);
+          if (!(attr in gem)) gem[attr] = wert;
+          el.setAttribute(attr, ziel);
+        }
+      } else {
+        const gem = _attrOriginal.get(el);
+        if (gem && gem[attr] != null) el.setAttribute(attr, gem[attr]);
+      }
+    }
+  }
+}
+
+const WOERTER = {
+  /* Kopfzeile + Werkzeuge */
+  "Öffnen": "Open", "Speichern": "Save", "Speichern unter": "Save as",
+  "Signatur…": "Signature…", "Lesen": "Read", "Bearbeiten": "Edit",
+  "Auswahl": "Select", "Text": "Text", "Markieren": "Mark up",
+  "Zeichnen": "Draw", "Löschen": "Delete", "Rückgängig": "Undo",
+  "OCR": "OCR", "KI": "AI",
+  "PDF öffnen (Strg+O)": "Open PDF (Ctrl+O)",
+  "Speichern (Strg+S)": "Save (Ctrl+S)",
+  "Kopie an anderem Ort speichern": "Save a copy elsewhere",
+  "Drucken (mit Signaturen, Texten und Formulareinträgen)": "Print (with signatures, texts and form entries)",
+  "Signaturen verwalten – Kachel aufs Papier ziehen": "Manage signatures – drag a tile onto the paper",
+  "Lesemodus – Klicken schaltet die Bearbeitung frei (Text, Bilder, Signaturen, Formen)": "Read mode – click unlocks editing (text, images, signatures, shapes)",
+  "Bearbeiten aktiv – Klicken schaltet zurück in den Lesemodus (die Seite ruht)": "Edit mode active – click returns to read mode (the paper rests)",
+  "Auswahl & Verschieben – beendet Text-/Löschen-Modus (Esc)": "Select & move – exits text/delete mode (Esc)",
+  "Aufs Papier klicken und direkt tippen": "Click the paper and type right there",
+  "Text aufziehen und markieren – Marker, Unterstreichen, Durchstreichen": "Drag over text to mark it – highlight, underline, strikethrough",
+  "Formen und Freihand zeichnen – Rechteck, Oval, Linie, Pfeil, Tinte": "Draw shapes and freehand – rectangle, oval, line, arrow, ink",
+  "Original-Text entfernen": "Remove original text",
+  "Rückgängig (Strg+Z)": "Undo (Ctrl+Z)",
+  "Texterkennung (OCR) – durchsuchbarer Text für Scans": "Text recognition (OCR) – searchable text for scans",
+  "KI-Assistent – Chat, Zusammenfassen, Übersetzen (eigener API-Schlüssel)": "AI assistant – chat, summarize, translate (your own API key)",
+  "Im Dokument suchen (Strg+F)": "Search the document (Ctrl+F)",
+  "Schrift für neue und bearbeitete Texte": "Font for new and edited texts",
+  "Stil für neue und ausgewählte Markierungen": "Style for new and selected markups",
+  "Werkzeuge und Stil für Formen": "Tools and style for shapes",
+  "Schriftgröße (Mausrad darüber: ± 1)": "Font size (mouse wheel on top: ± 1)",
+  "Zeichenabstand (Spacing) in Punkten – auch negativ; Mausrad darüber: ± 0,25": "Letter spacing in points – negative allowed; wheel on top: ± 0.25",
+  "Textfarbe": "Text color",
+  "Marker (farbige Fläche)": "Highlighter (colored area)",
+  "Unterstrichen": "Underline", "Durchgestrichen": "Strikethrough", "Wellenlinie": "Squiggly line",
+  "Farbe der Markierung": "Markup color",
+  "Deckkraft in % (Marker)": "Opacity in % (highlighter)",
+  "Strichstärke in pt (Unter-/Durchstreichen, Wellenlinie); Mausrad: ± 0,5": "Stroke width in pt (underline/strikethrough, squiggly); wheel: ± 0.5",
+  "Rechteck – gedrückte Strg- oder Umschalt-Taste zeichnet ein Quadrat": "Rectangle – hold Ctrl or Shift to draw a square",
+  "Oval – gedrückte Strg- oder Umschalt-Taste zeichnet einen Kreis": "Oval – hold Ctrl or Shift to draw a circle",
+  "Linie": "Line", "Pfeil": "Arrow", "Tinte (freihand zeichnen)": "Ink (draw freehand)",
+  "Radiergummi – Objekte anklicken zum Löschen": "Eraser – click objects to delete them",
+  "Art der Pfeilspitze": "Arrowhead type",
+  "Linienstil": "Line style",
+  "Strichdicke in pt; Mausrad: ± 0,5": "Stroke width in pt; wheel: ± 0.5",
+  "Füllfarbe (nur Rechteck/Oval)": "Fill color (rectangle/oval only)",
+  "Form füllen": "Fill shape",
+  "Deckkraft in %": "Opacity in %",
+  "Zwischen hellem und dunklem Design wechseln": "Switch between light and dark design",
+  "Sprache wechseln / Switch language": "Switch language / Sprache wechseln",
+  "Minimieren": "Minimize",
+  "Maximieren / Wiederherstellen": "Maximize / Restore",
+  "FederPDF schließen": "Quit FederPDF",
+  "Ziehen verschiebt das Fenster": "Drag moves the window",
+  "Über FederPDF – Programm- und Versionsinfo": "About FederPDF – program and version info",
+  "Drehwinkel in Grad (im Uhrzeigersinn)": "Rotation angle in degrees (clockwise)",
+  /* Formate + Zeichnen-Optionen */
+  "fett": "bold", "kursiv": "italic", "fett+kursiv": "bold+italic",
+  "Gefüllte Spitze": "Filled head", "Offene Spitze": "Open head", "Keine Spitze": "No head",
+  "Beidseitig gefüllt": "Filled both ends", "Beidseitig offen": "Open both ends",
+  "Hinten offen, vorn gefüllt": "Open tail, filled head",
+  "Durchgezogen": "Solid", "Gestrichelt": "Dashed", "Gepunktet": "Dotted",
+  "Füllung": "Fill",
+  /* Eigenschaftenleiste */
+  "Breite": "Width", "Höhe": "Height", "Winkel": "Angle",
+  /* Seitenvorschau + Seitenleiste */
+  "Seitenvorschau auf die andere Seite verschieben": "Move page thumbnails to the other side",
+  "Seitenvorschau ein-/ausklappen": "Collapse/expand page thumbnails",
+  "Seitenleiste ein-/ausklappen": "Collapse/expand sidebar",
+  "Seitenleiste auf die andere Seite verschieben": "Move sidebar to the other side",
+  "Lesezeichen": "Bookmarks", "Formularfelder": "Form fields", "Kurzhilfe": "Quick help",
+  "Kein Dokument geöffnet.": "No document open.",
+  /* Fussleiste */
+  "Seiten": "Pages", "Drehen": "Rotate", "Seite": "Page",
+  "Miniaturen ein-/ausblenden": "Show/hide thumbnails",
+  "Seite zurück": "Previous page", "Seite vor": "Next page",
+  "Verkleinern (Strg+Mausrad)": "Zoom out (Ctrl+wheel)",
+  "Vergrößern": "Zoom in",
+  "Passend": "Fit",
+  "Seitenbreite einpassen": "Fit page width",
+  "Seite 90° drehen": "Rotate page 90°",
+  "Diese Seite löschen": "Delete this page",
+  "Ungespeicherte Änderungen": "Unsaved changes",
+  /* Umbenennen */
+  "Signatur umbenennen": "Rename signature", "Neuer Name": "New name",
+  "Übernehmen": "Apply", "Abbrechen": "Cancel",
+  /* Einbrennen-Dialog */
+  "Beim Speichern einbrennen?": "Flatten on save?",
+  "Eingebrennt werden Signaturen, Texte, Formen und\n  Markierungen fixer Seiteninhalt – in keinem PDF-Programm mehr entfernbar oder verschiebbar. Formularfelder bleiben ausfüllbar.": "Flattening turns signatures, texts, shapes and markups into fixed page content – no longer removable or movable in any PDF program. Form fields stay fillable.",
+  "Einbrennen & speichern": "Flatten & save", "Beweglich speichern": "Save editable",
+  /* Passwort-Dialoge */
+  "Signatur entsperren": "Unlock signature",
+  "Diese Signatur ist passwortgeschützt. Das Passwort gilt bis zum\n  Programmende (wird nie gespeichert).": "This signature is password-protected. The password lasts until\n  the program ends (never stored).",
+  "Passwort": "Password", "Entsperren": "Unlock",
+  "Setzt oder ändert das Passwort dieser Signatur\n  (Datei wird verschlüsselt gespeichert). Leer = Schutz entfernen.": "Sets or changes this signature's password\n  (file is stored encrypted). Empty = remove protection.",
+  "Neues Passwort (leer = Schutz entfernen)": "New password (empty = remove protection)",
+  /* Signatur-Upload */
+  "Signatur hochladen": "Upload signature",
+  "Hintergrund entfernen — Schwellwert:": "Remove background — threshold:",
+  "Name der Signatur": "Signature name",
+  "Passwort (optional) – verschlüsselt die Signatur": "Password (optional) – encrypts the signature",
+  "Hochladen": "Upload",
+  /* OCR-Dialog */
+  "Texterkennung (OCR)": "Text recognition (OCR)",
+  "Erkennt Text auf Seiten ohne Textebene (Scans, Fotos) und bettet ihn\n  unsichtbar ein: durchsuchbar, kopierbar, markierbar. Vorhandener Text bleibt unangetastet.": "Recognizes text on pages without a text layer (scans, photos) and embeds it\n  invisibly: searchable, copyable, markable. Existing text stays untouched.",
+  "Deutsch + Englisch": "German + English", "Deutsch": "German", "Englisch": "English",
+  "Starten": "Start", "Schließen": "Close",
+  /* KI-Konfiguration + Hinzufügen */
+  "KI-Konfiguration": "AI configuration",
+  "Aufgabe dem Modell zuordnen. Die Schlüssel liegen nur lokal in einstellungen.json.": "Assign a model to each task. Keys are stored only locally in einstellungen.json.",
+  "Modelle": "Models",
+  "Modell hinzufügen": "Add model", "Fertig": "Done",
+  "KI-Modell hinzufügen": "Add AI model",
+  "Name (z. B. Arbeits-KI)": "Name (e.g. Work AI)",
+  "Basis-URL (https://…/v1)": "Base URL (https://…/v1)",
+  "API-Schlüssel (leer bei Ollama)": "API key (empty for Ollama)",
+  "– Anbieter-Modell –": "– Provider model –",
+  "Liste der Modelle aktualisieren": "Refresh model list",
+  "Hinzufügen": "Add",
+  /* Über-Dialog */
+  "Version": "Version",
+  "PDFs öffnen, lesen, bearbeiten, signieren und\n  markieren — vollständig lokal auf diesem Rechner, ohne Cloud und ohne Telemetrie.": "Open, read, edit, sign and\n  mark up PDFs — fully local on this machine, no cloud, no telemetry.",
+  "Idee und Entwicklung:": "Idea and development:",
+  /* Suche */
+  "Suchen…": "Search…",
+  "Vorheriger Treffer (Umschalt+Eingabe)": "Previous hit (Shift+Enter)",
+  "Nächster Treffer (Eingabe)": "Next hit (Enter)",
+  "Suche schließen (Esc)": "Close search (Esc)",
+  /* KI-Panel */
+  "KI-Assistent": "AI assistant",
+  "KI-Konfiguration (Modelle, Schlüssel, Aufgaben)": "AI configuration (models, keys, tasks)",
+  "Assistent ausblenden – schließt NICHT das Programm": "Hide assistant – does NOT close the program",
+  "Ziehen ändert die Breite": "Drag to change the width",
+  "Noch kein Modell eingerichtet.": "No model set up yet.",
+  "„Einrichten\" öffnet die Konfiguration – eigener Anbieter, eigener Schlüssel (BYOK).": "“Set up” opens the configuration – your own provider, your own key (BYOK).",
+  "Einrichten": "Set up",
+  "Zusammenfassen": "Summarize", "Auswahl übersetzen": "Translate selection",
+  "Ganzes Dokument zusammenfassen": "Summarize the whole document",
+  "Markierte Zeilen übersetzen (Alt+Ziehen auswählen)": "Translate marked lines (select with Alt+drag)",
+  "Französisch": "French", "Spanisch": "Spanish", "Italienisch": "Italian",
+  "Gesamttext des Dokuments als Kontext mitschicken": "Send the document's full text along as context",
+  "Dokument als Kontext": "Document as context",
+  "Frage zum Dokument stellen… (Enter senden, Umschalt+Enter neue Zeile)": "Ask about the document… (Enter sends, Shift+Enter new line)",
+  "Senden": "Send",
+  /* Kurzhlfe: Ueberschriften (fette Knoten) */
+  "Lesemodus:": "Read mode:", "Verschieben:": "Panning:", "Kopieren:": "Copy:",
+  "Signatur:": "Signature:", "Löschen:": "Delete:", "Markieren:": "Mark up:",
+  "Zeichnen:": "Draw:", "OCR:": "OCR:", "KI:": "AI:", "Schriften:": "Fonts:",
+  "Drehen:": "Rotate:", "Einbrennen:": "Flattening:", "Geschützte Signatur:": "Protected signature:",
+  "Text:": "Text:", "Originaltext ändern:": "Edit original text:", "Formulare:": "Forms:",
+  "Suchen:": "Search:", "Bereiche:": "Panels:", "Bild:": "Image:", "Zoom:": "Zoom:",
+  "Alt+Ziehen": "Alt+drag", "Strg": "Ctrl", "Rechtsklick": "Right-click",
+  /* Kurzhlfe: Textfragmente (exakt wie im Markup, getrimmt) */
+  "Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Lesen/Bearbeiten“ (Auge ↔ Stift) in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch.":
+    "When opening, the paper rests (no block-marking on hover). The “Read/Edit” button (eye ↔ pen) in the toolbar unlocks editing – a tool or a dragged signature does it automatically.",
+  "aufs Papier klicken und ziehen – die Seite folgt der Maus.":
+    "click the paper and drag – the page follows the mouse.",
+  "einzelne Zeile anklicken oder mit": "click a single line, or drag over text with",
+  "Text aufziehen (Strg+Klick hängt an).": "to select text (Ctrl+Click appends).",
+  "Kachel im Menü „Signatur…\" direkt aufs Papier ziehen – danach greifen & ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.":
+    "drag a tile from the “Signature…” menu straight onto the paper – then grab & drag; the anchor at the bottom right changes the size. On upload you set preview, background transparency and password; the password later via the padlock icon on the tile.",
+  "Signatur/Text/Form anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen\".":
+    "click a signature/text/shape, then press Del – or right-click → “Delete”.",
+  "Werkzeug „Markieren\" wählen, Text aufziehen – Marker, Unterstreichen, Durchstreichen oder Wellenlinie; Farbe, Deckkraft und Stärke oben einstellen. Markierung anklicken und ziehen verschiebt sie.":
+    "pick the “Mark up” tool and drag over text – highlight, underline, strikethrough or squiggly; set color, opacity and strength above. Click a markup and drag to move it.",
+  "Rechteck, Oval, Linie, Pfeil oder Tinte aufziehen bzw. malen – Strichdicke, Strich- und Füllfarbe oben. Mit gedrückter":
+    "drag rectangles, ovals, lines, arrows or paint ink – stroke width, stroke and fill color above. With",
+  "(oder Umschalt-)Taste wird das Rechteck zum Quadrat und das Oval zum Kreis. Radiergummi klickt Objekte weg. Objekte lassen sich auch direkt im Zeichen-Werkzeug anklicken und verschieben (ohne Werkzeugwechsel), Anker unten rechts ändert die Größe – mit Strg/Umschalt wieder Quadrat/Kreis –, Linien, Pfeile und Tinte greift man direkt am Strich.":
+    "or Shift held, the rectangle becomes a square and the oval a circle. The eraser removes objects by clicking. Objects can also be clicked and moved right inside the draw tool (no tool switch); the bottom-right anchor resizes – Ctrl/Shift makes square/circle again –, lines, arrows and ink are grabbed at the stroke itself.",
+  "aufs Papier wechselt das Werkzeug oder bearbeitet die letzte Form; Rechtsklick aufs Objekt bietet Stil, Löschen und Werkzeugwechsel.":
+    "on the paper switches the tool or edits the last shape; right-click on an object offers style, delete and tool switch.",
+  "Knopf „OCR\" – erkennt Text auf Scan-Seiten (Deutsch + Englisch) und bettet ihn unsichtbar ein: durchsuchbar, kopierbar, markierbar.":
+    "the “OCR” button – recognizes text on scan pages (German + English) and embeds it invisibly: searchable, copyable, markable.",
+  "Knopf „KI\" – Chat mit Dokument-Kontext, Zusammenfassen, Auswahl übersetzen. Eigener Anbieter und API-Schlüssel (Zahnrad im Panel), gespeichert nur lokal.":
+    "the “AI” button – chat with document context, summarize, translate a selection. Your own provider and API key (gear in the panel), stored locally only.",
+  "Im Text-Werkzeug stehen auch die im PDF eingebetteten Schriften zur Auswahl („Aus dem Dokument\").":
+    "the text tool also lists the fonts embedded in the PDF (“From the document”).",
+  "runden Griff über der ausgewählten Signatur ziehen (Umschalt = 15°-Raster) – exakte Werte oben ins Winkelfeld.":
+    "drag the round handle above the selected signature (Shift = 15° steps) – enter exact values in the angle field above.",
+  "Beim Speichern wird gefragt, ob Signaturen/Texte/Formen fix werden sollen.":
+    "On save you are asked whether signatures/texts/shapes should become fixed.",
+  "im Menü oben Passwort vergeben – die Datei liegt verschlüsselt.":
+    "set a password in the menu above – the file is stored encrypted.",
+  "Bereich mit gedrückter Maustaste aufziehen oder Punkt anklicken – direkt tippen; Doppelklick auf Text bearbeitet ihn (Schrift, Stil, Größe, Farbe, Abstand oben änderbar). Beenden: Esc, Rechtsklick oder Klick neben das Feld. Kopfzeile: Griffe/Logo ziehen verschiebt das Fenster, Doppelklick max/min.":
+    "drag an area with the mouse held down or click a spot – type right away; double-click existing text to edit it (font, style, size, color, spacing changeable above). Finish: Esc, right-click or click beside the box. Header: grips/logo drag moves the window, double-click max/min.",
+  "Doppelklick auf eine Textzeile (nicht in Scans) – tippen; Umschalt+Enter macht eine neue Zeile, Schrift oben änderbar, Enter übernimmt. Danach ist der Text ein verschiebbares Objekt.":
+    "double-click a text line (not in scans) – type; Shift+Enter starts a new line, font changeable above, Enter applies. Afterwards the text is a movable object.",
+  "Felder direkt im Dokument ausfüllen.": "Fill fields right inside the document.",
+  "Lupe in der Leiste oder Strg+F – Eingabe springt auf Treffer, Enter/Umschalt+Enter blättert weiter, Esc schließt.":
+    "magnifier in the toolbar or Ctrl+F – typing jumps to hits, Enter/Shift+Enter cycles, Esc closes.",
+  "Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.":
+    "Page thumbnails and bookmarks collapse at the edge and switch sides with the arrow button.",
+  "eingebettete Grafiken anklicken und ziehen – die alte Stelle wird weiß überdeckt (Scans bleiben fix). Anker unten rechts skaliert proportional, runder Griff dreht (Umschalt = 15°-Raster), Rechtsklick dreht in 90°-Schritten; Größe/Position exakt in der Leiste oben.":
+    "click and drag embedded images – the old spot is covered in white (scans stay fixed). The bottom-right anchor scales proportionally, the round handle rotates (Shift = 15° steps), right-click rotates in 90° steps; exact size/position in the bar above.",
+  "Strg+Mausrad oder Leiste unten.": "Ctrl+mouse wheel or the bar below.",
+  "Alles wird erst mit": "Nothing becomes permanent until you press",
+  "dauerhaft.": "."
+};
+
 /* ---------- Modi ---------- */
 const MODUS_BTN = {text:'btnText', mark:'btnMark', draw:'btnDraw', delete:'btnDel'};
 let drawTool = 'rect';   // Unterauswahl im Zeichnen-Modus: rect/oval/line/arrow/ink/erase
@@ -884,13 +1161,13 @@ function bearbSetzen(an, still) {
   // "Bearbeiten" im Bearbeitungsmodus (Stift allein war dem Markierer zu ähnlich,
   // Nutzer-Hinweis v0.19.2)
   document.getElementById('bearbIco').innerHTML = bearb ? '&#xE70B;' : '&#xE7B3;';
-  document.getElementById('bearbLbl').textContent = bearb ? 'Bearbeiten' : 'Lesen';
+  document.getElementById('bearbLbl').textContent = bearb ? E('Bearbeiten', 'Edit') : E('Lesen', 'Read');
   b.title = bearb
-    ? 'Bearbeiten aktiv – Klicken schaltet zurück in den Lesemodus (die Seite ruht)'
-    : 'Lesemodus – Klicken schaltet die Bearbeitung frei (Text, Bilder, Signaturen, Formen)';
+    ? E('Bearbeiten aktiv – Klicken schaltet zurück in den Lesemodus (die Seite ruht)', 'Edit mode active – click returns to read mode (the paper rests)')
+    : E('Lesemodus – Klicken schaltet die Bearbeitung frei (Text, Bilder, Signaturen, Formen)', 'Read mode – click unlocks editing (text, images, signatures, shapes)');
   if (!still) stat(bearb
-    ? 'Bearbeiten aktiv – Objekte lassen sich greifen.'
-    : 'Lesemodus – die Seite bleibt ruhig. „Lesen/Bearbeiten“ schaltet die Bearbeitung frei.', true);
+    ? E('Bearbeiten aktiv – Objekte lassen sich greifen.', 'Edit mode active – objects can be grabbed.')
+    : E('Lesemodus – die Seite bleibt ruhig. „Lesen/Bearbeiten“ schaltet die Bearbeitung frei.', 'Read mode – the page stays calm. “Read/Edit” unlocks editing.'), true);
 }
 function bearbUmschalten() { bearbSetzen(!bearb); }
 function bearbSicherstellen() { if (!bearb) bearbSetzen(true); }   // Promotion: Werkzeug-/Signatur-/OCR-Absicht
@@ -928,22 +1205,22 @@ function setMode(m) {
   marked = []; commitInline(true); selectAnnot(null); clearFreeSel(); updateMarked();
   drawVorEntfernen(); markVorEntfernen();
   modusKlassenSetzen();
-  const tip = {normal:'', sign:'Klicke auf die Stelle, wo die Signatur hin soll.',
-               text:'Klicke aufs Papier und tippe direkt dort.',
-               mark:'Text aufziehen (gedrückt halten) – Stil und Farbe oben einstellen.',
-               draw:'Form aufziehen bzw. Tinte zeichnen – Stil oben einstellen. Esc beendet.',
-               delete:'Klicke die zu löschenden Zeilen an (rot), dann unten "Löschen ausführen".'}[mode];
+  const tip = {normal:'', sign:['Klicke auf die Stelle, wo die Signatur hin soll.', 'Click the spot where the signature should go.'],
+               text:['Klicke aufs Papier und tippe direkt dort.', 'Click the paper and type right there.'],
+               mark:['Text aufziehen (gedrückt halten) – Stil und Farbe oben einstellen.', 'Drag over text (hold the button) – set style and color above.'],
+               draw:['Form aufziehen bzw. Tinte zeichnen – Stil oben einstellen. Esc beendet.', 'Drag a shape or paint ink – set the style above. Esc exits.'],
+               delete:['Klicke die zu löschenden Zeilen an (rot), dann unten "Löschen ausführen".', 'Click the lines to delete (red), then "Apply deletion" below.']}[mode];
   // Delete-Ausfuehren-Knopf dynamisch in Statusleiste
   document.getElementById('delGoWrap')?.remove();
   if (mode === 'delete') {
     const b = document.createElement('button');
     b.className = 'sbtn'; b.id = 'delGoWrap'; b.style.color = 'var(--danger)'; b.classList.add('slide-in');
-    b.innerHTML = '<span class="i">&#xE74D;</span> Löschen ausführen (<span id="markCount">0</span>)';
+    b.innerHTML = '<span class="i">&#xE74D;</span> ' + E('Löschen ausführen (', 'Apply deletion (') + '<span id="markCount">0</span>)';
     b.onclick = deleteMarked;
     document.querySelector('footer').insertBefore(b, document.getElementById('statusMain'));
   }
   kontextLeiste();
-  if (tip) stat(tip, true);
+  if (tip) stat(A(tip), true);
 }
 
 /* Kontextleiste: genau EINE Werkzeuggleiste je Tool/Auswahl (Text/Markieren/
@@ -980,14 +1257,15 @@ function openDoc(info) {
   ['saveAsBtn', 'prBtn'].forEach(id => document.getElementById(id).disabled = false);
   document.querySelectorAll('footer .sbtn').forEach(b => b.disabled = false);
   document.getElementById('btnOcr').disabled = false;
-  stat('Geöffnet: ' + info.name + ' (' + info.pages + ' Seiten)', true);
+  stat(E('Geöffnet: ' + info.name + ' (' + info.pages + ' Seiten)', 'Opened: ' + info.name + ' (' + info.pages + ' pages)'), true);
   const toc = document.getElementById('toc');
-  if (!info.toc.length) { toc.textContent = 'Dieses Dokument hat keine Lesezeichen.'; toc.className='muted'; }
+  toc.innerHTML = '';   // Reste des Leeren-Textes/Vorgaengerdokuments weg (haengten sonst als Geist ueber den Eintraegen)
+  if (!info.toc.length) { toc.textContent = E('Dieses Dokument hat keine Lesezeichen.', 'This document has no bookmarks.'); toc.className='muted'; }
   else {
     toc.className = 'toc';
     for (const [lvl, title, page] of info.toc) {
       const a = document.createElement('a');
-      a.innerHTML = title + ' <span class="pg">S. ' + page + '</span>';
+      a.innerHTML = title + ' <span class="pg">' + E('S. ', 'p. ') + page + '</span>';
       a.className = 'l' + Math.min(lvl,3);
       a.onclick = () => jumpTo(page - 1);
       toc.appendChild(a);
@@ -1006,7 +1284,7 @@ function makePageEl(n) {
   const wrap = document.createElement('div');
   wrap.className = 'pagewrap'; wrap.id = 'page' + n; wrap.dataset.page = n;
   if (mode !== 'normal') wrap.classList.add('mode-' + mode);
-  const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = 'Seite ' + (n+1);
+  const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = E('Seite ', 'Page ') + (n+1);
   const img = document.createElement('img');
   img.dataset.page = n; img.loading = 'lazy';
   img.dataset.renderedDpi = Math.round(BASE_DPI * zoom);
@@ -1226,7 +1504,7 @@ async function addLines(img) {
         divs = gesammelt;
       } else if (gesammelt.length) {
         origmarkLeeren();
-        stat('Sammlung verworfen – bearbeite die angeklickte Zeile.');
+        stat(E('Sammlung verworfen – bearbeite die angeklickte Zeile.', 'Selection discarded – editing the clicked line.'));
         divs = blockZeilen(img, d.dataset.b);
       } else {
         divs = blockZeilen(img, d.dataset.b);
@@ -1239,8 +1517,8 @@ async function addLines(img) {
       if (ev.detail > 1) return; // Doppelklick = editieren, nicht kopieren
       if (ev.shiftKey) {         // Umschalt+Klick: Zeile zum gemeinsamen Editieren sammeln
         d.classList.toggle('origmark');
-        stat(d.classList.contains('origmark') ? 'Zeile gesammelt – Doppelklick auf eine gesammelte Zeile bearbeitet alle (Doppelklick auf eine andere Zeile oder Esc verwirft).' :
-             'Zeile aus der Sammlung entfernt.');
+        stat(d.classList.contains('origmark') ? E('Zeile gesammelt – Doppelklick auf eine gesammelte Zeile bearbeitet alle (Doppelklick auf eine andere Zeile oder Esc verwirft).', 'Line collected – double-click a collected line to edit all of them (double-click another line or Esc discards).') :
+             E('Zeile aus der Sammlung entfernt.', 'Line removed from the selection.'));
         return;
       }
       if (mode === 'delete') {
@@ -1253,7 +1531,7 @@ async function addLines(img) {
       let base = '';
       if (ev.ctrlKey) { try { base = await clipboardRead() + '\n'; } catch (e) {} }
       if (clipboardWrite(base + ln.t)) {
-        d.classList.add('copied'); stat('Kopiert: ' + ln.t.slice(0,60), true);
+        d.classList.add('copied'); stat(E('Kopiert: ', 'Copied: ') + ln.t.slice(0,60), true);
         setTimeout(() => d.classList.remove('copied'), 900);
       }
     };
@@ -1284,10 +1562,10 @@ async function deleteMarked() {
     const fd = new FormData();
     fd.append('page', pg); fd.append('rects', JSON.stringify(rects));
     const r = await fetch('/api/delete/' + cur.id, {method:'POST', body: fd});
-    if (!r.ok) { stat('Löschen fehlgeschlagen (Seite ' + (+pg+1) + ')'); return; }
+    if (!r.ok) { stat(E('Löschen fehlgeschlagen (Seite ' + (+pg+1) + ')', 'Deletion failed (page ' + (+pg+1) + ')')); return; }
   }
   setDirty(true);
-  stat('Bereiche entfernt – mit Speichern dauerhaft.', true);
+  stat(E('Bereiche entfernt – mit Speichern dauerhaft.', 'Areas removed – save to make it permanent.'), true);
   const pages = Object.keys(byPage);
   marked = [];
   pages.forEach(pg => refreshPage(pg));
@@ -1316,7 +1594,7 @@ async function addAnnots(img) {
       d.style.backgroundImage = (a.file && !gesperrt) ? `url(/api/signature/file/${encodeURIComponent(a.file)}${rp})` : '';
       if (!a.file || gesperrt) {
         d.style.background = 'rgba(200,200,200,.5)'; d.textContent = '';
-        d.title = gesperrt ? 'Passwortgeschützte Signatur – im Signatur-Menü (oben) entsperren' : 'Signaturdatei fehlt';
+        d.title = gesperrt ? E('Passwortgeschützte Signatur – im Signatur-Menü (oben) entsperren', 'Password-protected signature – unlock in the signature menu (top)') : E('Signaturdatei fehlt', 'Signature file missing');
         const lock = document.createElement('span');
         lock.textContent = gesperrt ? '\uE72E' : '✍';
         lock.style.fontFamily = gesperrt ? 'var(--icon)' : 'inherit';
@@ -1338,7 +1616,7 @@ async function addAnnots(img) {
     positionRect(d, a.rect, k);
     const rz = document.createElement('div'); rz.className = 'rz'; d.appendChild(rz);
     const ro = document.createElement('div'); ro.className = 'ro'; ro.textContent = '\u21BB';
-    ro.title = 'Drehen – ziehen (Umschalt-Taste rastet auf 15°-Schritte)';
+    ro.title = E('Drehen – ziehen (Umschalt-Taste rastet auf 15°-Schritte)', 'Rotate – drag (Shift snaps to 15° steps)');
     if (a.type === 'sign') d.appendChild(ro);
     d.addEventListener('mousedown', (ev) => startDrag(ev, d, a, n, k, 'move'));
     rz.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startDrag(ev, d, a, n, k, 'resize'); });
@@ -1556,12 +1834,14 @@ function shapeObjZeichnen(div, a, k, rectOpt, altROpt) {
     }
   }
 }
-const TYP_NAME = {sign:'Signatur', text:'Text', shape:{rect:'Rechteck', oval:'Oval', line:'Linie', arrow:'Pfeil', ink:'Tinte'},
-                  markup:{h:'Marker', u:'Unterstrichen', s:'Durchgestrichen', q:'Wellenlinie'}};
+const TYP_NAME = {sign:['Signatur','Signature'], text:['Text','Text'],
+                  shape:{rect:['Rechteck','Rectangle'], oval:['Oval','Oval'], line:['Linie','Line'], arrow:['Pfeil','Arrow'], ink:['Tinte','Ink']},
+                  markup:{h:['Marker','Highlight'], u:['Unterstrichen','Underline'], s:['Durchgestrichen','Strikethrough'], q:['Wellenlinie','Squiggly']}};
 function annotTypName(a) {
-  if (!a) return 'Objekt';
-  if (a.type === 'shape' || a.type === 'markup') return (TYP_NAME[a.type] && TYP_NAME[a.type][a.sub]) || 'Objekt';
-  return TYP_NAME[a.type] || 'Objekt';
+  const e = (v) => v ? v[sprache === 'en' ? 1 : 0] : E('Objekt', 'Object');
+  if (!a) return e(null);
+  if (a.type === 'shape' || a.type === 'markup') return e(TYP_NAME[a.type] && TYP_NAME[a.type][a.sub]);
+  return e(TYP_NAME[a.type]);
 }
 function selectAnnot(sel) {
   bildAbwaehlen();   // Bild- und Objektauswahl schliessen sich gegenseitig aus (v0.19.1)
@@ -1595,7 +1875,7 @@ function selectAnnot(sel) {
 let bildSel = null;
 function bildProps(div) {
   const r = div._pdfRect;
-  document.getElementById('prTyp').textContent = 'Bild';
+  document.getElementById('prTyp').textContent = E('Bild', 'Image');
   document.getElementById('prX').value = Math.round(r[0]);
   document.getElementById('prY').value = Math.round(r[1]);
   document.getElementById('prW').value = Math.round(r[2] - r[0]);
@@ -1655,8 +1935,8 @@ async function applyProps() {
     a.rect = rect; selAnnot.div._pdfRect = rect;
     if (istForm) shapeObjZeichnen(selAnnot.div, a, k);
     else positionRect(selAnnot.div, rect, k);
-    setDirty(true); stat('Position/Größe gesetzt – Speichern macht es dauerhaft.', true);
-  } else stat('Fehler beim Setzen');
+    setDirty(true); stat(E('Position/Größe gesetzt – Speichern macht es dauerhaft.', 'Position/size set – save to make it permanent.'), true);
+  } else stat(E('Fehler beim Setzen', 'Setting failed'));
 }
 /* Bild verschieben/skalieren: Commit an /api/image/move (der Server streckt via
    insert_image in das Ziel-Rect - skalieren ist dort kein Sonderfall). */
@@ -1678,10 +1958,10 @@ async function bildPropsAnwenden() {
   const alt = div._pdfRect.slice();
   const neu = [x, y, x + w, y + h];
   if (neu.every((v, i) => Math.abs(v - alt[i]) < 0.5)) return;
-  if (!(await bildCommitMove(div, pageN, alt, neu))) { stat('Fehler beim Setzen'); return; }
+  if (!(await bildCommitMove(div, pageN, alt, neu))) { stat(E('Fehler beim Setzen', 'Setting failed')); return; }
   div._pdfRect = neu.slice(); div._imgbox = neu.slice();
   setDirty(true); bildAbwaehlen(); refreshPage(pageN);
-  stat('Position/Größe gesetzt – Speichern macht es dauerhaft.', true);
+  stat(E('Position/Größe gesetzt – Speichern macht es dauerhaft.', 'Position/size set – save to make it permanent.'), true);
 }
 ['prX','prY','prW','prH'].forEach(id => document.getElementById(id).addEventListener('change', applyProps));
 
@@ -1726,8 +2006,8 @@ function stilAufSelektion() {
       }
       const img = document.querySelector('#page' + selAnnot.div.dataset.page + ' img');
       shapeObjZeichnen(selAnnot.div, a, img ? parseFloat(img.dataset.k) : 1);
-      stat('Stil geändert – Strg+Z stellt den alten Stil wieder her.', true);
-    } else stat('Stil-Änderung fehlgeschlagen');
+      stat(E('Stil geändert – Strg+Z stellt den alten Stil wieder her.', 'Style changed – Ctrl+Z restores the old style.'), true);
+    } else stat(E('Stil-Änderung fehlgeschlagen', 'Style change failed'));
   }, 300);
 }
 ['mkFarbe','mkDeckkraft','mkStaerke','dwBreite','dwFarbe','dwFuellung','dwFuellt','dwDeckkraft',
@@ -1777,7 +2057,7 @@ kopfleiste.addEventListener('dblclick', (ev) => {
 window.pwMaximiert = (max) => {
   const kn = document.getElementById('knMax');
   if (!kn) return;
-  kn.title = max ? 'Wiederherstellen' : 'Maximieren';
+  kn.title = max ? E('Wiederherstellen', 'Restore') : E('Maximieren', 'Maximize');
   kn.innerHTML = max
     ? '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 2.5h6.5V9H0z M2.5 0H9v6.5" fill="none" stroke="currentColor" stroke-width="1"/></svg>'
     : '<svg width="10" height="10" viewBox="0 0 10 10"><path d="M0.5 0.5h9v9h-9z" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
@@ -1803,32 +2083,32 @@ document.addEventListener('contextmenu', (ev) => {
     selectAnnot({div});
     const pageN = parseInt(div.dataset.page);
     if (div._annot.type === 'sign')
-      eintrag('Drehen (90°)', '&#xE7A8;', () => rotateAnnot(div));
+      eintrag(E('Drehen (90°)', 'Rotate (90°)'), '&#xE7A8;', () => rotateAnnot(div));
     if (div._annot.type === 'text')
-      eintrag('Bearbeiten', '&#xE70F;', () => startInlineEdit(pageN, null, null, div._annot));
+      eintrag(E('Bearbeiten', 'Edit'), '&#xE70F;', () => startInlineEdit(pageN, null, null, div._annot));
     if (div._annot.type === 'markup' || div._annot.type === 'shape')
-      eintrag('Stil oben ändern', '&#xE790;', () => { stat('Stil in der Werkzeugleiste oben einstellen.', true); });
-    eintrag('Löschen', '&#xE74D;', () => deleteAnnot(div), true);
+      eintrag(E('Stil oben ändern', 'Change style above'), '&#xE790;', () => { stat(E('Stil in der Werkzeugleiste oben einstellen.', 'Set the style in the toolbar above.'), true); });
+    eintrag(E('Löschen', 'Delete'), '&#xE74D;', () => deleteAnnot(div), true);
     if (mode !== 'normal')
-      eintrag('Werkzeug: Auswahl & Verschieben', '', () => setMode('normal'));
+      eintrag(E('Werkzeug: Auswahl & Verschieben', 'Tool: select & move'), '', () => setMode('normal'));
   } else if (bildDiv && bildDiv._xref) {
     // Eingebettetes Bild (kein Annotation-Overlay): Auswahl + 90°-Schritte
     selectBild(bildDiv);
     const bildSeite = parseInt(bildDiv.dataset.page);
-    eintrag('Drehen (90°)', '&#xE7A8;', () => bildDrehen(bildDiv, bildSeite, 90));
-    eintrag('Drehen (−90°)', '&#xE7A8;', () => bildDrehen(bildDiv, bildSeite, -90));
+    eintrag(E('Drehen (90°)', 'Rotate (90°)'), '&#xE7A8;', () => bildDrehen(bildDiv, bildSeite, 90));
+    eintrag(E('Drehen (−90°)', 'Rotate (−90°)'), '&#xE7A8;', () => bildDrehen(bildDiv, bildSeite, -90));
   } else if (cur && ev.target.closest('#viewer')) {
     // Kontextmenü auf dem Papier: letzte Aktion weiterbearbeiten + Werkzeug wechseln
     const letzteDiv = letzteForm
       ? document.querySelector('#page' + letzteForm.page + ' .annot[data-xref="' + letzteForm.xref + '"]')
       : null;
     if (letzteDiv)
-      eintrag('Letzte Form bearbeiten (Stil, Größe …)', '', () => selectAnnot({div: letzteDiv}));
-    eintrag(bearb ? 'Lesemodus (Papier ruht)' : 'Bearbeiten aktivieren', bearb ? '&#xE7A8;' : '&#xE70F;', () => bearbUmschalten());
-    modusEintrag('Werkzeug: Auswahl & Verschieben', 'normal');
-    modusEintrag('Werkzeug: Zeichnen (Formen & Freihand)', 'draw');
-    modusEintrag('Werkzeug: Markieren', 'mark');
-    modusEintrag('Werkzeug: Text', 'text');
+      eintrag(E('Letzte Form bearbeiten (Stil, Größe …)', 'Edit last shape (style, size …)'), '', () => selectAnnot({div: letzteDiv}));
+    eintrag(bearb ? E('Lesemodus (Papier ruht)', 'Read mode (paper rests)') : E('Bearbeiten aktivieren', 'Enable editing'), bearb ? '&#xE7A8;' : '&#xE70F;', () => bearbUmschalten());
+    modusEintrag(E('Werkzeug: Auswahl & Verschieben', 'Tool: select & move'), 'normal');
+    modusEintrag(E('Werkzeug: Zeichnen (Formen & Freihand)', 'Tool: draw (shapes & ink)'), 'draw');
+    modusEintrag(E('Werkzeug: Markieren', 'Tool: mark up'), 'mark');
+    modusEintrag(E('Werkzeug: Text', 'Tool: text'), 'text');
   } else return;
   ctxMenu.style.display = 'block';
   const r = ctxMenu.getBoundingClientRect();
@@ -1846,8 +2126,8 @@ async function deleteAnnot(div) {
     selectAnnot(null); setDirty(true);
     div.classList.add('fade-out');               // erst ausblenden ...
     setTimeout(async () => { await reloadAnnots(pageN); }, 170);   // ... dann Overlays neu bauen
-    stat(name + ' gelöscht – Strg+Z holt es zurück.', true);
-  } else stat('Löschen fehlgeschlagen');
+    stat(name + E(' gelöscht – Strg+Z holt es zurück.', ' deleted – Ctrl+Z brings it back.'), true);
+  } else stat(E('Löschen fehlgeschlagen', 'Deletion failed'));
 }
 async function rotateAnnot(div) {
   if (!div || !div._annot) return;
@@ -1857,8 +2137,8 @@ async function rotateAnnot(div) {
   const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
   if (r.ok) {
     await rotateDivAktualisieren(div, await r.json());
-    stat('Signatur gedreht (90°) – Strg+Z dreht zurück.', true);
-  } else stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+    stat(E('Signatur gedreht (90°) – Strg+Z dreht zurück.', 'Signature rotated (90°) – Ctrl+Z rotates back.'), true);
+  } else stat((await r.json().catch(() => ({}))).detail || E('Drehen fehlgeschlagen', 'Rotation failed'));
 }
 async function rotateAnnotTo(div, ziel) {
   if (!div || !div._annot || div._annot.type !== 'sign' || isNaN(ziel)) return;
@@ -1873,10 +2153,10 @@ async function rotateAnnotTo(div, ziel) {
   const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
   if (r.ok) {
     await rotateDivAktualisieren(div, await r.json());
-    stat('Signatur auf ' + ziel + '\u00B0 gedreht.', true);
+    stat(E('Signatur auf ' + ziel + '\u00B0 gedreht.', 'Signature rotated to ' + ziel + '\u00B0.'), true);
   } else {
     div.style.transform = '';
-    stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+    stat((await r.json().catch(() => ({}))).detail || E('Drehen fehlgeschlagen', 'Rotation failed'));
   }
 }
 /* Drehung ohne Flackern uebernehmen: Bild mit neuem Winkel VORAB laden, dann
@@ -1935,7 +2215,7 @@ document.addEventListener('mousemove', (ev) => {
     if (ev.shiftKey) delta = Math.round(delta / 15) * 15;
     drag.rotNeu = (drag.rotStart + delta + 360) % 360;
     drag.div.style.transform = 'rotate(' + delta + 'deg)';      // Rahmen+Anker drehen live mit
-    stat('Winkel: ' + (Math.round(drag.rotNeu * 10) / 10) + '\u00B0');
+    stat(E('Winkel: ', 'Angle: ') + (Math.round(drag.rotNeu * 10) / 10) + '\u00B0');
     return;
   }
   const dx = (ev.clientX - drag.startX) / drag.k;
@@ -1986,10 +2266,10 @@ document.addEventListener('mouseup', async () => {
     const r = await fetch('/api/annot/rotate/' + cur.id, {method:'POST', body: fd});
     if (r.ok) {
       await rotateDivAktualisieren(dr.div, await r.json());
-      stat('Signatur auf ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', true);
+      stat(E('Signatur auf ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', 'Signature rotated to ' + ziel + '\u00B0 – Ctrl+Z rotates back.'), true);
     } else {
       dr.div.style.transform = '';
-      stat((await r.json().catch(() => ({}))).detail || 'Drehen fehlgeschlagen');
+      stat((await r.json().catch(() => ({}))).detail || E('Drehen fehlgeschlagen', 'Rotation failed'));
     }
     return;
   }
@@ -2014,12 +2294,12 @@ document.addEventListener('mouseup', async () => {
     }
     drag.div._pdfRect = drag.a.rect;
     if (istForm) shapeObjZeichnen(drag.div, drag.a, drag.k);   // mit gueltigem Rect neu aufbauen (Zugrect kann gespiegelt gewesen sein)
-    setDirty(true); stat('Geändert – Speichern macht es dauerhaft.', true);
+    setDirty(true); stat(E('Geändert – Speichern macht es dauerhaft.', 'Changed – save to make it permanent.'), true);
     syncProps();
   } else {
     if (istForm) shapeObjZeichnen(drag.div, drag.a, drag.k);   // zurueck auf den alten Zustand
     else positionRect(drag.div, drag.rect, drag.k);
-    stat('Verschieben fehlgeschlagen');
+    stat(E('Verschieben fehlgeschlagen', 'Moving failed'));
   }
   drag = null;
 });
@@ -2049,11 +2329,11 @@ async function ladeDocFonts() {
   const nutzbar = docFonts.filter(f => f.nutzbar);
   if (!nutzbar.length) return;
   const gr = document.createElement('optgroup');
-  gr.label = 'Aus dem Dokument';
+  gr.label = E('Aus dem Dokument', 'From the document');
   for (const f of nutzbar) {
     const o = document.createElement('option');
     o.value = `doc~${f.xref}~${f.basefont}`;
-    o.textContent = f.name + (f.subset ? ' (Teilmenge)' : '');
+    o.textContent = f.name + (f.subset ? E(' (Teilmenge)', ' (subset)') : '');
     gr.appendChild(o);
     if (!document.fonts.check('12px pwdoc-' + f.xref)) {
       const ff = new FontFace('pwdoc-' + f.xref, `/api/font/file/${cur.id}/${f.xref}`);
@@ -2179,7 +2459,7 @@ function startInlineEdit(pageN, pdfX, pdfY, existing, vorgabe) {
   let delBtn = null;
   if (existing) {
     delBtn = document.createElement('button');
-    delBtn.className = 'inlineDel'; delBtn.innerHTML = '&#xE74D;'; delBtn.title = 'Text löschen';
+    delBtn.className = 'inlineDel'; delBtn.innerHTML = '&#xE74D;'; delBtn.title = E('Text löschen', 'Delete text');
     delBtn.style.left = (rect[0] * k) + 'px';
     delBtn.style.top = (rect[1] * k - 24) + 'px';
     delBtn.addEventListener('mousedown', (ev) => ev.preventDefault());
@@ -2189,7 +2469,7 @@ function startInlineEdit(pageN, pdfX, pdfY, existing, vorgabe) {
       fd.append('page', pageN); fd.append('xref', existing.xref);
       await fetch('/api/annot/delete/' + cur.id, {method: 'POST', body: fd});
       teardownInline();
-      setDirty(true); reloadAnnots(pageN); stat('Text gelöscht.', true);
+      setDirty(true); reloadAnnots(pageN); stat(E('Text gelöscht.', 'Text deleted.'), true);
     });
     wrap.appendChild(delBtn);
   }
@@ -2245,12 +2525,12 @@ async function commitInline(keepMode) {
   fd.append('xref', st.xref);
   const r = await fetch('/api/annot/text/' + cur.id, {method: 'POST', body: fd});
   if (r.ok) {
-    setDirty(true); stat('Text gesetzt – Speichern macht ihn dauerhaft.', true); await reloadAnnots(st.page);
+    setDirty(true); stat(E('Text gesetzt – Speichern macht ihn dauerhaft.', 'Text set – save to make it permanent.'), true); await reloadAnnots(st.page);
     // Nach dem Tippen zurueck zum Verschieben (wie bei Signaturen); nur wenn
     // gerade der naechste Text platziert wird, bleibt der Text-Modus erhalten.
     if (!keepMode && mode === 'text') setMode('normal');
   }
-  else stat('Text fehlgeschlagen');
+  else stat(E('Text fehlgeschlagen', 'Setting the text failed'));
 }
 async function reloadAnnots(n) {
   const img = document.querySelector('#page' + n + ' img');
@@ -2343,7 +2623,7 @@ async function startOriginalEdit(pageN, lineDivs) {
     document.getElementById(id).addEventListener('change', liveOrig);
   });
   const delBtn = document.createElement('button');
-  delBtn.className = 'inlineDel'; delBtn.innerHTML = '&#xE74D;'; delBtn.title = 'Originaltext entfernen';
+  delBtn.className = 'inlineDel'; delBtn.innerHTML = '&#xE74D;'; delBtn.title = E('Originaltext entfernen', 'Remove original text');
   delBtn.style.left = (rect[0] * k) + 'px';
   delBtn.style.top = (rect[1] * k - 24) + 'px';
   delBtn.addEventListener('mousedown', (ev) => ev.preventDefault());
@@ -2352,7 +2632,7 @@ async function startOriginalEdit(pageN, lineDivs) {
     await fetch(`/api/text/blockreplace/${cur.id}`, {method:'POST', body: originalEditBlockForm(pageN, zeilenFest)});
     teardownOriginalEdit();
     setDirty(true); refreshPage(pageN);
-    stat('Originaltext entfernt – Strg+Z setzt ihn zurück.', true);
+    stat(E('Originaltext entfernt – Strg+Z setzt ihn zurück.', 'Original text removed – Ctrl+Z restores it.'), true);
   });
   img.parentElement.appendChild(delBtn);
   img.parentElement.appendChild(ta);
@@ -2434,16 +2714,16 @@ async function commitOriginalEdit() {
         neu = neuZeilen.slice(i).join('\n');   // ueberzaehlige neue Zeilen an die letzte haengen
       if (neu === alt) continue;               // unveraendert: Zeile nicht anfassen
       const rf = await fetch(`/api/text/replace/${cur.id}`, {method:'POST', body: originalEditForm(pageN, zeilen[i].rect, neu)});
-      if (!rf.ok) { stat('Textänderung fehlgeschlagen (Zeile ' + (i + 1) + ')'); setDirty(true); refreshPage(pageN); return; }
+      if (!rf.ok) { stat(E('Textänderung fehlgeschlagen (Zeile ' + (i + 1) + ')', 'Text change failed (line ' + (i + 1) + ')')); setDirty(true); refreshPage(pageN); return; }
     }
     setDirty(true); refreshPage(pageN);
-    stat('Zeilenweise übernommen – jede Zeile bleibt an ihrer Stelle.', true);
+    stat(E('Zeilenweise übernommen – jede Zeile bleibt an ihrer Stelle.', 'Applied line by line – every line stays in place.'), true);
     return;
   }
   // 1) Alle beteiligten Originalzeilen wegredigieren - EIN Undo-Eintrag,
   //    der JEDE Zeile an ihrer eigenen Position zurueckstellt ...
   const r = await fetch(`/api/text/blockreplace/${cur.id}`, {method:'POST', body: originalEditBlockForm(pageN, zeilen)});
-  if (!r.ok) { stat('Textänderung fehlgeschlagen'); return; }
+  if (!r.ok) { stat(E('Textänderung fehlgeschlagen', 'Text change failed')); return; }
   const antw = await r.json().catch(() => ({}));
   // Baseline der obersten Zeile + gemessener Zeilenabstand des Originals:
   // Der neue Textblock steht dann exakt im Zeilenraster des Originals.
@@ -2486,10 +2766,10 @@ async function commitOriginalEdit() {
     fd2.append('spacing', document.getElementById('teAbstand').value || '0');
     fd2.append('leading', (lead || 0).toFixed(2));
     const r2 = await fetch(`/api/annot/text/${cur.id}`, {method:'POST', body: fd2});
-    if (!r2.ok) { stat('Text gesetzt, aber das Objekt konnte nicht angelegt werden'); setDirty(true); refreshPage(pageN); return; }
+    if (!r2.ok) { stat(E('Text gesetzt, aber das Objekt konnte nicht angelegt werden', 'Text set, but the object could not be created')); setDirty(true); refreshPage(pageN); return; }
   }
   setDirty(true); refreshPage(pageN);
-  stat('Text übernommen – jetzt verschiebbar: greifen & ziehen.', true);
+  stat(E('Text übernommen – jetzt verschiebbar: greifen & ziehen.', 'Text applied – now movable: grab & drag.'), true);
 }
 
 /* ---------- Klick aufs Papier ---------- */
@@ -2514,9 +2794,9 @@ async function placeSignature(n, x, y) {
     setMode('normal');   // direkt weiterarbeiten: greifen/ziehen ohne Moduswechsel
     const nd = document.querySelector('#page' + n + ' .annot[data-xref="' + placed.xref + '"]');
     if (nd) { nd.classList.add('pop-in'); selectAnnot({div: nd}); }
-    stat('Signatur gesetzt – ziehen oder Werte oben ändern.', true);
+    stat(E('Signatur gesetzt – ziehen oder Werte oben ändern.', 'Signature placed – drag it or change values above.'), true);
   }
-  else stat((await resp.json().catch(() => ({}))).detail || 'Signatur fehlgeschlagen');
+  else stat((await resp.json().catch(() => ({}))).detail || E('Signatur fehlgeschlagen', 'Placing the signature failed'));
 }
 
 /* ---------- Signatur aus dem Panel aufs Papier ziehen (Drag & Drop) ---------- */
@@ -2545,10 +2825,10 @@ sigDropViewer.addEventListener('drop', async (ev) => {
   ev.preventDefault();
   const el = document.elementFromPoint(ev.clientX, ev.clientY);
   const wrap = el ? el.closest('.pagewrap') : null;
-  if (!wrap) { stat('Daneben abgelegt – die Signatur wurde nicht gesetzt.'); return; }
+  if (!wrap) { stat(E('Daneben abgelegt – die Signatur wurde nicht gesetzt.', 'Dropped off the paper – the signature was not placed.')); return; }
   const img = wrap.querySelector('img');
   const k = parseFloat(img.dataset.k);
-  if (!k || !isFinite(k)) { stat('Seite noch nicht bereit – bitte kurz warten und erneut ziehen.'); return; }
+  if (!k || !isFinite(k)) { stat(E('Seite noch nicht bereit – bitte kurz warten und erneut ziehen.', 'Page not ready yet – wait a moment and drag again.')); return; }
   const wr = img.getBoundingClientRect();
   sigSelected = file; updateSigButton();
   document.getElementById('sigPanel').style.display = 'none';
@@ -2570,11 +2850,11 @@ async function loadFieldSummary() {
   const box = document.getElementById('fields');
   const r = await fetch('/api/fields/' + cur.id);
   fieldCache = await r.json();
-  if (!fieldCache.length) { box.textContent = 'Dieses Dokument hat keine Formularfelder.'; box.className='muted'; return; }
+  if (!fieldCache.length) { box.textContent = E('Dieses Dokument hat keine Formularfelder.', 'This document has no form fields.'); box.className='muted'; return; }
   box.className = ''; box.innerHTML = '';
   for (const f of fieldCache) {
     const div = document.createElement('div'); div.className = 'field';
-    div.innerHTML = f.name + ' <b>' + (f.value || '(leer)') + '</b> <span class="muted">(S.' + (f.page+1) + ')</span>';
+    div.innerHTML = f.name + ' <b>' + (f.value || E('(leer)', '(empty)')) + '</b> <span class="muted">' + E('(S.', '(p.') + (f.page+1) + ')</span>';
     box.appendChild(div);
   }
 }
@@ -2608,7 +2888,7 @@ async function saveWidget(f, value) {
   fd.append('page', f.page); fd.append('name', f.name); fd.append('value', value);
   const r = await fetch('/api/field/' + cur.id, {method:'POST', body: fd});
   if (r.ok) { f.value = value; setDirty(true); stat('[' + f.name + '] = ' + value, true); loadFieldSummary(); }
-  else stat('Fehler bei Feld ' + f.name);
+  else stat(E('Fehler bei Feld ', 'Error on field ') + f.name);
 }
 
 /* ---------- Suche (schwebendes Feld, PDFgear-Art; Logik unverändert) ---------- */
@@ -2684,22 +2964,22 @@ async function rotatePage() {
 }
 async function removePage() {
   if (!cur) return;
-  if (!confirm('Seite ' + (currentPage+1) + ' wirklich löschen?')) return;
+  if (!confirm(E('Seite ' + (currentPage+1) + ' wirklich löschen?', 'Really delete page ' + (currentPage+1) + '?'))) return;
   const fd = new FormData(); fd.append('page', currentPage);
   const r = await fetch('/api/deletepage/' + cur.id, {method:'POST', body: fd});
-  if (!r.ok) { stat('Letzte Seite kann nicht gelöscht werden.'); return; }
+  if (!r.ok) { stat(E('Letzte Seite kann nicht gelöscht werden.', 'The last page cannot be deleted.')); return; }
   setDirty(true);
   const idx = currentPage;
   const again = await fetch('/api/current');
   openDoc(await again.json());
   jumpTo(Math.min(idx, cur.pages - 1));
-  stat('Seite gelöscht.', true);
+  stat(E('Seite gelöscht.', 'Page deleted.'), true);
 }
 
 /* ---------- Drucken ---------- */
 async function printDoc() {
   if (!cur) return;
-  stat('Druckansicht wird erzeugt…');
+  stat(E('Druckansicht wird erzeugt…', 'Creating print view…'));
   try {
     const html = await (await fetch('/api/print/' + cur.id)).text();
     const fr = document.createElement('iframe');
@@ -2707,8 +2987,8 @@ async function printDoc() {
     fr.style.width = '0'; fr.style.height = '0'; fr.style.border = '0';
     document.body.appendChild(fr);
     fr.srcdoc = html;
-    fr.onload = () => { setTimeout(() => { fr.contentWindow.print(); stat('Druckdialog geöffnet.', true); }, 400); };
-  } catch (e) { stat('Drucken fehlgeschlagen'); }
+    fr.onload = () => { setTimeout(() => { fr.contentWindow.print(); stat(E('Druckdialog geöffnet.', 'Print dialog opened.'), true); }, 400); };
+  } catch (e) { stat(E('Drucken fehlgeschlagen', 'Printing failed')); }
 }
 
 /* ---------- Speichern / Speichern unter / Einbrennen ---------- */
@@ -2724,14 +3004,14 @@ async function saveDoc(flatten) {
     setDirty(false);
     const j = await r.json();
     stempel('saveBtn');
-    stat(j.flattened ? 'Gespeichert (eingebrannt): ' + j.path
-                    : 'Gespeichert (beweglich): ' + j.path + ' – Signaturen/Texte bleiben änderbar', true);
+    stat(j.flattened ? E('Gespeichert (eingebrannt): ', 'Saved (flattened): ') + j.path
+                    : E('Gespeichert (beweglich): ', 'Saved (editable): ') + j.path + E(' – Signaturen/Texte bleiben änderbar', ' – signatures/texts stay editable'), true);
     if (j.flattened) {
       await reloadAllAnnotOverlays();   // Overlays sind jetzt Seiteninhalt
       (j.seiten || []).forEach(n => refreshPage(n));   // Seitenbilder neu laden: eingebrannte Signatur sichtbar machen
     }
   }
-  else stat('Speichern fehlgeschlagen');
+  else stat(E('Speichern fehlgeschlagen', 'Saving failed'));
 }
 /* Speichern unter: Wrapper oeffnet den Systemdialog und meldet sich per pwSaveasDone zurueck.
    Ohne Wrapper (Browser) fällt die Funktion auf einen Download zurück.
@@ -2741,7 +3021,7 @@ let saveasFlatten = 0;        // lief diese Speichern-unter-Runde mit Einbrennen
 function showSaveBox(ziel) {
   saveZiel = ziel;
   document.getElementById('saveBoxTitle').textContent =
-    ziel === 'saveas' ? 'Beim „Speichern unter" einbrennen?' : 'Beim Speichern einbrennen?';
+    ziel === 'saveas' ? E('Beim „Speichern unter" einbrennen?', 'Flatten on “Save as”?') : E('Beim Speichern einbrennen?', 'Flatten on save?');
   const b = document.getElementById('saveBox');
   b.style.display = 'block';
   const r = document.getElementById('saveBtn').getBoundingClientRect();
@@ -2764,14 +3044,14 @@ function saveasFortsetzen(flatten) {
   saveasFlatten = flatten;
   if (window.chrome?.webview?.postMessage) {
     try { window.chrome.webview.postMessage('saveas|' + cur.id + '|' + cur.name + '|' + (flatten ? 1 : 0)); } catch (e) {}
-    stat('„Speichern unter": Ordner und Dateinamen wählen …');
+    stat(E('„Speichern unter": Ordner und Dateinamen wählen …', '“Save as”: choose folder and file name …'));
   } else downloadDoc();
 }
 window.pwSaveasDone = async function (ok, path) {
   if (ok) {
     setDirty(false);                       // gilt als gespeichert: neue Datei ist das Arbeitsdokument
     if (cur) cur.name = path.split(/[\\/]/).pop();
-    stat('Gespeichert unter: ' + path + (saveasFlatten ? ' (eingebrannt)' : '') + ' – weiter gearbeitet wird in dieser Datei.', true);
+    stat(E('Gespeichert unter: ', 'Saved as: ') + path + (saveasFlatten ? E(' (eingebrannt)', ' (flattened)') : '') + E(' – weiter gearbeitet wird in dieser Datei.', ' – work continues in this file.'), true);
     stempel('saveAsBtn');
     if (saveasFlatten) {
       await reloadAllAnnotOverlays();
@@ -2780,7 +3060,7 @@ window.pwSaveasDone = async function (ok, path) {
       });
     }
     saveasFlatten = 0;
-  } else stat('Speichern unter fehlgeschlagen');
+  } else stat(E('Speichern unter fehlgeschlagen', 'Save as failed'));
 };
 function downloadDoc() { if (cur) location.href = '/api/download/' + cur.id; }
 function openDemo() { fetch('/api/demo').then(r => r.json()).then(openDoc); }
@@ -2803,11 +3083,11 @@ async function addImageInfos(img) {
     d._imgbox = inf.bbox.slice();
     d._xref = inf.xref;
     d.dataset.page = n;   // Kontextmenü/Undo braucht die Seite am Element
-    d.title = 'Bild – ziehen verschiebt, Anker unten rechts skaliert, ↻ dreht (Rechtsklick: 90°-Schritte)';
+    d.title = E('Bild – ziehen verschiebt, Anker unten rechts skaliert, ↻ dreht (Rechtsklick: 90°-Schritte)', 'Image – drag to move, bottom-right anchor scales, ↻ rotates (right-click: 90° steps)');
     positionRect(d, inf.bbox, k2);
     const rz = document.createElement('div'); rz.className = 'rz'; d.appendChild(rz);
     const ro = document.createElement('div'); ro.className = 'ro'; ro.textContent = '\u21BB';
-    ro.title = 'Drehen – ziehen (Umschalt-Taste rastet auf 15°-Schritte)';
+    ro.title = E('Drehen – ziehen (Umschalt-Taste rastet auf 15°-Schritte)', 'Rotate – drag (Shift snaps to 15° steps)');
     d.appendChild(ro);
     d.addEventListener('mousedown', (ev) => startBildDrag(ev, d, n, k2, 'move'));
     rz.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startBildDrag(ev, d, n, k2, 'resize'); });
@@ -2852,12 +3132,13 @@ function startBildDrag(ev, div, pageN, k, kind) {
     if (neu.every((v, i) => Math.abs(v - box[i]) < 0.15)) return;   // praktisch unveraendert
     if (!(await bildCommitMove(div, pageN, box, neu))) {
       positionRect(div, box, k);
-      stat('Änderung fehlgeschlagen');
+      stat(E('Änderung fehlgeschlagen', 'Change failed'));
       return;
     }
     setDirty(true); bildAbwaehlen(); refreshPage(pageN);   // Raster neu aufbauen - Auswahl lebt im Neuaufbau nicht weiter
-    stat(kind === 'resize' ? 'Bild skaliert – Speichern macht es dauerhaft.' :
-         'Bild verschoben – Speichern macht es dauerhaft.', true);
+    stat(E(kind === 'resize' ? 'Bild skaliert – Speichern macht es dauerhaft.' :
+         'Bild verschoben – Speichern macht es dauerhaft.', kind === 'resize' ? 'Image scaled – save to make it permanent.' :
+         'Image moved – save to make it permanent.'), true);
   };
   document.addEventListener('mousemove', bewege);
   document.addEventListener('mouseup', hoch);
@@ -2881,7 +3162,7 @@ function startBildRotate(ev, div, pageN, k) {
     if (ev2.shiftKey) delta = Math.round(delta / 15) * 15;
     deltaGesamt = delta;
     div.style.transform = 'rotate(' + delta + 'deg)';
-    stat('Winkel: ' + (Math.round(delta * 10) / 10) + '\u00B0');
+    stat(E('Winkel: ', 'Angle: ') + (Math.round(delta * 10) / 10) + '\u00B0');
   };
   const hoch = async () => {
     document.removeEventListener('mousemove', bewege);
@@ -2900,11 +3181,11 @@ function startBildRotate(ev, div, pageN, k) {
     const rr = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
     if (rr.ok) {
       setDirty(true); bildAbwaehlen(); refreshPage(pageN);
-      stat('Bild um ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', true);
+      stat(E('Bild um ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', 'Image rotated by ' + ziel + '\u00B0 – Ctrl+Z rotates back.'), true);
     } else {
       div.style.transform = ''; div.style.backgroundImage = '';
       const j = await rr.json().catch(() => ({}));
-      stat(typeof j.detail === 'string' ? j.detail : 'Drehen fehlgeschlagen');
+      stat(typeof j.detail === 'string' ? j.detail : E('Drehen fehlgeschlagen', 'Rotation failed'));
     }
   };
   document.addEventListener('mousemove', bewege);
@@ -2919,10 +3200,10 @@ async function bildDrehen(div, pageN, winkel) {   // Kontextmenü: 90°-Schritte
   const r = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
   if (r.ok) {
     setDirty(true); bildAbwaehlen(); refreshPage(pageN);
-    stat('Bild um ' + winkel + '\u00B0 gedreht – Strg+Z dreht zurück.', true);
+    stat(E('Bild um ' + winkel + '\u00B0 gedreht – Strg+Z dreht zurück.', 'Image rotated by ' + winkel + '\u00B0 – Ctrl+Z rotates back.'), true);
   } else {
     const j = await r.json().catch(() => ({}));
-    stat(typeof j.detail === 'string' ? j.detail : 'Drehen fehlgeschlagen');
+    stat(typeof j.detail === 'string' ? j.detail : E('Drehen fehlgeschlagen', 'Rotation failed'));
   }
 }
 
@@ -2958,7 +3239,7 @@ function updateSigButton() {
     lbl.textContent = prettySig(sigSelected);
   } else {
     img.style.display = 'none'; img.removeAttribute('src');
-    lbl.textContent = 'Signatur…';
+    lbl.textContent = E('Signatur…', 'Signature…');
   }
 }
 function toggleSigPanel(ev) {
@@ -2991,7 +3272,7 @@ function buildSigPanel() {
   p.innerHTML = '';
   if (!sigList.length) {
     const e = document.createElement('div'); e.className = 'muted'; e.style.padding = '6px';
-    e.textContent = 'Noch keine Signaturen vorhanden.';
+    e.textContent = E('Noch keine Signaturen vorhanden.', 'No signatures yet.');
     p.appendChild(e);
   }
   let kachelIdx = 0;
@@ -3004,7 +3285,7 @@ function buildSigPanel() {
       const lock = document.createElement('div');
       lock.className = 'siglock';
       lock.textContent = '\uE72E';
-      lock.title = s.unlocked ? 'entsperrt bis Programmende' : 'passwortgeschützt';
+      lock.title = s.unlocked ? E('entsperrt bis Programmende', 'unlocked until the program ends') : E('passwortgeschützt', 'password-protected');
       if (s.unlocked) lock.style.color = 'var(--ok)';
       item.appendChild(lock);
     } else {
@@ -3022,29 +3303,29 @@ function buildSigPanel() {
       ev.dataTransfer.effectAllowed = 'copy';
     });
     item.addEventListener('dragend', () => item.classList.remove('dragging'));
-    item.title = gesperrt ? 'Passwortgeschützt – aufs Papier ziehen: Passwort wird beim Ablegen abgefragt'
-                          : 'Klicken: auswählen – oder direkt aufs Papier ziehen';
+    item.title = gesperrt ? E('Passwortgeschützt – aufs Papier ziehen: Passwort wird beim Ablegen abgefragt', 'Password-protected – drag onto the paper: the password is asked when dropped')
+                          : E('Klicken: auswählen – oder direkt aufs Papier ziehen', 'Click: select – or drag straight onto the paper');
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = prettySig(s.file);
     const act = document.createElement('div'); act.className = 'act';
-    const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = 'Umbenennen';
+    const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = E('Umbenennen', 'Rename');
     ren.onclick = (ev) => { ev.stopPropagation(); openRename(s.file); };
     const pwd = document.createElement('button'); pwd.innerHTML = '&#xE72E;';
     if (gesperrt) {
-      pwd.title = 'Erst entsperren (Klick auf die Kachel)';
+      pwd.title = E('Erst entsperren (Klick auf die Kachel)', 'Unlock first (click the tile)');
       pwd.onclick = (ev) => { ev.stopPropagation(); openPwBox(s.file); };
     } else {
-      pwd.title = s.locked ? 'Passwort ändern oder entfernen' : 'Passwort vergeben (verschlüsselt die Signatur)';
+      pwd.title = s.locked ? E('Passwort ändern oder entfernen', 'Change or remove the password') : E('Passwort vergeben (verschlüsselt die Signatur)', 'Set a password (encrypts the signature)');
       pwd.onclick = (ev) => { ev.stopPropagation(); openSigPwd(s.file); };
     }
-    const del = document.createElement('button'); del.className = 'del'; del.innerHTML = '&#xE74D;'; del.title = 'Löschen';
+    const del = document.createElement('button'); del.className = 'del'; del.innerHTML = '&#xE74D;'; del.title = E('Löschen', 'Delete');
     del.onclick = async (ev) => {
       ev.stopPropagation();
-      if (!confirm('Signatur "' + prettySig(s.file) + '" wirklich löschen?\n\nBereits gesetzte Signaturen in PDFs bleiben beim Speichern erhalten.')) return;
+      if (!confirm(E('Signatur "' + prettySig(s.file) + '" wirklich löschen?\n\nBereits gesetzte Signaturen in PDFs bleiben beim Speichern erhalten.', 'Really delete signature "' + prettySig(s.file) + '"?\n\nSignatures already placed in PDFs are kept when saving.'))) return;
       const fd = new FormData(); fd.append('fname', s.file);
       await fetch('/api/signature/delete', {method:'POST', body: fd});
       await loadSignatures(true);
       await reloadAllAnnotOverlays();
-      stat('Signatur gelöscht.', true);
+      stat(E('Signatur gelöscht.', 'Signature deleted.'), true);
     };
     act.appendChild(ren); act.appendChild(pwd); act.appendChild(del);
     item.appendChild(nm); item.appendChild(act);
@@ -3052,13 +3333,13 @@ function buildSigPanel() {
       if (s.locked && !s.unlocked) { openPwBox(s.file); return; }   // erst Passwort
       sigSelected = s.file; updateSigButton();
       p.style.display = 'none';
-      stat('Signatur gewählt: ' + prettySig(s.file), true);
+      stat(E('Signatur gewählt: ', 'Signature selected: ') + prettySig(s.file), true);
     });
     p.appendChild(item);
   }
   const add = document.createElement('div');
   add.className = 'sigadd';
-  add.innerHTML = '<span class="i" style="font-family:var(--icon)">&#xE710;</span> Neue Signatur hochladen (Hintergrund wird transparent)';
+  add.innerHTML = '<span class="i" style="font-family:var(--icon)">&#xE710;</span> ' + E('Neue Signatur hochladen (Hintergrund wird transparent)', 'Upload a new signature (background becomes transparent)');
   add.addEventListener('dragstart', (ev) => ev.preventDefault());   // keine Zieh- statt Klick-Erkennung
   // Sofort-Aktivierung beim NIEDERDRUECKEN: pointerdown kam in jeder
   // Nutzer-Aufzeichung zuverlaessig an, waehrend up/click auf manchen
@@ -3076,7 +3357,7 @@ function buildSigPanel() {
   const hint = document.createElement('div');
   hint.className = 'muted';
   hint.style.cssText = 'padding:2px 6px 4px; font-size:11px; line-height:1.4;';
-  hint.textContent = 'Signaturen mit Schloss verlangen beim Platzieren das Passwort – entsperren gilt bis Programmende. Schloss-Knopf an der Kachel: Passwort setzen/ändern.';
+  hint.textContent = E('Signaturen mit Schloss verlangen beim Platzieren das Passwort – entsperren gilt bis Programmende. Schloss-Knopf an der Kachel: Passwort setzen/ändern.', 'Signatures with a padlock ask for the password when placed – unlocking lasts until the program ends. Padlock button on the tile: set/change the password.');
   p.appendChild(hint);
 }
 
@@ -3087,7 +3368,7 @@ function openPwBox(file, danach) {
   pwTarget = file;
   pwNach = danach || null;
   const box = document.getElementById('pwBox');
-  document.getElementById('pwTitle').textContent = 'Entsperren: ' + prettySig(file);
+  document.getElementById('pwTitle').textContent = E('Entsperren: ', 'Unlock: ') + prettySig(file);
   document.getElementById('pwInput').value = '';
   box.style.display = 'block';
   const btn = document.getElementById('sigBtn').getBoundingClientRect();
@@ -3107,12 +3388,12 @@ async function tryUnlock() {
     await loadSignatures(true);
     if (cur) await reloadAllAnnotOverlays();   // Platzhalter durch Bilder ersetzen
     updateSigButton();
-    stat('Signatur entsperrt (bis Programmende): ' + prettySig(pwTarget), true);
+    stat(E('Signatur entsperrt (bis Programmende): ', 'Signature unlocked (until the program ends): ') + prettySig(pwTarget), true);
     pwTarget = '';
     const danach = pwNach; pwNach = null;
     if (danach) await danach();   // z. B. Platzierung nach Drag&Drop auf geschützte Signatur
   } else {
-    stat((await r.json().catch(() => ({}))).detail || 'Falsches Passwort');
+    stat((await r.json().catch(() => ({}))).detail || E('Falsches Passwort', 'Wrong password'));
     const inp = document.getElementById('pwInput');
     inp.value = ''; inp.focus();
   }
@@ -3125,7 +3406,7 @@ let sigPwdTarget = '';
 function openSigPwd(file) {
   sigPwdTarget = file;
   const box = document.getElementById('sigPwdBox');
-  document.getElementById('sigPwdTitle').textContent = 'Passwort: ' + prettySig(file);
+  document.getElementById('sigPwdTitle').textContent = E('Passwort: ', 'Password: ') + prettySig(file);
   document.getElementById('sigPwdInput').value = '';
   box.style.display = 'block';
   const btn = document.getElementById('sigBtn').getBoundingClientRect();
@@ -3140,7 +3421,7 @@ async function applySigPwd() {
   const fd = new FormData(); fd.append('fname', sigPwdTarget); fd.append('new_password', pw);
   const r = await fetch('/api/signature/password', {method:'POST', body: fd});
   if (!r.ok) {
-    stat((await r.json().catch(() => ({}))).detail || 'Passwort konnte nicht gesetzt werden');
+    stat((await r.json().catch(() => ({}))).detail || E('Passwort konnte nicht gesetzt werden', 'The password could not be set'));
     return;
   }
   const j = await r.json();
@@ -3151,7 +3432,7 @@ async function applySigPwd() {
   await loadSignatures(true);
   if (cur) await reloadAllAnnotOverlays();   // Dateiname kann gewechselt haben
   setDirty(true);
-  stat(geschuetzt ? 'Passwort gesetzt – Signatur ist jetzt verschlüsselt (bis Programmende entsperrt).' : 'Passwortschutz entfernt.', true);
+  stat(geschuetzt ? E('Passwort gesetzt – Signatur ist jetzt verschlüsselt (bis Programmende entsperrt).', 'Password set – the signature is now encrypted (unlocked until the program ends).') : E('Passwortschutz entfernt.', 'Password protection removed.'), true);
 }
 document.getElementById('sigPwdOk').addEventListener('click', applySigPwd);
 document.getElementById('sigPwdInput').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') applySigPwd(); });
@@ -3182,7 +3463,7 @@ document.getElementById('rnOk').addEventListener('click', async () => {
   if (!newName || !renameTarget) { document.getElementById('renameBox').style.display = 'none'; return; }
   const fd = new FormData(); fd.append('old', renameTarget); fd.append('new', newName);
   const r = await fetch('/api/signature/rename', {method:'POST', body: fd});
-  if (!r.ok) { stat((await r.json().catch(() => ({}))).detail || 'Umbenennen fehlgeschlagen'); return; }
+  if (!r.ok) { stat((await r.json().catch(() => ({}))).detail || E('Umbenennen fehlgeschlagen', 'Renaming failed')); return; }
   const renamed = (await r.json()).file;
   if (sigSelected === renameTarget) sigSelected = renamed;
   renameTarget = '';
@@ -3190,7 +3471,7 @@ document.getElementById('rnOk').addEventListener('click', async () => {
   await loadSignatures(true);
   await reloadAllAnnotOverlays();
   setDirty(true);
-  stat('Signatur umbenannt – auch in geöffneten Dokumenten.', true);
+  stat(E('Signatur umbenannt – auch in geöffneten Dokumenten.', 'Signature renamed – also in open documents.'), true);
 });
 document.getElementById('rnInput').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') document.getElementById('rnOk').click(); });
 async function reloadAllAnnotOverlays() {
@@ -3211,7 +3492,7 @@ document.getElementById('sigFile').addEventListener('change', (ev) => {
 /* Vorschau-Dialog: Schachbrett zeigt den entfernten Hintergrund,
    der Schwellwert steuert, wie viel Weiss durchsichtig wird. */
 function openSigUploadDialog() {
-  document.getElementById('sigUpTitle').textContent = 'Signatur hochladen: ' + sigPending.name;
+  document.getElementById('sigUpTitle').textContent = E('Signatur hochladen: ', 'Upload signature: ') + sigPending.name;
   document.getElementById('sigUpName').value = prettySig(sigPending.name);   // Dateiname als Namensvorschlag
   document.getElementById('sigUpPwd').value = '';
   const thr = document.getElementById('sigUpThr');
@@ -3264,15 +3545,15 @@ async function uploadPending() {
   if (eigenName) fd.append('name', eigenName);   // eigener Name statt Dateiname
   const pw = document.getElementById('sigUpPwd').value;
   if (pw) fd.append('password', pw);
-  stat('Signatur wird verarbeitet …');
+  stat(E('Signatur wird verarbeitet …', 'Processing the signature …'));
   const r = await fetch('/api/signature/upload', {method:'POST', body: fd});
   const j = await r.json().catch(() => ({}));
   document.getElementById('sigUpBox').style.display = 'none';
   sigPending = null;
   if (r.ok) {
     await loadSignatures(true);
-    stat(j.file && j.file.endsWith('.pwdsig') ? 'Geschützte Signatur hinzugefügt (verschlüsselt gespeichert).' : 'Signatur hinzugefügt.', true);
-  } else stat(j.detail || 'Upload fehlgeschlagen');
+    stat(j.file && j.file.endsWith('.pwdsig') ? E('Geschützte Signatur hinzugefügt (verschlüsselt gespeichert).', 'Protected signature added (stored encrypted).') : E('Signatur hinzugefügt.', 'Signature added.'), true);
+  } else stat(j.detail || E('Upload fehlgeschlagen', 'Upload failed'));
 }
 document.getElementById('sigUpOk').addEventListener('click', uploadPending);
 document.getElementById('sigUpName').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') uploadPending(); });
@@ -3287,9 +3568,9 @@ viewer.addEventListener('drop', async (ev) => {
   const f = ev.dataTransfer.files[0];
   if (!f || !f.name.toLowerCase().endsWith('.pdf')) return;
   const fd = new FormData(); fd.append('file', f);
-  stat('Lade …');
+  stat(E('Lade …', 'Loading …'));
   const r = await fetch('/api/upload', {method:'POST', body: fd});
-  if (r.ok) openDoc(await r.json()); else stat('Upload fehlgeschlagen');
+  if (r.ok) openDoc(await r.json()); else stat(E('Upload fehlgeschlagen', 'Upload failed'));
 });
 function clipboardWrite(text) {
   if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text); return true; }
@@ -3325,7 +3606,7 @@ document.addEventListener('keydown', (ev) => {
     else if (inline) cancelInline();
     else if (origEdit) cancelOriginalEdit();
     else if (freeSel.length) clearFreeSel();
-    else if (document.querySelector('.line.origmark')) { origmarkLeeren(); stat('Zeilen-Sammlung geleert.'); }
+    else if (document.querySelector('.line.origmark')) { origmarkLeeren(); stat(E('Zeilen-Sammlung geleert.', 'Line selection cleared.')); }
     else if (mode !== 'normal') setMode(mode);
   }
   else if (ev.key === 'Delete' && selAnnot && selAnnot.div) {
@@ -3535,8 +3816,8 @@ async function markDragLoslassen() {
     letzteForm = {page: md.n, xref: j.xref};
     setDirty(true);
     await reloadAnnots(md.n);
-    stat(text ? ('Markiert: ' + text.slice(0, 60)) : 'Bereich markiert (kein Text darunter – Scan).', true);
-  } else stat('Markieren fehlgeschlagen');
+    stat(text ? (E('Markiert: ', 'Marked: ') + text.slice(0, 60)) : E('Bereich markiert (kein Text darunter – Scan).', 'Area marked (no text underneath – scan).'), true);
+  } else stat(E('Markieren fehlgeschlagen', 'Marking failed'));
 }
 
 /* ---------- Zeichnen: Formen aufziehen, Tinte malen, Radiergummi ---------- */
@@ -3551,9 +3832,9 @@ function setDrawTool(t) {
   setPref('drawTool', t);
   pfeilFelderAktualisieren();
   if (mode === 'draw')
-    stat(t === 'erase' ? 'Radiergummi: Objekte anklicken, um sie zu löschen.'
-     : {rect:'Rechteck aufziehen.', oval:'Oval aufziehen.', line:'Linie ziehen.',
-        arrow:'Pfeil ziehen.', ink:'Freihand zeichnen (Maustaste halten).'}[t], true);
+    stat(A(t === 'erase' ? ['Radiergummi: Objekte anklicken, um sie zu löschen.', 'Eraser: click objects to delete them.']
+     : {rect:['Rechteck aufziehen.', 'Drag a rectangle.'], oval:['Oval aufziehen.', 'Drag an oval.'], line:['Linie ziehen.', 'Draw a line.'],
+        arrow:['Pfeil ziehen.', 'Draw an arrow.'], ink:['Freihand zeichnen (Maustaste halten).', 'Paint freehand (hold the mouse button).']}[t]), true);
 }
 /* Spitzen-Auswahl nur bei Linie/Pfeil sichtbar; Linienwerkzeug startet ohne Spitze */
 function pfeilFelderAktualisieren() {
@@ -3720,8 +4001,8 @@ async function drawDragLoslassen() {
     letzteForm = {page: dd.n, xref: j.xref};
     setDirty(true);
     await reloadAnnots(dd.n);
-    stat(TYP_NAME.shape[dd.tool] + ' gesetzt – Strg+Z macht es rückgängig.', true);
-  } else stat('Zeichnen fehlgeschlagen');
+    stat(annotTypName({type:'shape', sub: dd.tool}) + E(' gesetzt – Strg+Z macht es rückgängig.', ' placed – Ctrl+Z undoes it.'), true);
+  } else stat(E('Zeichnen fehlgeschlagen', 'Drawing failed'));
 }
 
 /* Radiergummi: Objekt unter dem Zeiger markieren, Klick loescht.
@@ -3777,7 +4058,7 @@ function clearFreeSel() {
 function copyFreeSel() {
   if (!freeSel.length) return;
   const text = freeSel.map(el => el._text).join('\n');
-  if (clipboardWrite(text)) stat('Kopiert: ' + freeSel.length + ' Zeilen.', true);
+  if (clipboardWrite(text)) stat(E('Kopiert: ', 'Copied: ') + freeSel.length + E(' Zeilen.', ' lines.'), true);
   clearFreeSel();
 }
 document.addEventListener('mousemove', (ev) => {
@@ -3870,15 +4151,15 @@ document.addEventListener('mouseup', (ev) => {
     kiAuswahlAktualisieren();
     const chip = document.createElement('button');
     chip.className = 'copyChip'; chip.id = 'copyChip';
-    chip.textContent = 'Kopieren (' + freeSel.length + ' Zeilen)';
+    chip.textContent = E('Kopieren (', 'Copy (') + freeSel.length + E(' Zeilen)', ' lines)');
     chip.style.left = Math.min(window.innerWidth - 190, chipX + 8) + 'px';
     chip.style.top = Math.min(window.innerHeight - 50, chipY + 8) + 'px';
     chip.addEventListener('mousedown', (ev2) => ev2.stopPropagation());
     chip.addEventListener('click', (ev2) => { ev2.stopPropagation(); copyFreeSel(); });
     document.body.appendChild(chip);
-    stat(freeSel.length + ' Zeilen ausgewählt – Strg+C kopiert ebenfalls.', true);
+    stat(freeSel.length + E(' Zeilen ausgewählt – Strg+C kopiert ebenfalls.', ' lines selected – Ctrl+C copies as well.'), true);
   } else if (wasActive && !freeSel.length) {
-    stat('Kein Text in der Auswahl – die Region erfasst nur erkannte Textzeilen.');
+    stat(E('Kein Text in der Auswahl – die Region erfasst nur erkannte Textzeilen.', 'No text in the selection – the region only covers recognized text lines.'));
   } else if (!wasActive) {
     clearFreeSel();
   }
@@ -3891,12 +4172,12 @@ async function undoLast() {
   if (ic) { ic.classList.remove('undoSpin'); void ic.offsetWidth; ic.classList.add('undoSpin'); }
   const r = await fetch('/api/undo/' + cur.id, {method:'POST'});
   const j = await r.json();
-  if (!j.undone) { stat('Nichts mehr rückgängig zu machen.'); return; }
+  if (!j.undone) { stat(E('Nichts mehr rückgängig zu machen.', 'Nothing left to undo.')); return; }
   setDirty(true);
   refreshPage(j.page);
   reloadAnnots(j.page);
   loadFieldSummary();
-  stat('Rückgängig gemacht.', true);
+  stat(E('Rückgängig gemacht.', 'Undone.'), true);
 }
 
 /* ---------- Miniaturen ---------- */
@@ -3929,16 +4210,17 @@ function ocrDialogOeffnen() {
   document.getElementById('ocrBalken').style.width = '0%';
   document.getElementById('ocrOk').style.display = '';
   document.getElementById('ocrClose').style.display = 'none';
-  document.getElementById('ocrInfo').textContent = 'Prüfe Seiten …';
+  document.getElementById('ocrInfo').textContent = E('Prüfe Seiten …', 'Checking pages …');
   fetch('/api/ocr/info/' + cur.id).then(r2 => r2.json()).then(j => {
     const ohne = (j.seiten_ohne_text || []).length;
     document.getElementById('ocrInfo').innerHTML = ohne
-      ? `<b style="color:var(--text)">${ohne} von ${j.pages} Seiten</b> ohne Textebene (Scan/Foto) – nur diese werden bearbeitet.`
-      : 'Alle Seiten haben bereits Text – es gibt nichts zu erkennen.';
+      ? E(`<b style="color:var(--text)">${ohne} von ${j.pages} Seiten</b> ohne Textebene (Scan/Foto) – nur diese werden bearbeitet.`,
+          `<b style="color:var(--text)">${ohne} of ${j.pages} pages</b> without a text layer (scan/photo) – only these will be processed.`)
+      : E('Alle Seiten haben bereits Text – es gibt nichts zu erkennen.', 'All pages already have text – nothing to recognize.');
     document.getElementById('ocrOk').disabled = !ohne;
     box.dataset.ohne = JSON.stringify(j.seiten_ohne_text || []);
     if (!j.tessdata.length)
-      document.getElementById('ocrInfo').innerHTML += '<br><span style="color:var(--danger)">Sprachdaten fehlen (tessdata-Ordner nicht gefunden).</span>';
+      document.getElementById('ocrInfo').innerHTML += '<br><span style="color:var(--danger)">' + E('Sprachdaten fehlen (tessdata-Ordner nicht gefunden).', 'Language data missing (tessdata folder not found).') + '</span>';
   });
 }
 document.getElementById('ocrCancel').addEventListener('click', () => {
@@ -3954,31 +4236,33 @@ document.getElementById('ocrOk').addEventListener('click', async () => {
   ocrLaeuft = true; ocrStop = false;
   const lang = document.getElementById('ocrLang').value;
   const ok = document.getElementById('ocrOk');
-  ok.disabled = true; ok.textContent = 'Läuft …';
-  document.getElementById('ocrCancel').textContent = 'Abbrechen';
+  ok.disabled = true; ok.textContent = E('Läuft …', 'Running …');
+  document.getElementById('ocrCancel').textContent = E('Abbrechen', 'Cancel');
   let fertig = 0, zeilen = 0;
   for (const n of ohne) {
     if (ocrStop) break;
     document.getElementById('ocrInfo').textContent =
-      `Erkenne Seite ${n + 1} von ${cur.pages} … (${fertig}/${ohne.length} fertig)`;
+      E(`Erkenne Seite ${n + 1} von ${cur.pages} … (${fertig}/${ohne.length} fertig)`,
+        `Recognizing page ${n + 1} of ${cur.pages} … (${fertig}/${ohne.length} done)`);
     try {
       const fd = new FormData();
       fd.append('page', n); fd.append('lang', lang); fd.append('dpi', '300');
       const r = await fetch('/api/ocr/' + cur.id, {method: 'POST', body: fd});
       if (r.ok) { const j = await r.json(); if (!j.skip) zeilen += j.zeilen || 0; refreshPage(n); }
-      else stat((await r.json().catch(() => ({}))).detail || 'OCR fehlgeschlagen');
-    } catch (e) { stat('OCR fehlgeschlagen: ' + e); }
+      else stat((await r.json().catch(() => ({}))).detail || E('OCR fehlgeschlagen', 'OCR failed'));
+    } catch (e) { stat(E('OCR fehlgeschlagen: ', 'OCR failed: ') + e); }
     fertig++;
     document.getElementById('ocrBalken').style.width = Math.round(fertig / ohne.length * 100) + '%';
   }
   ocrLaeuft = false;
-  ok.disabled = false; ok.textContent = 'Starten';
-  document.getElementById('ocrCancel').textContent = 'Abbrechen';
+  ok.disabled = false; ok.textContent = E('Starten', 'Start');
+  document.getElementById('ocrCancel').textContent = E('Abbrechen', 'Cancel');
   document.getElementById('ocrClose').style.display = '';
   document.getElementById('ocrInfo').textContent = ocrStop
-    ? 'Abgebrochen – bereits erkannte Seiten bleiben durchsuchbar.'
-    : `Fertig: ${zeilen} Textzeilen erkannt und unsichtbar eingebettet. Speichern macht sie dauerhaft.`;
-  stat(ocrStop ? 'OCR abgebrochen.' : `OCR fertig – ${zeilen} Zeilen eingebettet (nicht rückgängig machbar).`, true);
+    ? E('Abgebrochen – bereits erkannte Seiten bleiben durchsuchbar.', 'Cancelled – pages already recognized stay searchable.')
+    : E(`Fertig: ${zeilen} Textzeilen erkannt und unsichtbar eingebettet. Speichern macht sie dauerhaft.`,
+        `Done: ${zeilen} text lines recognized and embedded invisibly. Save makes them permanent.`);
+  stat(ocrStop ? E('OCR abgebrochen.', 'OCR cancelled.') : E(`OCR fertig – ${zeilen} Zeilen eingebettet (nicht rückgängig machbar).`, `OCR done – ${zeilen} lines embedded (cannot be undone).`), true);
   setDirty(true);
 });
 
@@ -3989,10 +4273,10 @@ const KI_ANBIETER = {
   openrouter: {name: 'OpenRouter', url: 'https://openrouter.ai/api/v1', art: 'openai'},
   anthropic:  {name: 'Anthropic (Claude)', url: 'https://api.anthropic.com', art: 'anthropic'},
   google:     {name: 'Google (Gemini)', url: 'https://generativelanguage.googleapis.com/v1beta', art: 'google'},
-  ollama:     {name: 'Ollama (lokal, ohne Schlüssel)', url: 'http://localhost:11434/v1', art: 'openai'},
-  custom:     {name: 'OpenAI-kompatibel (eigene URL)', url: '', art: 'openai'},
+  ollama:     {name: ['Ollama (lokal, ohne Schlüssel)', 'Ollama (local, no key)'], url: 'http://localhost:11434/v1', art: 'openai'},
+  custom:     {name: ['OpenAI-kompatibel (eigene URL)', 'OpenAI-compatible (custom URL)'], url: '', art: 'openai'},
 };
-const KI_AUFGABEN = {chat: 'Chatbot', zusammenfassen: 'Zusammenfassen', uebersetzen: 'Übersetzen'};
+const KI_AUFGABEN = {chat: ['Chatbot', 'Chatbot'], zusammenfassen: ['Zusammenfassen', 'Summarize'], uebersetzen: ['Übersetzen', 'Translate']};
 let ki = {modelle: [], aufgaben: {chat: '', zusammenfassen: '', uebersetzen: ''}};
 let kiVerlauf = [];
 let kiLaeuft = false;
@@ -4064,7 +4348,7 @@ function kiBlase(rolle, text) {
   return b;
 }
 async function kiSystemPrompt() {
-  let sys = 'Du bist der KI-Assistent der PDF-App FederPDF. Antworte präzise und auf Deutsch.';
+  let sys = E('Du bist der KI-Assistent der PDF-App FederPDF. Antworte präzise und auf Deutsch.', 'You are the AI assistant of the PDF app FederPDF. Answer precisely and in English.');
   if (document.getElementById('kiKontext')?.checked && cur) {
     try {
       const j = await (await fetch('/api/fulltext/' + cur.id)).json();
@@ -4081,8 +4365,8 @@ async function kiSystemPrompt() {
 }
 async function kiAnfrage(aufgabe, nutzerFrage, antwortIntro) {
   const modell = kiModellFuer(aufgabe);
-  if (!modell) { stat('Kein KI-Modell eingerichtet – KI-Konfiguration öffnen.'); kiConfigOeffnen(); return; }
-  if (kiLaeuft) { stat('Eine KI-Anfrage läuft bereits.'); return; }
+  if (!modell) { stat(E('Kein KI-Modell eingerichtet – KI-Konfiguration öffnen.', 'No AI model set up – open the AI configuration.')); kiConfigOeffnen(); return; }
+  if (kiLaeuft) { stat(E('Eine KI-Anfrage läuft bereits.', 'An AI request is already running.')); return; }
   kiLaeuft = true;
   if (antwortIntro) kiBlase('user', antwortIntro);
   const blase = kiBlase('ki', '');
@@ -4111,7 +4395,7 @@ async function kiAnfrage(aufgabe, nutzerFrage, antwortIntro) {
     }
     blase.classList.remove('denkt');
   } catch (e) {
-    blase.textContent = '⚠ Anfrage fehlgeschlagen: ' + e;
+    blase.textContent = E('⚠ Anfrage fehlgeschlagen: ', '⚠ Request failed: ') + e;
     blase.classList.remove('denkt');
   }
   kiLaeuft = false;
@@ -4129,19 +4413,23 @@ document.getElementById('kiText').addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); kiSenden(); }
 });
 async function kiZusammenfassen() {
-  if (!cur) { stat('Kein Dokument geöffnet.'); return; }
+  if (!cur) { stat(E('Kein Dokument geöffnet.', 'No document open.')); return; }
   await kiAnfrage('zusammenfassen',
-    'Fasse das Dokument strukturiert zusammen: 1) Kernaussage in einem Satz, ' +
+    E('Fasse das Dokument strukturiert zusammen: 1) Kernaussage in einem Satz, ' +
     '2) die wichtigsten Punkte als Liste, 3) enthaltene Zahlen/Daten/Fristen, falls vorhanden.',
-    'Bitte fasse das ganze Dokument zusammen.');
+    'Summarize the document in a structured way: 1) core statement in one sentence, ' +
+    '2) the most important points as a list, 3) any numbers/dates/deadlines it contains.'),
+    E('Bitte fasse das ganze Dokument zusammen.', 'Please summarize the whole document.'));
 }
 async function kiAuswahlUebersetzen() {
-  if (!freeSel.length) { stat('Zuerst Zeilen auswählen: Alt + ziehen (oder Zeilen anklicken).'); return; }
+  if (!freeSel.length) { stat(E('Zuerst Zeilen auswählen: Alt + ziehen (oder Zeilen anklicken).', 'Select lines first: Alt + drag (or click lines).')); return; }
   const text = freeSel.map(el => el._text).join('\n');
   const ziel = document.getElementById('kiZielSprache').value;
+  const zielName = A(ZIELSPRACHEN[ziel] || ziel);
   await kiAnfrage('uebersetzen',
-    `Übersetze den folgenden Text nach ${ziel}. Gib NUR die Übersetzung aus, ohne Erklärungen:\n\n${text}`,
-    `Auswahl nach ${ziel} übersetzen (${freeSel.length} Zeilen)`);
+    E(`Übersetze den folgenden Text nach ${ziel}. Gib NUR die Übersetzung aus, ohne Erklärungen:\n\n${text}`,
+      `Translate the following text to ${zielName}. Output ONLY the translation, no explanations:\n\n${text}`),
+    E(`Auswahl nach ${ziel} übersetzen (${freeSel.length} Zeilen)`, `Translate selection to ${zielName} (${freeSel.length} lines)`));
 }
 /* Auswahl-Zustand: Übersetzen-Knopf freigeben */
 function kiAuswahlAktualisieren() {
@@ -4156,10 +4444,10 @@ function kiConfigOeffnen() {
   for (const [schluessel, name] of Object.entries(KI_AUFGABEN)) {
     const zeile = document.createElement('div');
     zeile.className = 'kiconf-aufgabe';
-    zeile.innerHTML = `<span style="min-width:110px">${name}</span>`;
+    zeile.innerHTML = `<span style="min-width:110px">${A(name)}</span>`;
     const sel = document.createElement('select');
     const leer = document.createElement('option');
-    leer.value = ''; leer.textContent = '– kein Modell –';
+    leer.value = ''; leer.textContent = E('– kein Modell –', '– no model –');
     sel.appendChild(leer);
     for (const m of ki.modelle) {
       const o = document.createElement('option');
@@ -4173,13 +4461,13 @@ function kiConfigOeffnen() {
   }
   const liste = document.getElementById('kiModellListe');
   liste.innerHTML = '';
-  if (!ki.modelle.length) liste.innerHTML = '<div class="muted" style="font-size:12px">Noch keine Modelle.</div>';
+  if (!ki.modelle.length) liste.innerHTML = '<div class="muted" style="font-size:12px">' + E('Noch keine Modelle.', 'No models yet.') + '</div>';
   for (const m of ki.modelle) {
     const z = document.createElement('div');
     z.className = 'kiconf-zeile';
     z.innerHTML = `<b>${m.name}</b><span class="muted">${m.model}</span>`;
     const del = document.createElement('button');
-    del.className = 'del'; del.innerHTML = '&#xE74D;'; del.title = 'Modell entfernen';
+    del.className = 'del'; del.innerHTML = '&#xE74D;'; del.title = E('Modell entfernen', 'Remove model');
     del.onclick = () => { ki.modelle = ki.modelle.filter(x => x.id !== m.id);
                           for (const k of Object.keys(ki.aufgaben)) if (ki.aufgaben[k] === m.id) ki.aufgaben[k] = '';
                           kiSpeichern(); kiConfigOeffnen(); };
@@ -4205,7 +4493,7 @@ document.getElementById('kiAddOpen').addEventListener('click', () => {
   kiAnbieterGewechselt();
   document.getElementById('kiName').value = '';
   document.getElementById('kiKey').value = '';
-  document.getElementById('kiModell').innerHTML = '<option value="">– Anbieter-Modell –</option>';
+  document.getElementById('kiModell').innerHTML = '<option value="">' + E('– Anbieter-Modell –', '– Provider model –') + '</option>';
   document.getElementById('kiAddHinweis').textContent = '';
   const box = document.getElementById('kiAddBox');
   box.style.display = 'block';
@@ -4223,7 +4511,7 @@ document.getElementById('kiAddCancel').addEventListener('click', () =>
   document.getElementById('kiAddBox').style.display = 'none');
 document.getElementById('kiModelleLaden').addEventListener('click', async () => {
   const hinweis = document.getElementById('kiAddHinweis');
-  hinweis.textContent = 'Lade Modellliste …';
+  hinweis.textContent = E('Lade Modellliste …', 'Loading model list …');
   try {
     const art = (KI_ANBIETER[document.getElementById('kiAnbieter').value] || {}).art || 'openai';
     const q = `?url=${encodeURIComponent(document.getElementById('kiUrl').value.trim())}` +
@@ -4236,17 +4524,17 @@ document.getElementById('kiModelleLaden').addEventListener('click', async () => 
       o.value = id; o.textContent = id;
       sel.appendChild(o);
     }
-    hinweis.textContent = (j.modelle || []).length + ' Modelle gefunden.';
+    hinweis.textContent = (j.modelle || []).length + E(' Modelle gefunden.', ' models found.');
   } catch (e) {
     const detail = (await e.json?.().catch(() => ({}))) || {};
-    hinweis.textContent = 'Fehler: ' + (detail.detail || e.message || e);
+    hinweis.textContent = E('Fehler: ', 'Error: ') + (detail.detail || e.message || e);
   }
 });
 document.getElementById('kiAddOk').addEventListener('click', () => {
   const name = document.getElementById('kiName').value.trim() ||
     ((KI_ANBIETER[document.getElementById('kiAnbieter').value] || {}).name || 'Modell');
   const modell = document.getElementById('kiModell').value;
-  if (!modell) { document.getElementById('kiAddHinweis').textContent = 'Bitte Modell auswählen (Liste aktualisieren).'; return; }
+  if (!modell) { document.getElementById('kiAddHinweis').textContent = E('Bitte Modell auswählen (Liste aktualisieren).', 'Please pick a model (refresh the list).'); return; }
   const anbieter = document.getElementById('kiAnbieter').value;
   ki.modelle.push({
     id: 'm' + Date.now().toString(36),
@@ -4259,7 +4547,7 @@ document.getElementById('kiAddOk').addEventListener('click', () => {
   if (!ki.aufgaben.chat) ki.aufgaben.chat = ki.modelle[ki.modelle.length - 1].id;
   kiSpeichern();
   document.getElementById('kiAddBox').style.display = 'none';
-  stat('KI-Modell hinzugefügt: ' + name + ' (' + modell + ')', true);
+  stat(E('KI-Modell hinzugefügt: ', 'AI model added: ') + name + ' (' + modell + ')', true);
   kiConfigOeffnen();
 });
 
@@ -4294,9 +4582,9 @@ setTimeout(fitToolbar, 1200);
 document.getElementById('file').addEventListener('change', async (ev) => {
   const f = ev.target.files[0]; if (!f) return;
   const fd = new FormData(); fd.append('file', f);
-  stat('Lade …');
+  stat(E('Lade …', 'Loading …'));
   const r = await fetch('/api/upload', {method:'POST', body: fd});
-  if (r.ok) openDoc(await r.json()); else stat('Upload fehlgeschlagen');
+  if (r.ok) openDoc(await r.json()); else stat(E('Upload fehlgeschlagen', 'Upload failed'));
   ev.target.value = '';
 });
 loadSignatures();
@@ -4305,6 +4593,7 @@ loadSignatures();
   document.body.classList.add('bearb-aus');   // Startzustand: Lesemodus (v0.19.0, bewusst nicht persistiert)
   if (prefs.theme === 'light') document.body.classList.add('light');
   window.chrome?.webview?.postMessage('theme|' + (document.body.classList.contains('light') ? 'light' : 'dark'));
+  if (prefs.sprache === 'en') spracheSetzen('en');   // gespeicherte UI-Sprache (v0.21.0)
   // alte Gesammt-Seitenwahl (vor v0.12.3) auf die neuen Einzelprefs mappen
   if (prefs.sbSide === 'left') setSbSide('left');
   else if (prefs.side === 'left') { setSbSide('left'); setThumbSide('right'); }

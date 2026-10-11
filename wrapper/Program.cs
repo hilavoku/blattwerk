@@ -11,6 +11,9 @@ internal static class Program
 {
     private static int port;
     private static bool dirty;
+    // UI-Sprache ("de"/"en"): Startwert aus einstellungen.json, laufend per
+    // Webmessage "sprache|en" aus der UI nachgezogen (Splash/Dialoge)
+    private static string uiSprache = "de";
 
     [STAThread]
     private static void Main(string[] args)
@@ -29,6 +32,21 @@ internal static class Program
                 "FederPDF", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
+
+        // Gespeicherte UI-Sprache uebernehmen (steuert Splash/Fehlerseite/
+        // Schliessdialog, bis die UI per "sprache|xx" nachzieht)
+        try
+        {
+            string einst = Path.Combine(baseDir, "einstellungen.json");
+            if (File.Exists(einst))
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(einst));
+                if (doc.RootElement.TryGetProperty("sprache", out var sp)
+                    && sp.ValueKind == JsonValueKind.String && sp.GetString() == "en")
+                    uiSprache = "en";
+            }
+        }
+        catch { /* kaputte/kompatible Datei: Deutsch bleibt */ }
 
         var psi = new ProcessStartInfo
         {
@@ -117,6 +135,7 @@ internal static class Program
                     var msg = e.TryGetWebMessageAsString();
                     if (msg == "dirty:1") dirty = true;
                     else if (msg == "dirty:0") dirty = false;
+                    else if (msg != null && msg.StartsWith("sprache|")) uiSprache = msg.Substring(8) == "en" ? "en" : "de";
                     else if (msg != null && msg.StartsWith("fenster|"))
                     {
                         // Eigene Titelleiste: Minimieren/Maximieren/Schliessen/Ziehen aus der Kopfzeile
@@ -214,12 +233,17 @@ internal static class Program
         form.FormClosing += (_, e) =>
         {
             if (!dirty) return;
+            bool en = uiSprache == "en";
             var choice = MessageBox.Show(
-                "Es gibt nicht gespeicherte \u00c4nderungen.\n\n" +
-                "Ja = Speichern und schließen\n" +
-                "Nein = Ohne Speichern schließen\n" +
-                "Abbrechen = Zurück zum Dokument",
-                "Ungespeicherte \u00c4nderungen",
+                en ? "There are unsaved changes.\n\n" +
+                     "Yes = Save and close\n" +
+                     "No = Close without saving\n" +
+                     "Cancel = Back to the document"
+                   : "Es gibt nicht gespeicherte \u00c4nderungen.\n\n" +
+                     "Ja = Speichern und schließen\n" +
+                     "Nein = Ohne Speichern schließen\n" +
+                     "Abbrechen = Zurück zum Dokument",
+                en ? "Unsaved changes" : "Ungespeicherte \u00c4nderungen",
                 MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning,
                 MessageBoxDefaultButton.Button1);
             if (choice == DialogResult.Cancel)
@@ -232,7 +256,7 @@ internal static class Program
                 if (!SaveCurrent())
                 {
                     var again = MessageBox.Show(
-                        "Speichern fehlgeschlagen. Trotzdem schließen?",
+                        en ? "Saving failed. Close anyway?" : "Speichern fehlgeschlagen. Trotzdem schließen?",
                         "FederPDF", MessageBoxButtons.YesNo, MessageBoxIcon.Error);
                     if (again == DialogResult.No) e.Cancel = true;
                 }
@@ -304,8 +328,9 @@ internal static class Program
         .bar{width:140px;height:3px;background:#2c313a;border-radius:2px;margin:18px auto 0;overflow:hidden}
         .bar i{display:block;width:40%;height:100%;background:#4cc2ff;border-radius:2px;animation:sl 1.1s infinite linear}
         @keyframes sl{from{transform:translateX(-100%)}to{transform:translateX(350%)}}
-        </style></head><body><div class="c">__LOGO__<h1>FederPDF</h1><p>wird gestartet &hellip;</p><div class="bar"><i></i></div></div></body></html>
-        """.Replace("__LOGO__", LogoHtml(84));
+        </style></head><body><div class="c">__LOGO__<h1>FederPDF</h1><p>__START__</p><div class="bar"><i></i></div></body></html>
+        """.Replace("__LOGO__", LogoHtml(84))
+           .Replace("__START__", uiSprache == "en" ? "starting &hellip;" : "wird gestartet &hellip;");
 
     private static string ErrorHtml() => """
         <!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -316,9 +341,13 @@ internal static class Program
         .logo.emoji{line-height:1}
         h1{font-weight:600;margin:0 0 10px}
         p{color:#97a0af;line-height:1.6;margin:0}
-        </style></head><body><div class="c">__LOGO__<h1>&#9888;&#65039; Server nicht erreichbar</h1>
-        <p>Der FederPDF-Server konnte nicht gestartet werden.<br>Bitte das Programm schlie\u00dfen und neu starten.<br>Besteht das Problem, den Ordner <b>server</b> im Programmverzeichnis <b>pr\u00fcfen</b>.</p></div></body></html>
-        """.Replace("__LOGO__", LogoHtml(64));
+        </style></head><body><div class="c">__LOGO__<h1>&#9888;&#65039; __ERRTITEL__</h1>
+        <p>__ERRTEXT__</p></div></body></html>
+        """.Replace("__LOGO__", LogoHtml(64))
+           .Replace("__ERRTITEL__", uiSprache == "en" ? "Server not reachable" : "Server nicht erreichbar")
+           .Replace("__ERRTEXT__", uiSprache == "en"
+               ? "The FederPDF server could not be started.<br>Please close the program and start it again.<br>If the problem persists, check the <b>server</b> folder in the program directory."
+               : "Der FederPDF-Server konnte nicht gestartet werden.<br>Bitte das Programm schlie\u00dfen und neu starten.<br>Besteht das Problem, den Ordner <b>server</b> im Programmverzeichnis <b>pr\u00fcfen</b>.");
 
     private static bool SaveCurrent()
     {
