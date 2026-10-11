@@ -5,7 +5,7 @@
 #
 # Ausfuehrung:   py -3.14 tests/pdfwerkstatt_test.py
 #   (erwartet die installierte App unter dem Standardpfad; abweichend:
-#    PW_EXE=C:\Pfad\zu\PdfWerkstattServer.exe py -3.14 tests/pdfwerkstatt_test.py)
+#    PW_EXE=C:\Pfad\zu\FederPDFServer.exe py -3.14 tests/pdfwerkstatt_test.py)
 # Benoetigt: requests, pymupdf, pillow  (pip install requests pymupdf pillow)
 import os
 import shutil
@@ -16,7 +16,7 @@ import sys
 
 import requests
 
-EXE = os.environ.get("PW_EXE", r"C:\Anwendungen\PDF-Werkstatt\server\PdfWerkstattServer.exe")
+EXE = os.environ.get("PW_EXE", r"C:\Anwendungen\PDF-Werkstatt\server\FederPDFServer.exe")
 DEMO = os.path.join(os.path.dirname(EXE), "demo", "demo.pdf")
 PORT = 8515
 BASE = f"http://127.0.0.1:{PORT}"

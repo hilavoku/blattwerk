@@ -20,8 +20,8 @@ $mp = & "$venv\python.exe" -c "import importlib.util; print('multipart' if impor
 Write-Host "multipart-Modul: $mp"
 
 Set-Location (Join-Path $root "app")
-$pargs = @("--noconfirm","--clean","--onedir","--name","PdfWerkstattServer",
-           "--icon",(Join-Path $root "wrapper\pdfwerkstatt_icon.ico"),
+$pargs = @("--noconfirm","--clean","--onedir","--name","FederPDFServer",
+           "--icon",(Join-Path $root "wrapper\federpdf_icon.ico"),
            "--add-data","static;static",
            "--collect-all","pymupdf","--collect-all","uvicorn","--collect-all","fastapi",
            "--collect-all","cryptography")
@@ -34,7 +34,7 @@ Write-Host "=== PyInstaller-Build ==="
 & "$venv\python.exe" -m PyInstaller @pargs server.py 2>&1 | Select-Object -Last 5
 Write-Host "pyinstaller exit: $LASTEXITCODE"
 
-$dist = Join-Path $root "app\dist\PdfWerkstattServer\PdfWerkstattServer.exe"
+$dist = Join-Path $root "app\dist\FederPDFServer\FederPDFServer.exe"
 if (Test-Path $dist) {
     $size = [math]::Round((Get-ChildItem (Split-Path $dist) -Recurse | Measure-Object Length -Sum).Sum/1MB,1)
     Write-Host "SERVER-EXE OK: $dist ($size MB)"

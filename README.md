@@ -17,7 +17,7 @@ KI-Assistenten mit seinem eigenen API-Schlüssel frei).
 
 Fertige Windows-Version (portable ZIP, keine Installation):
 **[github.com/hilavoku/federpdf/releases](https://github.com/hilavoku/federpdf/releases)** —
-ZIP entpacken, `PdfWerkstatt.exe` starten, fertig. Erhältlich für **x64**
+ZIP entpacken, `FederPDF.exe` starten, fertig. Erhältlich für **x64**
 (Intel/AMD) und **ARM64** (Windows on ARM, nativ). Enthält OCR-Sprachdaten
 (Deutsch/Englisch); benötigt die
 [.NET-8-Desktop-Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
@@ -80,14 +80,14 @@ Repository klonen, dann:
 ```bat
 :: 1) Server bauen (PyInstaller, ~105 MB inkl. Kryptografie + OCR-Sprachdaten)
 powershell -File build_server.ps1
-::    Ergebnis: app\dist\PdfWerkstattServer\PdfWerkstattServer.exe
+::    Ergebnis: app\dist\FederPDFServer\FederPDFServer.exe
 
 :: 2) Fenster-Wrapper bauen
-dotnet publish wrapper\PdfWerkstatt.csproj -c Release -o paket
+dotnet publish wrapper\FederPDF.csproj -c Release -o paket
 
-:: 3) Server neben die EXE legen (Ordner "server" neben PdfWerkstatt.exe,
-::    Inhalt von app\dist\PdfWerkstattServer hinein)
-:: 4) paket\PdfWerkstatt.exe starten
+:: 3) Server neben die EXE legen (Ordner "server" neben FederPDF.exe,
+::    Inhalt von app\dist\FederPDFServer hinein)
+:: 4) paket\FederPDF.exe starten
 ```
 
 ### Nur den Server ausprobieren (ohne Windows-Programm)
@@ -115,7 +115,7 @@ und Fixtures — Nutzerdaten werden nie angefasst.
 pip install requests pymupdf pillow
 py -3.14 tests\pdfwerkstatt_test.py
 :: abweichender Server-Pfad:
-set PW_EXE=C:\Pfad\zu\PdfWerkstattServer.exe
+set PW_EXE=C:\Pfad\zu\FederPDFServer.exe
 py -3.14 tests\pdfwerkstatt_test.py
 ```
 

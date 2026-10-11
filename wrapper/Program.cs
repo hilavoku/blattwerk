@@ -5,7 +5,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace PdfWerkstatt;
+namespace FederPDF;
 
 internal static class Program
 {
@@ -21,11 +21,11 @@ internal static class Program
 
         port = GetFreePort();
         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-        string serverExe = Path.Combine(baseDir, "server", "PdfWerkstattServer.exe");
+        string serverExe = Path.Combine(baseDir, "server", "FederPDFServer.exe");
         if (!File.Exists(serverExe))
         {
             MessageBox.Show(
-                "PdfWerkstattServer.exe wurde nicht gefunden:\n" + serverExe,
+                "FederPDFServer.exe wurde nicht gefunden:\n" + serverExe,
                 "FederPDF", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }

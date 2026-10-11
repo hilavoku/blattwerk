@@ -6,12 +6,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>PdfWerkstatt</AssemblyName>
-    <ApplicationIcon>pdfwerkstatt_icon.ico</ApplicationIcon>
+    <AssemblyName>FederPDF</AssemblyName>
+    <ApplicationIcon>federpdf_icon.ico</ApplicationIcon>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>false</PublishSingleFile>
-    <Version>0.20.3</Version>
+    <Version>0.20.4</Version>
     <Product>FederPDF</Product>
     <!-- Zwingend fuer WebView2: sonst landen echte Mausklicks bei gemischter
          Monitor-Skalierung versetzt in der Seite (Knöpfe "tun nichts") -->

@@ -2,6 +2,35 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.20.4 — Ein Name überall: EXE und Namespace heißen FederPDF
+- **Letzte Alt-Namen beseitigt:** Die Programm-EXE (`PdfWerkstatt.exe`), der
+  Hintergrundserver (`PdfWerkstattServer.exe`) und der .NET-Namespace trugen
+  noch den alten technischen Namen. Alles heißt jetzt durchgängig FederPDF:
+  `FederPDF.exe`, `FederPDFServer.exe`, Namespace `FederPDF`, Projektdatei
+  `FederPDF.csproj`, Programm-Icon `federpdf_icon.ico`. Kein
+  Funktionsunterschied — nur der Name.
+- **Für Umsteigende:** Die Dateizuordnung („.pdf immer mit diesem Programm
+  öffnen") und eine evtl. Taskleisten-Verknüpfung müssen einmalig neu auf
+  `FederPDF.exe` gesetzt werden. Beim Selbstbauen ändern sich die Befehle:
+  `build_server.ps1` baut nach `app\dist\FederPDFServer\`, der Wrapper per
+  `dotnet publish wrapper\FederPDF.csproj`. Der Dateiname der Testsuite
+  bleibt unverändert `tests/pdfwerkstatt_test.py`.
+
+## v0.20.3 — Fenster skaliert korrekt beim Wechsel zwischen Monitoren
+- **Nutzer-Fall:** Bei zwei Bildschirmen mit unterschiedlicher Skalierung
+  (z. B. Notebook 150 %, externer Monitor 100 %) behielt das Fenster beim
+  Hinüberschieben seine Pixelgröße — es war auf dem Zielfenster größer als
+  der Bildschirmbereich, und nach dem Zurückschieben blieben Schrift und
+  Menüs zu klein (die Oberfläche hing im Rastermaßstab des anderen Monitors).
+- **Ursache:** Das Programmfenster antwortete auf die Windows-Nachricht
+  `WM_GETDPISCALEDSIZE` („Wie groß willst du auf dem anderen Bildschirm
+  sein?") mit der unveränderten Fläche — der Größenänderungsvorschlag in
+  `WM_DPICHANGED` lief dadurch leer.
+- **Fix:** Das Fenster berechnet die Zielgröße jetzt selbst (linear zur
+  DPI-Änderung) und übernimmt sie beim Monitorwechsel; maximierte Fenster
+  überläßt weiterhin das System. Der Wechsel zwischen Monitoren skaliert das
+  Fenster nun in beide Richtungen verlustfrei.
+
 ## v0.20.2 — Bild-Geister beseitigt, Kopfzeile bleibt einreihig
 - **Nutzer-Fall:** Beim Verschieben einer eingebetteten Signatur (Bild) wurde
   jedes Mal eine unsichtbare Kopie angelegt — sie ließ sich auf leerem Papier

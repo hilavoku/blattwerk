@@ -1,5 +1,5 @@
-# FederPDF - lokaler PDF-Server (technische Namen PdfWerkstatt)
-# Läuft auf 127.0.0.1, wird vom WebView2-Wrapper (PdfWerkstatt.exe) gestartet.
+# FederPDF - lokaler PDF-Server
+# Läuft auf 127.0.0.1, wird vom WebView2-Wrapper (FederPDF.exe) gestartet.
 import os
 import re
 import sys
@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.20.2"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.20.4"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
