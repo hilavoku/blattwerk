@@ -2,6 +2,37 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.20.2 — Bild-Geister beseitigt, Kopfzeile bleibt einreihig
+- **Nutzer-Fall:** Beim Verschieben einer eingebetteten Signatur (Bild) wurde
+  jedes Mal eine unsichtbare Kopie angelegt — sie ließ sich auf leerem Papier
+  „anfassen“ (Auswahlrahmen ohne Inhalt) und ihr Verschieben erzeugte eine
+  sichtbare Dublette. Außerdem sprang bei jeder Auswahl die Seite, weil das
+  Menü oben wegen der Bild-Koordinatenfelder in zwei Reihen umbrichte.
+- **Unsichtbare Kopien (Geister) werden nicht mehr gemeldet:** `/api/image/move`
+  überdeckt die alte Stelle weiß und setzt das Bild neu ein — die alte
+  Platzierung bleibt dabei (bewusst) in der Datei und wurde von `/api/imageinfo`
+  weiter als verschiebbares Objekt gemeldet. Der Server erkennt diese Geister
+  jetzt markerlos über die Content-Stream-Reihenfolge (`get_bboxlog` listet
+  Bilder und Pfade vereint; ein Bild, das von einem SPÄTER gezeichneten,
+  deckungsweißen Rechteck voll überdeckt wird, ist unsichtbar und fällt aus
+  der Objektliste). Das wirkt ohne Merker auch bei bereits gespeicherten
+  Dateien und nach Undo; unberührte Bilder bleiben selbstverständlich
+  gemeldet. Aufräumen per Redaction/delete_image war bewusst KEIN Weg — dort
+  wären überlappende Nachbarbilder mit verschwunden.
+- **Weißdeckel-Kante:** Der Whiteout stand exakt auf dem Bild-Rect, die
+  gerasterte Bildkante schimmerte danach hauchfein als farbiger Rest an der
+  alten Stelle. Der Deckel übersteht jetzt 1 pt (Verschieben, Drehen, Undo).
+- **Eigenschaftenleiste schwebt:** Die Leiste (X/Y/Breite/Höhe/Winkel) ist aus
+  dem Fluss der Kopfzeile genommen und schwebt als Panel unter der Kopfzeile
+  rechts (direktes Kind von `header`, nicht von `.kopfzeile` — deren
+  horizontales Scrollen würde das Panel abschneiden). Das Menü bleibt
+  einreihig, die Seite springt beim Auswählen nicht mehr.
+- Tests am Quellstand: API-Suite 27 Checks PASS (dreimaliges Verschieben
+  inkl. überlappendem Zug, Kantenproben weiß, Undo, Speichern + Neuöffnen
+  filtert weiter, unberührte Bilder bleiben). Browser-E2E: Kopfzeile bleibt
+  einreihig (49 px) und die Seite springt nicht — mit und ohne Auswahl;
+  Auswahl, Ziehen und Feld-Setzen funktionieren, keine Geister-Overlays.
+
 ## v0.20.1 — Fix: Zeilen-Sammlung kaperte den Doppelklick des Originaltext-Editors
 - **Nutzer-Fall:** Nach dem Sammeln einer Zeile (Umschalt+Klick, hellblaue
   Markierung) öffnete ein Doppelklick auf eine ANDERE Zeile immer den Editor

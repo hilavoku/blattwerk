@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.20.1"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.20.2"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -383,6 +383,53 @@ def hasannots(did: str):
     return {"any": False}
 
 
+def _bild_geister(pg, erwartet: int):
+    """Ordinalnummern (Reihenfolge get_image_info) von Bildplatzierungen, die von
+    einem SPAETER gezeichneten, deckungsweissen Rechteck voll ueberdeckt werden.
+    image-move/-rotate ueberdecken die alte Stelle weiss und setzen das Bild neu
+    ein - die alte Platzierung bleibt unsichtbar in der Datei (Bild-Geist) und
+    war bislang weiter waehlbar; ihr Verschieben erzeugte eine sichtbare Kopie.
+    Markerlose Erkennung: get_bboxlog liefert Bilder und Pfade in Content-Stream-
+    Reihenfolge (fill-image/fill-path), get_drawings die Farbe (nur reines Weiss
+    mit Deckkraft 1 zaehlt)."""
+    try:
+        log = pg.get_bboxlog()
+        zeichnungen = pg.get_drawings()
+    except Exception:
+        return set()
+    log_bilder = [(i, e[1]) for i, e in enumerate(log) if e[0] == "fill-image"]
+    if len(log_bilder) != erwartet:   # Zaehlung divergiert: lieber gar nicht filtern
+        return set()
+    weiss = set()
+    for dr in zeichnungen:
+        if (dr.get("type") == "f" and dr.get("fill_opacity", 1) >= 0.999 and dr.get("fill")
+                and all(abs(c - 1.0) < 0.01 for c in dr["fill"])):
+            r = dr["rect"]
+            weiss.add((r.x0, r.y0, r.x1, r.y1))
+    if not weiss:
+        return set()
+    pfade = []
+    for i, e in enumerate(log):
+        if e[0] != "fill-path":
+            continue
+        b = e[1]
+        for (x0, y0, x1, y1) in weiss:
+            if (abs(b[0] - x0) < 0.5 and abs(b[1] - y0) < 0.5
+                    and abs(b[2] - x1) < 0.5 and abs(b[3] - y1) < 0.5):
+                pfade.append((i, b))
+                break
+    geister = set()
+    for nr, (bidx, bbox) in enumerate(log_bilder):
+        for pidx, pb in pfade:
+            if pidx <= bidx:
+                continue   # nur WEISS-Kaestchen zaehlen, die NACH dem Bild liegen
+            if (pb[0] - 1 <= bbox[0] and bbox[2] <= pb[2] + 1
+                    and pb[1] - 1 <= bbox[1] and bbox[3] <= pb[3] + 1):
+                geister.add(nr)
+                break
+    return geister
+
+
 @app.get("/api/imageinfo/{did}/{page}")
 def image_info(did: str, page: int):
     """Eingebettete Bilder der Seite mit Platzierungsrechteck und xref.
@@ -392,15 +439,26 @@ def image_info(did: str, page: int):
         raise HTTPException(404, "Seite existiert nicht")
     pg = d[page]
     pw, ph = pg.rect.width, pg.rect.height
+    infos = pg.get_image_info(xrefs=True)
+    geister = _bild_geister(pg, len(infos)) if infos else set()
     bilder = []
-    for inf in pg.get_image_info(xrefs=True):
+    for nr, inf in enumerate(infos):
         if inf.get("xref", 0) <= 0:
             continue                                   # Inline-Bild: nicht per xref verschiebbar
         b = inf["bbox"]
         if (b[2] - b[0]) * (b[3] - b[1]) > 0.9 * pw * ph:
             continue                                   # Ganzseitenbild (Scan): nicht verschiebbar
+        if nr in geister:
+            continue                                   # unsichtbarer Bild-Geist (weiss ueberdeckt)
         bilder.append({"bbox": [round(v, 1) for v in b], "xref": inf["xref"]})
     return {"page_w": pw, "bilder": bilder}
+
+
+def _weissdeckel(r: pymupdf.Rect) -> pymupdf.Rect:
+    """Weissdeckel 1pt ueberstehen lassen: exakt passend bleibt die gerasterte
+    Bildkante der alten Platzierung als duenner farbiger Rest sichtbar
+    (Antialiasing zeichnet sie hauchfein um die Weissflaeche herum)."""
+    return pymupdf.Rect(r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1)
 
 
 @app.post("/api/image/move/{did}")
@@ -416,7 +474,7 @@ async def image_move(did: str, page: int = Form(...), xref: int = Form(...),
     alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
     neu_r = pymupdf.Rect(*[float(v) for v in json.loads(neu)])
     pg = d[page]
-    pg.draw_rect(alt_r, color=None, fill=(1, 1, 1), overlay=True)
+    pg.draw_rect(_weissdeckel(alt_r), color=None, fill=(1, 1, 1), overlay=True)
     pg.insert_image(neu_r, xref=xref)
     push_undo(did, {"op": "image-move", "page": page, "xref": xref,
                     "alt": list(alt_r), "neu": list(neu_r)})
@@ -495,7 +553,7 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(...),
     cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
     neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
     pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
-    pg.draw_rect(alt_r, color=None, fill=(1, 1, 1), overlay=True)
+    pg.draw_rect(_weissdeckel(alt_r), color=None, fill=(1, 1, 1), overlay=True)
     pg.insert_image(neu_r, stream=buf.getvalue())
     push_undo(did, {"op": "image-rotate", "page": page, "xref": xref,
                     "alt": list(alt_r), "neu": list(neu_r)})
@@ -1637,7 +1695,7 @@ def undo(did: str):
         _freetext_ap_mit_abstand(d, a, pg.rect.height, sp, ld)   # immer eigener AP
     elif op in ("image-move", "image-rotate"):   # invers: neue Stelle weiss, Original zurueck
         o = e
-        pg.draw_rect(pymupdf.Rect(*o["neu"]), color=None, fill=(1, 1, 1), overlay=True)
+        pg.draw_rect(_weissdeckel(pymupdf.Rect(*o["neu"])), color=None, fill=(1, 1, 1), overlay=True)
         pg.insert_image(pymupdf.Rect(*o["alt"]), xref=o["xref"])
     elif op == "text-replace":
         o = e

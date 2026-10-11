@@ -34,3 +34,4 @@ demo/
 
 # PyInstaller generiert die Spec bei jedem Build neu (Build-Artefakt)
 app/*.spec
+Thumbs.db

@@ -312,7 +312,13 @@
                                    font-size:12px; padding:4px 5px; }
   .fmtbar input[type=number] { width:50px; }
   .fmtbar input[type=color] { width:30px; height:26px; padding:1px; }
-  .propsbar { display:flex; align-items:center; gap:5px; }
+  /* Eigenschaftenleiste schwebt UNTER der Kopfzeile (v0.20.2) - im Fluss der
+     Kopfzeile liess ihr Erscheinen das Menue umbrechen (zwei Reihen) und die
+     Seite springen. Direktes Kind von header (position:relative), nicht von
+     .kopfzeile - die hat overflow-x:auto und wuerde das Panel abschneiden. */
+  .propsbar { position:absolute; top:100%; right:10px; z-index:40; display:flex; align-items:center; gap:5px;
+              background:var(--chrome); border:1px solid var(--border); border-top:none;
+              border-radius:0 0 8px 8px; padding:5px 10px 6px; box-shadow:0 6px 14px rgba(0,0,0,.22); }
   .propsbar input { width:60px; background:var(--chrome2); color:var(--text); border:1px solid var(--border);
                     border-radius:6px; padding:4px 6px; font-size:12px; }
   .propsbar .lbl { color:var(--muted); font-size:11px; }
@@ -539,6 +545,8 @@
     <span class="lbl" style="color:var(--muted);font-size:11px">%</span>
   </div>
   <div class="sep"></div>
+  <button class="tbtn" id="btnSuche" onclick="sucheUmschalten()" title="Im Dokument suchen (Strg+F)"><span class="i">&#xE721;</span></button>
+  </div>
   <div class="propsbar" id="propsBar" style="display:none">
     <span class="typ" id="prTyp">Objekt</span>
     <span class="lbl">X</span><input type="number" id="prX" step="1">
@@ -547,9 +555,6 @@
     <span class="lbl">Höhe</span><input type="number" id="prH" step="1" min="10">
     <span class="lbl" id="prRotLbl">Winkel</span><input type="number" id="prRot" step="1" title="Drehwinkel in Grad (im Uhrzeigersinn)">
     <span class="lbl">pt</span>
-  </div>
-  <div class="sep"></div>
-  <button class="tbtn" id="btnSuche" onclick="sucheUmschalten()" title="Im Dokument suchen (Strg+F)"><span class="i">&#xE721;</span></button>
   </div>
   <div class="fensterzone">
     <button class="tbtn" id="themeBtn" onclick="toggleTheme()" title="Zwischen hellem und dunklem Design wechseln"><span class="i">&#xE706;</span></button>
