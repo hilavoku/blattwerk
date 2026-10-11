@@ -2,6 +2,19 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.21.3 — Keine Scrollbalken-Reste mehr bei spät geladenen Riesenseiten
+- **Nutzer-Fall:** Das automatisch eingepaßte Dokument zeigte Seite 1 korrekt,
+  aber horizontale (und übertriebene vertikale) Scrollbalken blieben — die
+  Seiten 3 und 4 standen weiterhin in dreifacher Breite im Strom.
+- **Ursache 1:** Diese Seiten luden erst NACH dem automatischen Einpassen; auf
+  die aktuelle Zoomstufe wurde niemand mehr gezogen. `buildPage` wendet die
+  Zoomstufe jetzt selbst auf jede frisch geladene Seite an (idempotent).
+- **Ursache 2:** Die Breiten-Rückrechnung des Seitenmaßstabs nahm dabei fälschlich
+  die aktuelle Zoom-DPI als Render-DPI — hatte der Auto-Einpassen die Zoomstufe
+  aber bereits geändert, während das Bild noch lud, kam ein vielfach zu großer
+  Wert heraus. Die Rückrechnung nutzt jetzt die DPI, mit der das Bild
+  tatsächlich gerendert wurde (`dataset.renderedDpi`).
+
 ## v0.21.2 — Riesenseiten werden beim Öffnen automatisch eingepaßt
 - Der v0.21.1-Fix machte „Passend" bei übergroßen Scan-Seiten wieder
   wirksam — aber beim Öffnen stand so ein Dokument weiterhin bei 100 %

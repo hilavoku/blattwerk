@@ -1315,10 +1315,22 @@ function buildPage(img) {
   // Wert erst asynchron - bei Riesenseiten (Scan-MediaBoxen bis 2400 pt)
   // queuen sich die /api/text-Antworten hinter den Seitenrenderings, und bis
   // dahin sind Zoom/Fit tot (Nutzer-Fall v0.21.1, PKV-Scan). Naturalbreite
-  // ist exakt dpi*pageW/72, also 72/dpi zurueckgerechnet - addLines
-  // ueberschreibt gleich mit dem Serverwert.
+  // ist exakt gerenderteDpi*pageW/72 - der Nenner ist dataset.renderedDpi
+  // (die DPI, mit der DIESES Bild tatsaechlich gerendert wurde), NICHT die
+  // aktuelle Zoom-DPI: Zwischen src-Anfrage und load kann der Auto-Fit die
+  // Zoomstufe bereits veraendert haben (v0.21.3: sonst pageW-Quatsch und
+  // 3230-px-Restseiten neben dem eingepassten Auftakt). addLines
+  // ueberschreibt gleich mit dem exakten Serverwert.
   if (!img.dataset.pageW)
-    img.dataset.pageW = String(img.naturalWidth * 72 / (Math.round(BASE_DPI * zoom) || BASE_DPI));
+    img.dataset.pageW = String(img.naturalWidth * 72 /
+      (parseFloat(img.dataset.renderedDpi) || Math.round(BASE_DPI * zoom) || BASE_DPI));
+  // Spaet geladene Seiten auf die JETZTige Zoomstufe ziehen: laedt Seite 3 erst,
+  // nachdem der Nutzer (oder das Auto-Einpassen) auf 20 % gestellt hat, wuerde
+  // sie sonst in Vollbreite (hier 3170 px) liegen bleiben und Scrollbalken
+  // fuer Overflow erzeugen, den es laut Zoomstufe gar nicht gibt (Nutzer-Fall
+  // v0.21.3, PKV-Scan: Seite 1 passig, 3+4 riesig). Idempotent - bei passendem
+  // style.width veraendert resizeWrap nichts.
+  resizeWrap(img.parentElement);
   addLines(img); addAnnots(img); addWidgets(img); addImageInfos(img);
 }
 function refreshPage(n) {
