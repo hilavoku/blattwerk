@@ -25,7 +25,7 @@ UPLOADS = os.path.join(BASE, "uploads")
 SIGN_DIR = os.path.join(BASE, "signatures")
 TESSDATA = os.path.join(BASE, "tessdata")   # deu/eng Sprachdaten fuer Tesseract (PyMuPDF-OCR)
 DEMO = os.path.join(BASE, "demo", "demo.pdf")
-# Einstellungen NEBEN dem Programmordner: Deployment = PDF-Werkstatt\einstellungen.json
+# Einstellungen NEBEN dem Programmordner: Deployment = FederPDF\einstellungen.json
 # (ueberlebt server-Aktualisierungen); Entwicklung = Projektwurzel
 PREFS_FILE = os.path.join(os.path.dirname(BASE) if getattr(sys, "frozen", False) else BASE,
                           "einstellungen.json")

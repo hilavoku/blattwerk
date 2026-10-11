@@ -16,7 +16,7 @@ import sys
 
 import requests
 
-EXE = os.environ.get("PW_EXE", r"C:\Anwendungen\PDF-Werkstatt\server\FederPDFServer.exe")
+EXE = os.environ.get("PW_EXE", r"C:\Anwendungen\FederPDF\server\FederPDFServer.exe")
 DEMO = os.path.join(os.path.dirname(EXE), "demo", "demo.pdf")
 PORT = 8515
 BASE = f"http://127.0.0.1:{PORT}"
