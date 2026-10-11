@@ -2,6 +2,22 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.21.1 — „Passend" funktioniert jetzt auch bei Riesenseiten
+- **Nutzer-Fall:** Ein 4-seitiger Scan (Seitenbox 2400×3390 pt statt A4) zeigte
+  sich im Fenster als riesige Ecke bei „100 %", und „Passend" reagierte nicht —
+  auf dem externen Monitor. Auf dem Notebook-Display wirkte alles korrekt.
+- **Zwei Ursachen:** (1) Der Seitenmaßstab (`pageW`) wurde erst mit der
+  asynchronen Text-Antwort gesetzt — bei großen Scan-Seiten queueen sich diese
+  Antworten hinter den Seitenrenderings ein, und solange der Wert fehlte, waren
+  Zoom und „Passend" wirkungslos. Er steht jetzt schon beim Bildladen zur
+  Verfügung (aus der natürlichen Bildbreite zurückgerechnet; der Serverwert
+  präzisiert später). (2) Die Zoom-Untergrenze war starr 0,3 — bei 2400-pt-
+  Seiten entspricht das 960 px Mindestbreite: In ein schmales Fenster paßte
+  die Seite nie, der erste „Passend"-Klick klemmte an der Grenze, jeder
+  weitere war ein No-op. Die Untergrenze ist jetzt seitenabhängig (A4 bleibt
+  exakt bei 0,3; Riesenseiten dürfen bis auf ~240 px Mindestbreite
+  herauszoomen).
+
 ## v0.21.0 — Sprachumschalter: Oberfläche auf Deutsch oder Englisch
 - **DE/EN-Umschalter in der Kopfzeile** (neben dem Design-Knopf): Die gesamte
   Oberfläche — Werkzeugleisten, Kontextmenüs, Dialoge, Kurzhlfe, Statuszeile,
