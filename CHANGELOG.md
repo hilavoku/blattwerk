@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.21.2 — Riesenseiten werden beim Öffnen automatisch eingepaßt
+- Der v0.21.1-Fix machte „Passend" bei übergroßen Scan-Seiten wieder
+  wirksam — aber beim Öffnen stand so ein Dokument weiterhin bei 100 %
+  als mehrfach fensterbreites Monster da. Jetzt paßt FederPDF die Seiten
+  beim Öffnen automatisch ein, sobald die erste Seite mehr als doppelt so
+  breit ist wie der Sichtraum; normale Dokumente (A4 & Co.) bleiben
+  unverändert bei 100 %.
+- „Passend" vor dem Seitenladen führt nicht mehr zu Unsinnswerten (früher
+  rechnete eine 0-Breite kurz auf 400 % hoch), sondern wartet schlicht.
+
 ## v0.21.1 — „Passend" funktioniert jetzt auch bei Riesenseiten
 - **Nutzer-Fall:** Ein 4-seitiger Scan (Seitenbox 2400×3390 pt statt A4) zeigte
   sich im Fenster als riesige Ecke bei „100 %", und „Passend" reagierte nicht —

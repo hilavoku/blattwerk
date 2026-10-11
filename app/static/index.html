@@ -1279,6 +1279,17 @@ function openDoc(info) {
   buildThumbs();
   document.getElementById('undoBtn').disabled = false;
   updatePageIndicator();
+  // Riesenseiten beim Oeffnen EINPASSSEN: Scan-MediaBoxen (z. B. 2400 pt,
+  // Nutzer-Fall v0.21.1) stehen bei 100 % als mehrfach fensterbreite Monster
+  // da - unbedienbar. Nur wenn die erste Seite deutlich breiter ist als der
+  // Sichtraum (Faktor 2), wird eingepaßt; normale Dokumente bleiben bei 100 %.
+  const erstesImg = v.querySelector('.pagewrap img');
+  const riesigEinpassen = (im) => {
+    const breite100 = im.dataset.pageW ? parseFloat(im.dataset.pageW) * 96 / 72 : im.naturalWidth;
+    if (breite100 > document.getElementById('viewer').clientWidth * 2) fitWidth();
+  };
+  if (erstesImg && erstesImg.complete && erstesImg.naturalWidth) riesigEinpassen(erstesImg);
+  else if (erstesImg) erstesImg.addEventListener('load', () => riesigEinpassen(erstesImg), { once: true });
 }
 function makePageEl(n) {
   const wrap = document.createElement('div');
@@ -1428,6 +1439,7 @@ function zoomStep(d) {
 function fitWidth() {
   if (!cur) return;
   const img = document.querySelector('.pagewrap img');
+  if (!img || (!img.dataset.pageW && !img.naturalWidth)) return;   // Seite noch nicht geladen: nichts einpassen (frueher rechnete das 0-Breite zu 400%-Muell)
   const avail = document.getElementById('viewer').clientWidth - 44;
   let pageWpt = 595;
   if (img && img.dataset.pageW) pageWpt = parseFloat(img.dataset.pageW);
