@@ -369,6 +369,23 @@ internal sealed class HauptForm : Form
                       HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
     private const int WM_NCLBUTTONDOWN = 0xA1;
     private const int HTCAPTION = 2;
+    private const int WM_DPICHANGED = 0x02E0;
+    private const int WM_GETDPISCALEDSIZE = 0x02E4;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct VorschlagsRect
+    {
+        public int Links, Oben, Rechts, Unten;
+    }
+
+    // lParam von WM_GETDPISCALEDSIZE ist eine SIZE-Struktur (Breite/Hoehe),
+    // KEIN Rect - ein Rect-Zugriff liefert Muell und das System faellt dann
+    // auf unskaliert zurueck (Diagnose 11.10.2026)
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SkalierteGroesse
+    {
+        public int Breite, Hoehe;
+    }
 
     [DllImport("user32.dll")]
     private static extern bool ReleaseCapture();
@@ -452,6 +469,38 @@ internal sealed class HauptForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        // Monitorwechsel auf andere Skalierung, Teil 1: WinForms beantwortet
+        // WM_GETDPISCALEDSIZE mit der UNVERAENDERTEN Fensterflaeche - Windows
+        // schlaegt dann in WM_DPICHANGED genau dieses Rechteck vor, das Fenster
+        // behaelt also seine Pixelmasse (auf dem Zielfenster zu gross bzw.
+        // zu klein) und das WebView2 bleibt auf dem Rueckweg im alten
+        // Rastermassstab haengen ("alles sehr klein", Nutzer-Fall 11.10.2026).
+        // Wir antworten deshalb SELBST mit linear skaliertem Rechteck
+        // (neue DPI / alte DPI) - nur im Normalzustand, maximiert regelt das
+        // System selbst.
+        if (m.Msg == WM_GETDPISCALEDSIZE && WindowState == FormWindowState.Normal
+            && Marshal.PtrToStructure(m.LParam, typeof(SkalierteGroesse)) is SkalierteGroesse anfrage)
+        {
+            double faktor = (double)(m.WParam.ToInt32() & 0xFFFF) / DeviceDpi;
+            anfrage.Breite = (int)Math.Round(anfrage.Breite * faktor);
+            anfrage.Hoehe = (int)Math.Round(anfrage.Hoehe * faktor);
+            Marshal.StructureToPtr(anfrage, m.LParam, false);
+            m.Result = (IntPtr)1;
+            return;
+        }
+        // Teil 2: den (jetzt sinnvollen) Vorschlag tatsaechlich uebernehmen.
+        // Erst base lassen (interne Font-/Skalierungspflege), dann anwenden.
+        if (m.Msg == WM_DPICHANGED)
+        {
+            base.WndProc(ref m);
+            if (WindowState == FormWindowState.Normal
+                && Marshal.PtrToStructure(m.LParam, typeof(VorschlagsRect)) is VorschlagsRect v)
+            {
+                Bounds = new Rectangle(v.Links, v.Oben, v.Rechts - v.Links, v.Unten - v.Oben);
+                Invalidate();
+            }
+            return;
+        }
         // Groesse-Raender nur im Normalzustand und nur wo das WebView2 nicht ueberdeckt
         if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal && Padding.Left > 0)
         {
