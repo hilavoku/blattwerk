@@ -19,9 +19,7 @@ Fertige Windows-Version (portable ZIP, keine Installation):
 **[github.com/hilavoku/federpdf/releases](https://github.com/hilavoku/federpdf/releases)** —
 ZIP entpacken, `FederPDF.exe` starten, fertig. Erhältlich für **x64**
 (Intel/AMD) und **ARM64** (Windows on ARM, nativ). Enthält OCR-Sprachdaten
-(Deutsch/Englisch); benötigt die
-[.NET-8-Desktop-Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
-(in der zur ZIP passenden Variante) und die
+(Deutsch/Englisch) und die .NET-Runtime — benötigt wird nur die
 [WebView2-Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
 (auf Windows 11 vorinstalliert). Oder aus den Quellen bauen — siehe unten.
 
