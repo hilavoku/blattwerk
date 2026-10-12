@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.21.7 — Signatur-Kacheln: Vorschau nach dem Entsperren, Drag & Drop-Hinweis
+- Nach dem Eingeben des Passworts zeigt die Kachel wieder das kleine
+  Vorschaubild der Signatur statt des Schlosses — ein kleiner grüner
+  Schloss-Hinweis an der Ecke zeigt an, daß sie bis zum Programmende
+  entschlüsselt ist. Gesperrte Kacheln zeigen weiterhin das Schloss.
+- Jede Kachel trägt jetzt einen Tooltip mit der Platzier-Anweisung
+  („per Drag & Drop aufs Papier ziehen – Klick wählt nur aus"); derselbe
+  Hinweis steht im Fußtext des Signatur-Menüs.
+
 ## v0.21.6 — GitHub-Link im Über-Dialog
 - Der Über-Dialog (Klick auf Logo/FederPDF) nennt jetzt auch Quellcode und
   Downloads mit Link zum GitHub-Repository — der Link öffnet den

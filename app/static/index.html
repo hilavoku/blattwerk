@@ -3359,17 +3359,29 @@ function buildSigPanel() {
     item.className = 'sigitem' + (s.file === sigSelected ? ' sel' : '');
     item.style.setProperty('--i', kachelIdx++);
     const gesperrt = s.locked && !s.unlocked;
-    if (gesperrt || (s.locked && s.unlocked)) {
+    if (gesperrt) {
       const lock = document.createElement('div');
       lock.className = 'siglock';
       lock.textContent = '\uE72E';
-      lock.title = s.unlocked ? E('entsperrt bis Programmende', 'unlocked until the program ends') : E('passwortgeschützt', 'password-protected');
-      if (s.unlocked) lock.style.color = 'var(--ok)';
+      lock.title = E('passwortgeschützt', 'password-protected');
       item.appendChild(lock);
     } else {
+      // Vorschaubild - AUCH nach dem Entsperren (Nutzer-Wunsch v0.21.7: vorher
+      // blieb die Kachel beim Schloss); bei entsperrten liegt ein kleiner
+      // gruener Schloss-Hinweis obendrauf, damit der Schutzzustand sichtbar bleibt
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;flex:none';
       const img = document.createElement('img');
       img.src = '/api/signature/file/' + encodeURIComponent(s.file);
-      item.appendChild(img);
+      wrap.appendChild(img);
+      if (s.locked && s.unlocked) {
+        const badge = document.createElement('span');
+        badge.textContent = '\uE72E';
+        badge.style.cssText = 'position:absolute; top:-5px; right:-5px; font-family:var(--icon); font-size:10px; color:var(--ok); background:var(--chrome); border:1px solid var(--border); border-radius:7px; padding:1px 3px; line-height:1;';
+        badge.title = E('entsperrt bis Programmende', 'unlocked until the program ends');
+        wrap.appendChild(badge);
+      }
+      item.appendChild(wrap);
     }
     // Ziehbare Kachel: direkt aus der Liste aufs Papier ziehen - AUCH gesperrte:
     // Das Passwort wird beim Fallenlassen abgefragt (v0.17.11)
@@ -3381,8 +3393,11 @@ function buildSigPanel() {
       ev.dataTransfer.effectAllowed = 'copy';
     });
     item.addEventListener('dragend', () => item.classList.remove('dragging'));
-    item.title = gesperrt ? E('Passwortgeschützt – aufs Papier ziehen: Passwort wird beim Ablegen abgefragt', 'Password-protected – drag onto the paper: the password is asked when dropped')
-                          : E('Klicken: auswählen – oder direkt aufs Papier ziehen', 'Click: select – or drag straight onto the paper');
+    item.title = gesperrt
+      ? E('Passwortgeschützt – aufs Papier ziehen: Passwort wird beim Ablegen abgefragt', 'Password-protected – drag onto the paper: the password is asked when dropped')
+      : s.locked
+        ? E('Entsperrt bis Programmende – per Drag & Drop aufs Papier ziehen, Klick wählt nur aus', 'Unlocked until the program ends – drag & drop onto the paper, clicking only selects')
+        : E('Per Drag & Drop aufs Papier ziehen, um die Signatur zu setzen – Klick wählt nur aus', 'Drag & drop onto the paper to place the signature – clicking only selects');
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = prettySig(s.file);
     const act = document.createElement('div'); act.className = 'act';
     const ren = document.createElement('button'); ren.innerHTML = '&#xE8AC;'; ren.title = E('Umbenennen', 'Rename');
@@ -3435,7 +3450,8 @@ function buildSigPanel() {
   const hint = document.createElement('div');
   hint.className = 'muted';
   hint.style.cssText = 'padding:2px 6px 4px; font-size:11px; line-height:1.4;';
-  hint.textContent = E('Signaturen mit Schloss verlangen beim Platzieren das Passwort – entsperren gilt bis Programmende. Schloss-Knopf an der Kachel: Passwort setzen/ändern.', 'Signatures with a padlock ask for the password when placed – unlocking lasts until the program ends. Padlock button on the tile: set/change the password.');
+  hint.textContent = E('Signatur per Drag & Drop aufs Papier ziehen. Signaturen mit Schloss verlangen beim Platzieren das Passwort – entsperren gilt bis Programmende. Schloss-Knopf an der Kachel: Passwort setzen/ändern.',
+                       'Drag & drop a signature onto the paper to place it. Signatures with a padlock ask for the password when placed – unlocking lasts until the program ends. Padlock button on the tile: set/change the password.');
   p.appendChild(hint);
 }
 
