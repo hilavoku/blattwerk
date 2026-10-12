@@ -34,7 +34,9 @@ internal static class Program
         }
 
         // Gespeicherte UI-Sprache uebernehmen (steuert Splash/Fehlerseite/
-        // Schliessdialog, bis die UI per "sprache|xx" nachzieht)
+        // Schliessdialog, bis die UI per "sprache|xx" nachzieht) + Start-Design
+        // fuer den inneren Ziehzonen-Ring
+        bool startLicht = false;
         try
         {
             string einst = Path.Combine(baseDir, "einstellungen.json");
@@ -44,9 +46,12 @@ internal static class Program
                 if (doc.RootElement.TryGetProperty("sprache", out var sp)
                     && sp.ValueKind == JsonValueKind.String && sp.GetString() == "en")
                     uiSprache = "en";
+                if (doc.RootElement.TryGetProperty("theme", out var th)
+                    && th.ValueKind == JsonValueKind.String && th.GetString() == "light")
+                    startLicht = true;
             }
         }
-        catch { /* kaputte/kompatible Datei: Deutsch bleibt */ }
+        catch { /* kaputte/kompatible Datei: Deutsch/Dunkel bleibt */ }
 
         var psi = new ProcessStartInfo
         {
@@ -60,9 +65,10 @@ internal static class Program
 
         ApplicationConfiguration.Initialize();
 
-        // Fensterrand = Groesse-Zonen + Trikolore-Rahmen (frueher 6, Nutzer:
-        // "etwas duenner" v0.18.11); WM_NCHITTEST/OnPaint lesen Padding dynamisch
-        const int randBreite = 4;
+        // Fensterrand: SICHTBAR bleibt der duenne Trikolore-Streifen (4 px, Nutzer-
+        // Wunsch v0.18.11); die ZIEHZONE ist breiter (nativen Rahmen nachempfunden,
+        // Nutzer-Wunsch v0.21.4: Ecken besser greifbar) und wird in HauptForm
+        // (RandAnwenden/OnPaint) DPI-abhaengig gesetzt und mit UI-Farben gefuellt.
 
         var form = new HauptForm
         {
@@ -74,9 +80,9 @@ internal static class Program
             StartPosition = FormStartPosition.CenterScreen,
             Font = new Font("Segoe UI", 9f),
             FormBorderStyle = FormBorderStyle.None,
-            BackColor = System.Drawing.Color.FromArgb(23, 25, 29),
-            Padding = new Padding(randBreite, randBreite, randBreite, randBreite)
+            BackColor = System.Drawing.Color.FromArgb(23, 25, 29)
         };
+        form.ThemeSetzen(startLicht);   // innerer Ziehzonen-Ring im gespeicherten Design
 
         // Fenstergroesse/-position wiederherstellen (fenster.json neben der EXE)
         string winFile = Path.Combine(baseDir, "fenster.json");
@@ -107,10 +113,8 @@ internal static class Program
 
         form.Resize += (_, _) =>
         {
-            // Maximiert: randlos ueber den Bildschirm; sonst schmalen Groesse-Rand rundum
-            form.Padding = form.WindowState == FormWindowState.Maximized
-                ? Padding.Empty
-                : new Padding(randBreite, randBreite, randBreite, randBreite);
+            // Padding (Ziehzone) pflegt HauptForm.RandAnwenden selbst (vor dem
+            // Layout, im OnResize) - hier nur die WebView-Flaeche nachziehen
             WebViewAufInnenflaecheSetzen(form, webView);
         };
 
@@ -155,7 +159,9 @@ internal static class Program
                     else if (msg == "theme|light" || msg == "theme|dark")
                     {
                         // Fensterrand ist seit v0.16.9 in beiden Designs der
-                        // Schwarz-Rot-Gold-Verlauf - Nachricht wird nur noch ignoriert
+                        // Schwarz-Rot-Gold-Verlauf; der INNERE Ziehzone-Ring
+                        // faerbt sich seit v0.21.4 passend zum Design
+                        form.ThemeSetzen(msg == "theme|light");
                     }
                     else if (msg != null && msg.StartsWith("saveas|"))
                     {
@@ -443,12 +449,53 @@ internal sealed class HauptForm : Form
     private static readonly Color RandRot = Color.FromArgb(221, 0, 0);
     private static readonly Color RandGold = Color.FromArgb(255, 204, 0);
 
+    // Innerer Ziehzone-Ring in den Farben der ANGRENZENDEN UI (v0.21.4): oben
+    // Kopfzeilen-Ton, sonst Viewer-Hintergrund - dunkel wie hell nahezu unsichtbar
+    private static readonly Color InnenDunkel = Color.FromArgb(23, 25, 29);      // #17191d
+    private static readonly Color InnenObenDunkel = Color.FromArgb(31, 32, 36);  // #1f2024
+    private static readonly Color InnenHell = Color.FromArgb(238, 241, 245);     // #eef1f5
+    private static readonly Color InnenObenHell = Color.White;
+
+    private static bool licht;
+
+    public void ThemeSetzen(bool hell)
+    {
+        licht = hell;
+        if (IsHandleCreated) Invalidate();
+    }
+
+    // Ziehzone in PHYSISCHEN Pixeln, an native Rahmen angelehnt (8 px bei
+    // 100 %, 12 px bei 150 %) - die v0.18.11er 4 px waren halb so breit wie
+    // bei jedem anderen Programm (Nutzer: "Ecke schwer zu treffen")
+    private int ZiehzonePx() => Math.Max(8, (int)Math.Round(8.0 * DeviceDpi / 96.0));
+
+    /// <summary>Ziehzone (Padding) je Fensterzustand setzen: maximiert randlos,
+    /// sonst der breite unsichtbare Greifring. Steuert WebView-Flaeche UND
+    /// WM_NCHITTEST.</summary>
+    public void RandAnwenden()
+    {
+        Padding = WindowState == FormWindowState.Maximized ? Padding.Empty : new Padding(ZiehzonePx());
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
         var g = e.Graphics;
-        int b = Padding.Left;
-        if (b == 0) return;   // maximiert: kein Rand
+        int zone = Padding.Left;
+        if (zone == 0) return;   // maximiert: kein Rand
+        // Sichtbar bleibt der duenne Trikolore-Streifen (4 px, Nutzer-Wunsch
+        // v0.18.11). Die breitere Ziehzone (v0.21.4) wird mit den Farben der
+        // ANGRENZENDEN UI gefuellt - oben Kopfzeilen-Ton, sonst Viewer-
+        // Hintergrund - und ist darum nahezu unsichtbar.
+        int sichtbar = Math.Min(4, zone);
+        using (var bo = new SolidBrush(licht ? InnenObenHell : InnenObenDunkel))
+            g.FillRectangle(bo, 0, 0, Width, zone);
+        using (var bi = new SolidBrush(licht ? InnenHell : InnenDunkel))
+        {
+            g.FillRectangle(bi, 0, zone, zone, Height - zone);             // links
+            g.FillRectangle(bi, Width - zone, zone, zone, Height - zone);  // rechts
+            g.FillRectangle(bi, 0, Height - zone, Width, zone);            // unten
+        }
         // Verlaufskamm schwarz - rot - gold wie das CSS-Band (50% Rot). Der Rand
         // laeuft als NAHTLOSER Umlauf ums Fenster (an jeder Ecke treffen gleiche
         // Farben aufeinander): oben schwarz->gold, rechts gold->schwarz,
@@ -463,18 +510,19 @@ internal sealed class HauptForm : Form
             Positions = new float[] { 0f, 0.5f, 1f },
             Colors = new[] { RandGold, RandRot, RandSchwarz }
         };
-        using (var po = new LinearGradientBrush(new Rectangle(0, 0, Width, b), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
-        { po.InterpolationColors = kamm; g.FillRectangle(po, 0, 0, Width, b); }
-        using (var pr = new LinearGradientBrush(new Rectangle(Width - b, 0, b, Height), RandGold, RandSchwarz, LinearGradientMode.Vertical))
-        { pr.InterpolationColors = kammUmgekehrt; g.FillRectangle(pr, Width - b, 0, b, Height); }
-        using (var pu = new LinearGradientBrush(new Rectangle(0, Height - b, Width, b), RandGold, RandSchwarz, LinearGradientMode.Horizontal))
-        { pu.InterpolationColors = kammUmgekehrt; g.FillRectangle(pu, 0, Height - b, Width, b); }
-        using (var pl = new LinearGradientBrush(new Rectangle(0, 0, b, Height), RandSchwarz, RandGold, LinearGradientMode.Vertical))
-        { pl.InterpolationColors = kamm; g.FillRectangle(pl, 0, 0, b, Height); }
+        using (var po = new LinearGradientBrush(new Rectangle(0, 0, Width, sichtbar), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
+        { po.InterpolationColors = kamm; g.FillRectangle(po, 0, 0, Width, sichtbar); }
+        using (var pr = new LinearGradientBrush(new Rectangle(Width - sichtbar, 0, sichtbar, Height), RandGold, RandSchwarz, LinearGradientMode.Vertical))
+        { pr.InterpolationColors = kammUmgekehrt; g.FillRectangle(pr, Width - sichtbar, 0, sichtbar, Height); }
+        using (var pu = new LinearGradientBrush(new Rectangle(0, Height - sichtbar, Width, sichtbar), RandGold, RandSchwarz, LinearGradientMode.Horizontal))
+        { pu.InterpolationColors = kammUmgekehrt; g.FillRectangle(pu, 0, Height - sichtbar, Width, sichtbar); }
+        using (var pl = new LinearGradientBrush(new Rectangle(0, 0, sichtbar, Height), RandSchwarz, RandGold, LinearGradientMode.Vertical))
+        { pl.InterpolationColors = kamm; g.FillRectangle(pl, 0, 0, sichtbar, Height); }
     }
 
     protected override void OnResize(EventArgs e)
     {
+        RandAnwenden();   // Ziehzone VOR dem Layout (DPI-abhaengig; maximiert randlos)
         base.OnResize(e);
         // Groessenaenderung: Verlaufsrand STRECKENWEISE komplett neu zeichnen -
         // Windows malt sonst nur die freigelegten Streifen, an den Grenzflaechen
@@ -493,6 +541,7 @@ internal sealed class HauptForm : Form
     {
         DoubleBuffered = true;   // randloses Fenster: Verlaufsrand ohne Flackern
         MaximizedBounds = Screen.FromControl(this).WorkingArea;   // taskbar-sicher
+        RandAnwenden();   // erste Ziehzone (Padding steuert WebView-Flaeche + WM_NCHITTEST)
         base.OnLoad(e);
     }
 
