@@ -179,7 +179,12 @@
   #modePill { position:absolute; top:0; left:0; background:var(--accent-dim); border-radius:8px; z-index:0; opacity:0;
               transition: transform var(--d3) var(--e-standard), width var(--d3) var(--e-standard), opacity var(--d2); pointer-events:none; }
   header { position: relative; }
-  body:not(.light) header::before { content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  /* Trikolore-Kante oben: EIGENTUEMER der Oberkante ist allein die Kopfzeile
+     (seit v0.21.5 in BEIDEN Designs - der Wrapper malt oben nichts mehr; sein
+     zusaetzliches Band + diese Kante wirkten wie ein dicker Doppelstreifen).
+     Farben identisch zum Wrapper-Rand (links/unten schwarz, Mitte rot, rechts
+     gold) - die Seitenbaender setzen sie nahtlos fort. */
+  header::before { content:""; position:absolute; top:0; left:0; right:0; height:3px;
     background:linear-gradient(90deg, #1a1a1a, #dd0000 50%, #ffcc00 100%); z-index:4; }
   /* z-index:4: die Kante muss UEBER der .fensterzone (z-index:3) liegen, sonst
      reisst sie dort ab - harte Kante an der linken Zonecke, kahlen Ecken
@@ -295,7 +300,7 @@
 
   /* ---------- Statusleiste ---------- */
   footer { display:flex; align-items:center; gap:4px; padding:4px 10px; background:var(--chrome);
-           border-top:1px solid var(--border); font-size:12px; color:var(--muted); }
+           border-top:1px solid var(--border); font-size:12px; color:var(--muted); position:relative; }
   .sbtn { background:transparent; border:1px solid transparent; color:var(--text); border-radius:5px;
           padding:3px 8px; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:5px; }
   .sbtn:hover { background:var(--hover); }
@@ -307,6 +312,25 @@
   #statusMain { margin-left:auto; color:var(--muted); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52%; }
   #statusMain.ok { color:var(--ok); }
   #dirtyDot { width:8px; height:8px; border-radius:50%; background:var(--accent); display:none; margin-left:6px; }
+  /* Fenster-Griff unten rechts (Vorbild Affinity): PUNKT-DREIECK (1+2+3),
+     absolut in der Fussleistenecke am Rand - ein Druck loest ueber
+     "fenster|groesse" den nativen Groesse-Zug des Wrappers aus. Treffflaeche
+     20x20 (leichter greifen), Sichtbares nur die 6 Punkte. */
+  #fensterGriff { position:absolute; right:0; bottom:0; width:20px; height:20px;
+                  cursor:nwse-resize; opacity:.5; }
+  #fensterGriff:hover { opacity:.85; }
+  #fensterGriff::before { content:""; position:absolute; right:1px; bottom:1px; width:12px; height:12px;
+    background-image:
+      radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px),
+      radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px),
+      radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px),
+      radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px),
+      radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px),
+      radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px);
+    background-size: 3px 3px;   /* MUSS je Ebene < Flaeche sein, sonst ignorieren
+                                    die Positionen und alle Punkte stapeln sich mittig (Fehler Runde 4) */
+    background-repeat:no-repeat;
+    background-position: 9px 1px, 5px 5px, 9px 5px, 1px 9px, 5px 9px, 9px 9px; }
 
   /* ---------- Text-Formatleiste (oben) + Inline-Eingabe ---------- */
   .fmtbar { display:flex; align-items:center; gap:4px; }
@@ -629,6 +653,7 @@
   <button class="sbtn" onclick="removePage()" title="Diese Seite löschen" disabled><span class="i">&#xE74D;</span> Seite</button>
   <span id="dirtyDot" title="Ungespeicherte Änderungen"></span>
   <span id="statusMain"></span>
+  <span id="fensterGriff" title="Fenstergröße ziehen"></span>
 </footer>
 
 <div id="renameBox">
@@ -847,6 +872,13 @@ function setDirty(v) {
   document.getElementById('dirtyDot').style.display = v ? 'inline-block' : 'none';
   try { window.chrome?.webview?.postMessage(v ? 'dirty:1' : 'dirty:0'); } catch (e) {}
 }
+/* Fenster-Griff (Fussleiste, rechts): Druck loest den nativen Groesse-Zug des
+   Wrappers aus - der modale Systemzug capturet die Maus und fuehrt den bereits
+   gehaltenen Zeiger weiter (gleiches Muster wie die Marke/fenster|drag). */
+document.getElementById('fensterGriff').addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
+  try { window.chrome?.webview?.postMessage('fenster|groesse'); } catch (e) {}
+});
 
 /* ---------- Einstellungen (serverseitig gespeichert, nicht localStorage:
    der Serverport wechselt bei jedem Start -> localStorage waere immer leer) ---------- */
@@ -989,6 +1021,7 @@ const WOERTER = {
   "Maximieren / Wiederherstellen": "Maximize / Restore",
   "FederPDF schließen": "Quit FederPDF",
   "Ziehen verschiebt das Fenster": "Drag moves the window",
+  "Fenstergröße ziehen": "Drag to resize the window",
   "Über FederPDF – Programm- und Versionsinfo": "About FederPDF – program and version info",
   "Drehwinkel in Grad (im Uhrzeigersinn)": "Rotation angle in degrees (clockwise)",
   /* Formate + Zeichnen-Optionen */

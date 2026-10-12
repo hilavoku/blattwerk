@@ -143,11 +143,12 @@ internal static class Program
                     else if (msg != null && msg.StartsWith("fenster|"))
                     {
                         // Eigene Titelleiste: Minimieren/Maximieren/Schliessen/Ziehen aus der Kopfzeile
-                        var befehl = msg.Substring(8);
-                        if (befehl == "min") form.WindowState = FormWindowState.Minimized;
-                        else if (befehl == "max") form.MaximierenWechseln();
-                        else if (befehl == "zu") form.Close();
-                        else if (befehl == "drag") form.Titelziehen();
+                    var befehl = msg.Substring(8);
+                    if (befehl == "min") form.WindowState = FormWindowState.Minimized;
+                    else if (befehl == "max") form.MaximierenWechseln();
+                    else if (befehl == "zu") form.Close();
+                    else if (befehl == "drag") form.Titelziehen();
+                    else if (befehl == "groesse") form.GroesseZiehen();
                         try
                         {
                             var maxed = form.WindowState == FormWindowState.Maximized;
@@ -449,23 +450,16 @@ internal sealed class HauptForm : Form
     private static readonly Color RandRot = Color.FromArgb(221, 0, 0);
     private static readonly Color RandGold = Color.FromArgb(255, 204, 0);
 
-    // Innerer Ziehzone-Ring in den Farben der ANGRENZENDEN UI (v0.21.4): oben
-    // Kopfzeilen-Ton, sonst Viewer-Hintergrund - dunkel wie hell nahezu unsichtbar
+    // Innerer Ziehzone-Ring in der Farbe des ANGRENZENDEN UI (v0.21.4):
+    // Viewer-Hintergrund - dunkel wie hell nahezu unsichtbar
     private static readonly Color InnenDunkel = Color.FromArgb(23, 25, 29);      // #17191d
-    private static readonly Color InnenObenDunkel = Color.FromArgb(31, 32, 36);  // #1f2024
     private static readonly Color InnenHell = Color.FromArgb(238, 241, 245);     // #eef1f5
-    private static readonly Color InnenObenHell = Color.White;
 
     private static bool licht;
 
     public void ThemeSetzen(bool hell)
     {
         licht = hell;
-        if (greifRing != null)
-        {
-            greifRing.BackColor = hell ? InnenObenHell : InnenObenDunkel;
-            greifRing.Invalidate();
-        }
         if (IsHandleCreated) Invalidate();
     }
 
@@ -475,86 +469,61 @@ internal sealed class HauptForm : Form
     private int ZiehzonePx() => Math.Max(8, (int)Math.Round(8.0 * DeviceDpi / 96.0));
 
     /// <summary>Ziehzone (Padding) je Fensterzustand setzen: maximiert randlos,
-    /// sonst der breite unsichtbare Greifring. Steuert WebView-Flaeche UND
-    /// WM_NCHITTEST.</summary>
+    /// sonst die breite Ziehzone an SEITEN/UNTEN. OBEN ist die Zone 0 und der
+    /// Wrapper malt nichts: Eigner der Oberkante ist allein der CSS-Streifen
+    /// der Kopfzeile (v0.21.5, laeuft in beiden Designs einmal uebers Fenster) -
+    /// ein zusaetzliches Wrapper-Band darunter wirkte als dicker Doppelstreifen
+    /// mit Naht-Artefakten (Nutzer-Fall v0.21.5).</summary>
     public void RandAnwenden()
     {
-        Padding = WindowState == FormWindowState.Maximized ? Padding.Empty : new Padding(ZiehzonePx());
+        Padding = WindowState == FormWindowState.Maximized
+            ? Padding.Empty
+            : new Padding(ZiehzonePx(), 0, ZiehzonePx(), ZiehzonePx());
     }
 
-    // Sichtbarer Greifring unten rechts (Nutzer-Wunsch v0.21.4, "kleines
-    // Rechteck"): klassische Diagonalrillen, Klick+Ziehen loest den NATIVEN
-    // Groesse-Zug an der Ecke aus (gleiches Muster wie Titelziehen/HTCAPTION)
-    private Control greifRing;
-
-    private int GreifringPx() => Math.Max(16, (int)Math.Round(16.0 * DeviceDpi / 96.0));
-
-    private void GreifringAnlegen()
+    /// <summary>Native Größenänderung an der Ecke unten rechts starten (der
+    /// HTML-Greifgriff in der Fußleiste löst sie per "fenster|groesse" aus;
+    /// der modale Systemzug übernimmt den bereits gehaltenen Mauszeiger).</summary>
+    public void GroesseZiehen()
     {
-        greifRing = new Control
-        {
-            Size = new Size(GreifringPx(), GreifringPx()),
-            Cursor = Cursors.SizeNWSE,
-            BackColor = licht ? InnenObenHell : InnenObenDunkel   // Fussleisten-Ton
-        };
-        greifRing.Paint += (s, e) =>
-        {
-            int g = greifRing.Width;
-            using var stift = new Pen(licht ? Color.FromArgb(98, 108, 122) : Color.FromArgb(156, 151, 140), 2);
-            int r = g - 3;
-            for (int i = 1; i <= 3; i++)
-            {
-                int abstand = i * g / 4;
-                e.Graphics.DrawLine(stift, r - abstand, r, r, r - abstand);
-            }
-        };
-        greifRing.MouseDown += (s, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                ReleaseCapture();
-                _ = SendMessage(Handle, WM_NCLBUTTONDOWN, HTBOTTOMRIGHT, 0);
-            }
-        };
-        Controls.Add(greifRing);
-        greifRing.BringToFront();   // ueber dem WebView2: nur 16 px Ecke, dahinter liegt die leere Fussleiste
-    }
-
-    private void GreifringPlatzieren()
-    {
-        if (greifRing == null) return;
-        bool normal = WindowState == FormWindowState.Normal;
-        greifRing.Visible = normal;   // maximiert: kein Größengriff
-        if (normal)
-        {
-            greifRing.Size = new Size(GreifringPx(), GreifringPx());
-            greifRing.Location = new Point(ClientSize.Width - greifRing.Width, ClientSize.Height - greifRing.Height);
-        }
+        ReleaseCapture();
+        _ = SendMessage(Handle, WM_NCLBUTTONDOWN, HTBOTTOMRIGHT, 0);
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
         var g = e.Graphics;
-        int zone = Padding.Left;
+        int zone = Padding.Left;      // Ziehzone an den Seiten/unten (oben: 0)
         if (zone == 0) return;   // maximiert: kein Rand
         // Sichtbar bleibt der duenne Trikolore-Streifen (4 px, Nutzer-Wunsch
-        // v0.18.11). Die breitere Ziehzone (v0.21.4) wird mit den Farben der
-        // ANGRENZENDEN UI gefuellt - oben Kopfzeilen-Ton, sonst Viewer-
-        // Hintergrund - und ist darum nahezu unsichtbar.
+        // v0.18.11) an LINKS/RECHTS/UNTEN - oben liefert die Kopfzeile ihren
+        // eigenen CSS-Streifen (v0.21.5). Die breiteren Zonen werden mit dem
+        // ANGRENZENDEN UI-Hintergrund gefuellt und sind nahezu unsichtbar.
         int sichtbar = Math.Min(4, zone);
-        using (var bo = new SolidBrush(licht ? InnenObenHell : InnenObenDunkel))
-            g.FillRectangle(bo, 0, 0, Width, zone);
         using (var bi = new SolidBrush(licht ? InnenHell : InnenDunkel))
         {
-            g.FillRectangle(bi, 0, zone, zone, Height - zone);             // links
-            g.FillRectangle(bi, Width - zone, zone, zone, Height - zone);  // rechts
+            g.FillRectangle(bi, 0, 0, zone, Height);                       // links
+            g.FillRectangle(bi, Width - zone, 0, zone, Height);            // rechts
             g.FillRectangle(bi, 0, Height - zone, Width, zone);            // unten
         }
-        // Verlaufskamm schwarz - rot - gold wie das CSS-Band (50% Rot). Der Rand
-        // laeuft als NAHTLOSER Umlauf ums Fenster (an jeder Ecke treffen gleiche
-        // Farben aufeinander): oben schwarz->gold, rechts gold->schwarz,
-        // unten gold->schwarz (in Leserichtung), links schwarz->gold.
+        // Oberkanten-ANSCHLUSS (Nutzer-Fall: "Rand oben rechts nicht
+        // geschlossen"): der CSS-Streifen endet an der WebView-Kante; dieselbe
+        // Kamm-Flaeche einmal ueber die VOLLE Fensterbreite malen - die Mitte
+        // liegt unterm WebView (unsichtbar), an den Ecken schliesst der
+        // Streifen damit bündig bis zum Fensterrand. Hoehe = CSS 3px in
+        // physischen Pixeln (DeviceDpi).
+        int kanteH = Math.Max(3, (int)Math.Ceiling(3.0 * DeviceDpi / 96.0));
+        var kamm0 = new ColorBlend
+        {
+            Positions = new float[] { 0f, 0.5f, 1f },
+            Colors = new[] { RandSchwarz, RandRot, RandGold }
+        };
+        using (var pk = new LinearGradientBrush(new Rectangle(0, 0, Width, kanteH), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
+        { pk.InterpolationColors = kamm0; g.FillRectangle(pk, 0, 0, Width, kanteH); }
+        // Verlaufskamm schwarz - rot - gold wie das CSS-Band (50% Rot). Der
+        // Umlauf beginnt/endet an den oberen Ecken mit denselben Farben wie
+        // der CSS-Streifen (links schwarz, rechts gold) - nahtloser Ansatz.
         var kamm = new ColorBlend
         {
             Positions = new float[] { 0f, 0.5f, 1f },
@@ -565,8 +534,6 @@ internal sealed class HauptForm : Form
             Positions = new float[] { 0f, 0.5f, 1f },
             Colors = new[] { RandGold, RandRot, RandSchwarz }
         };
-        using (var po = new LinearGradientBrush(new Rectangle(0, 0, Width, sichtbar), RandSchwarz, RandGold, LinearGradientMode.Horizontal))
-        { po.InterpolationColors = kamm; g.FillRectangle(po, 0, 0, Width, sichtbar); }
         using (var pr = new LinearGradientBrush(new Rectangle(Width - sichtbar, 0, sichtbar, Height), RandGold, RandSchwarz, LinearGradientMode.Vertical))
         { pr.InterpolationColors = kammUmgekehrt; g.FillRectangle(pr, Width - sichtbar, 0, sichtbar, Height); }
         using (var pu = new LinearGradientBrush(new Rectangle(0, Height - sichtbar, Width, sichtbar), RandGold, RandSchwarz, LinearGradientMode.Horizontal))
@@ -579,7 +546,6 @@ internal sealed class HauptForm : Form
     {
         RandAnwenden();   // Ziehzone VOR dem Layout (DPI-abhaengig; maximiert randlos)
         base.OnResize(e);
-        GreifringPlatzieren();   // Position/Groesse nach dem Layout (nach base, ClientSize frisch)
         // Groessenaenderung: Verlaufsrand STRECKENWEISE komplett neu zeichnen -
         // Windows malt sonst nur die freigelegten Streifen, an den Grenzflaechen
         // zum WebView2 bleiben weisse Reststriche stehen. Zweites Invalidate
@@ -597,9 +563,7 @@ internal sealed class HauptForm : Form
     {
         DoubleBuffered = true;   // randloses Fenster: Verlaufsrand ohne Flackern
         MaximizedBounds = Screen.FromControl(this).WorkingArea;   // taskbar-sicher
-        GreifringAnlegen();
         RandAnwenden();   // erste Ziehzone (Padding steuert WebView-Flaeche + WM_NCHITTEST)
-        GreifringPlatzieren();
         base.OnLoad(e);
     }
 
@@ -645,10 +609,8 @@ internal sealed class HauptForm : Form
             var p = PointToClient(new Point(x, y));
             bool links = p.X <= Padding.Left;
             bool rechts = p.X >= ClientSize.Width - Padding.Right;
-            bool oben = p.Y <= Padding.Top;
+            bool oben = Padding.Top > 0 && p.Y <= Padding.Top;   // Oberzone 0: Kopfzeile zieht (v0.21.5)
             bool unten = p.Y >= ClientSize.Height - Padding.Bottom;
-            if (links && oben) { m.Result = (IntPtr)HTTOPLEFT; return; }
-            if (rechts && oben) { m.Result = (IntPtr)HTTOPRIGHT; return; }
             if (links && unten) { m.Result = (IntPtr)HTBOTTOMLEFT; return; }
             if (rechts && unten) { m.Result = (IntPtr)HTBOTTOMRIGHT; return; }
             if (oben) { m.Result = (IntPtr)HTTOP; return; }

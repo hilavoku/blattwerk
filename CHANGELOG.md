@@ -2,6 +2,26 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.21.5 — Fenstergriff final und eine einzige Oberkante
+- **Griff unten rechts (Vorbild Affinity):** eine winzige 12×12-Punktematrix
+  in der Fußleistenecke — dezente Punkte, kaum sichtbar, mit dem passenden
+  Größen-Pfeil als Cursor. Ein Druck darauf löst den nativen
+  Größenänderungs-Zug des Fensters aus; die Maus bleibt dabei gefaßt. Der
+  weiße Kasten aus 0.21.4 ist vollständig entfernt.
+- **Oberkante gehört nur noch der Kopfzeile:** Der Trikolore-Streifen läuft
+  in beiden Designs genau einmal über die Fensterbreite (vorher malte der
+  Fensterrahmen ein zweites Band darunter — das wirkte als dicker
+  Doppelstreifen mit Naht-Artefakten). Die breiten unsichtbaren Ziehzonen
+  bleiben an den Seiten und unten erhalten, die Oberkante selbst zieht das
+  Fenster (Kopfzeile wie gewohnt).
+
+## v0.21.4 — Fensterrand besser greifbar
+- Ziehzone an allen Kanten auf 8 px (bei 100 % Skalierung) bzw. 12 px (bei
+  150 %) verbreitert — sie war mit 4 px halb so breit wie bei normalen
+  Windows-Programmen und daher schwer zu treffen. Der sichtbare
+  Trikolore-Streifen bleibt 4 px dünn; der zusätzliche Rand ist in der Farbe
+  der angrenzenden Oberfläche gehalten und fällt nicht auf.
+
 ## v0.21.3 — Keine Scrollbalken-Reste mehr bei spät geladenen Riesenseiten
 - **Nutzer-Fall:** Das automatisch eingepaßte Dokument zeigte Seite 1 korrekt,
   aber horizontale (und übertriebene vertikale) Scrollbalken blieben — die
