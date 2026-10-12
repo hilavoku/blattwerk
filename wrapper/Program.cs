@@ -461,6 +461,11 @@ internal sealed class HauptForm : Form
     public void ThemeSetzen(bool hell)
     {
         licht = hell;
+        if (greifRing != null)
+        {
+            greifRing.BackColor = hell ? InnenObenHell : InnenObenDunkel;
+            greifRing.Invalidate();
+        }
         if (IsHandleCreated) Invalidate();
     }
 
@@ -475,6 +480,56 @@ internal sealed class HauptForm : Form
     public void RandAnwenden()
     {
         Padding = WindowState == FormWindowState.Maximized ? Padding.Empty : new Padding(ZiehzonePx());
+    }
+
+    // Sichtbarer Greifring unten rechts (Nutzer-Wunsch v0.21.4, "kleines
+    // Rechteck"): klassische Diagonalrillen, Klick+Ziehen loest den NATIVEN
+    // Groesse-Zug an der Ecke aus (gleiches Muster wie Titelziehen/HTCAPTION)
+    private Control greifRing;
+
+    private int GreifringPx() => Math.Max(16, (int)Math.Round(16.0 * DeviceDpi / 96.0));
+
+    private void GreifringAnlegen()
+    {
+        greifRing = new Control
+        {
+            Size = new Size(GreifringPx(), GreifringPx()),
+            Cursor = Cursors.SizeNWSE,
+            BackColor = licht ? InnenObenHell : InnenObenDunkel   // Fussleisten-Ton
+        };
+        greifRing.Paint += (s, e) =>
+        {
+            int g = greifRing.Width;
+            using var stift = new Pen(licht ? Color.FromArgb(98, 108, 122) : Color.FromArgb(156, 151, 140), 2);
+            int r = g - 3;
+            for (int i = 1; i <= 3; i++)
+            {
+                int abstand = i * g / 4;
+                e.Graphics.DrawLine(stift, r - abstand, r, r, r - abstand);
+            }
+        };
+        greifRing.MouseDown += (s, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                ReleaseCapture();
+                _ = SendMessage(Handle, WM_NCLBUTTONDOWN, HTBOTTOMRIGHT, 0);
+            }
+        };
+        Controls.Add(greifRing);
+        greifRing.BringToFront();   // ueber dem WebView2: nur 16 px Ecke, dahinter liegt die leere Fussleiste
+    }
+
+    private void GreifringPlatzieren()
+    {
+        if (greifRing == null) return;
+        bool normal = WindowState == FormWindowState.Normal;
+        greifRing.Visible = normal;   // maximiert: kein Größengriff
+        if (normal)
+        {
+            greifRing.Size = new Size(GreifringPx(), GreifringPx());
+            greifRing.Location = new Point(ClientSize.Width - greifRing.Width, ClientSize.Height - greifRing.Height);
+        }
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -524,6 +579,7 @@ internal sealed class HauptForm : Form
     {
         RandAnwenden();   // Ziehzone VOR dem Layout (DPI-abhaengig; maximiert randlos)
         base.OnResize(e);
+        GreifringPlatzieren();   // Position/Groesse nach dem Layout (nach base, ClientSize frisch)
         // Groessenaenderung: Verlaufsrand STRECKENWEISE komplett neu zeichnen -
         // Windows malt sonst nur die freigelegten Streifen, an den Grenzflaechen
         // zum WebView2 bleiben weisse Reststriche stehen. Zweites Invalidate
@@ -541,7 +597,9 @@ internal sealed class HauptForm : Form
     {
         DoubleBuffered = true;   // randloses Fenster: Verlaufsrand ohne Flackern
         MaximizedBounds = Screen.FromControl(this).WorkingArea;   // taskbar-sicher
+        GreifringAnlegen();
         RandAnwenden();   // erste Ziehzone (Padding steuert WebView-Flaeche + WM_NCHITTEST)
+        GreifringPlatzieren();
         base.OnLoad(e);
     }
 
