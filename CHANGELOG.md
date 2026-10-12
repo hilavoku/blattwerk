@@ -2,6 +2,12 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
 
+## v0.21.6 — GitHub-Link im Über-Dialog
+- Der Über-Dialog (Klick auf Logo/FederPDF) nennt jetzt auch Quellcode und
+  Downloads mit Link zum GitHub-Repository — der Link öffnet den
+  Standard-Browser, nicht das App-Fenster. Zweisprachig wie der Rest der
+  Oberfläche.
+
 ## v0.21.5 — Fenstergriff final und eine einzige Oberkante
 - **Griff unten rechts (Vorbild Affinity):** eine winzige 12×12-Punktematrix
   in der Fußleistenecke — dezente Punkte, kaum sichtbar, mit dem passenden

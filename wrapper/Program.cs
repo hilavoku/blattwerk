@@ -140,6 +140,18 @@ internal static class Program
                     if (msg == "dirty:1") dirty = true;
                     else if (msg == "dirty:0") dirty = false;
                     else if (msg != null && msg.StartsWith("sprache|")) uiSprache = msg.Substring(8) == "en" ? "en" : "de";
+                    else if (msg != null && msg.StartsWith("url|"))
+                    {
+                        // Link aus der UI (Über-Dialog) im Standard-Browser oeffnen -
+                        // nur http/https, nichts sonstiges
+                        var adresse = msg.Substring(4);
+                        if (Uri.TryCreate(adresse, UriKind.Absolute, out var ziel)
+                            && (ziel.Scheme == Uri.UriSchemeHttp || ziel.Scheme == Uri.UriSchemeHttps))
+                        {
+                            try { Process.Start(new ProcessStartInfo { FileName = adresse, UseShellExecute = true }); }
+                            catch { /* kein Browser/abgebrochen: still ignorieren */ }
+                        }
+                    }
                     else if (msg != null && msg.StartsWith("fenster|"))
                     {
                         // Eigene Titelleiste: Minimieren/Maximieren/Schliessen/Ziehen aus der Kopfzeile

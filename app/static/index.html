@@ -756,7 +756,8 @@
   markieren — vollständig lokal auf diesem Rechner, ohne Cloud und ohne Telemetrie.</p>
   <div style="margin-top:10px; padding:8px 10px; background:var(--chrome2); border:1px solid var(--border);
               border-radius:8px; font-size:11.5px; line-height:1.6">
-    Idee und Entwicklung: <b>Guido Nekes</b> · © 2026
+    Idee und Entwicklung: <b>Guido Nekes</b> · © 2026<br>
+    <span>Quellcode &amp; Downloads:</span> <a href="https://github.com/hilavoku/federpdf" id="infoLink" style="color:var(--accent)">github.com/hilavoku/federpdf</a>
   </div>
   <div class="row"><button id="infoOk" class="prim">Schließen</button></div>
 </div>
@@ -1089,6 +1090,7 @@ const WOERTER = {
   "Hinzufügen": "Add",
   /* Über-Dialog */
   "Version": "Version",
+  "Quellcode & Downloads:": "Source code & downloads:",
   "PDFs öffnen, lesen, bearbeiten, signieren und\n  markieren — vollständig lokal auf diesem Rechner, ohne Cloud und ohne Telemetrie.": "Open, read, edit, sign and\n  mark up PDFs — fully local on this machine, no cloud, no telemetry.",
   "Idee und Entwicklung:": "Idea and development:",
   /* Suche */
@@ -3731,6 +3733,15 @@ document.addEventListener('pointercancel', () => { markeDrueckt = null; });
    v0.18.12; gleiche Klasse wie die Signatur-Kacheln v0.17.10). */
 document.getElementById('brand').addEventListener('dragstart', (ev) => ev.preventDefault());
 document.getElementById('infoOk').addEventListener('click', infoBoxSchliessen);
+/* GitHub-Link im Über-Dialog: im STANDARD-BROWSER öffnen (Wrapper-Nachricht),
+   nicht im App-Fenster; ohne Wrapper (Browser-Entwicklung) window.open */
+document.getElementById('infoLink').addEventListener('click', (ev) => {
+  ev.preventDefault();
+  const ziel = ev.currentTarget.href;
+  if (window.chrome?.webview?.postMessage) {
+    try { window.chrome.webview.postMessage('url|' + ziel); } catch (e) {}
+  } else window.open(ziel, '_blank');
+});
 /* Klick neben den Dialog schliesst ihn (Klick auf die Marke macht das Toggle selbst) */
 document.addEventListener('pointerdown', (ev) => {
   const box = document.getElementById('infoBox');
