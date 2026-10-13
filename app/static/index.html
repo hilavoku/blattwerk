@@ -254,10 +254,19 @@
      Wort), ueber leeren Flaechen greift die Hand und verschiebt. Der Container ist
      durchlaessig (pointer-events:none) - nur die Spannen fangen die Maus, jeder
      Zwischenraum faellt bis zum Bild durch und kann die Seite ziehen. */
-  .textebene { position:absolute; inset:0; z-index:3; pointer-events:none; }
+  .textebene { position:absolute; inset:0; z-index:3; pointer-events:none; user-select:none; }
   .textebene span { position:absolute; pointer-events:auto; cursor:text; color:transparent;
                     white-space:pre; transform-origin:0 0; user-select:text; -webkit-user-select:text; }
   .textebene span::selection { background:var(--txtsel); }
+  /* Auswahl-Einkreisung (v0.21.10, Nutzer-Fund: Ziehen über das Textende hinaus
+     färbte die GANZE Seite blau): (1) Das Seitenbild darf nie in die Auswahl
+     kommen - ein "ausgewähltes" Bild bekommt in Chromium einen blauen Flächen-
+     ton über das ganze Raster. (2) Die Textebene selbst ebenso (Gap-Fill der
+     Seitenbox). (3) UI-Zweige (Miniaturen, Leisten, Labels) bleiben außen vor,
+     damit ein Überschießen nichts Fremdes greift - nur Eingabefelder und die
+     Zeilenspannen sind wählbar. */
+  .pagewrap img, #thumbrail, aside, header, footer, .pagewrap .lbl { user-select:none; -webkit-user-select:none; }
+  input, textarea { user-select:text; -webkit-user-select:text; }
   .mode-sign .textebene span, .mode-text .textebene span, .mode-mark .textebene span,
   .mode-draw .textebene span, .mode-delete .textebene span { pointer-events:none; }
   .line.blockhover { background: var(--linehover); }

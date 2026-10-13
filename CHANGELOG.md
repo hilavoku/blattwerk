@@ -1,6 +1,17 @@
 # FederPDF — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-13.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
+
+## v0.21.10 — Textauswahl frisst nicht mehr die ganze Seite
+- Fehlerbehobung (Nutzer-Fund): Zog man eine Textmarkierung über das Ende
+  des Textes hinaus, färbte sich die **ganze Seite blau** — der Mauszeiger
+  hatte unsichtbar das Seitenbild „mitmarkiert", und Chromium überzieht ein
+  ausgewähltes Bild mit einem blauen FlächenTon. Das Seitenbild, die
+  Textebene und alle Oberflächen-Teile (Miniaturen, Seitenleisten,
+  Kopf-/Fußzeile) nehmen jetzt grundsätzlich nicht an der Textauswahl teil —
+  wählbar sind nur die Textzeilen und Eingabefelder. Zieht man über das
+  Textende hinaus, bleibt die Markierung einfach stehen, wie bei anderen
+  PDF-Programmen.
 
 ## v0.21.9 — Abgerundete Ecken, deutlich sichtbar
 - Das Programmfenster bekommt gerundete Ecken. Der Standardbogen von
