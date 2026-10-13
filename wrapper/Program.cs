@@ -544,21 +544,29 @@ internal sealed class HauptForm : Form
 
     // Ziehzone in PHYSISCHEN Pixeln, an native Rahmen angelehnt (8 px bei
     // 100 %, 12 px bei 150 %) - die v0.18.11er 4 px waren halb so breit wie
-    // bei jedem anderen Programm (Nutzer: "Ecke schwer zu treffen")
+    // bei jedem anderen Programm (Nutzer: "Ecke schwer zu treffen").
+    // Seit der v0.21.9-Ergaenzung gilt sie NUR noch im WM_NCHITTEST (Greif-
+    // breite); das Layout-Inset (Padding) ist der sichtbare BandPx-Streifen,
+    // sonst liegt zwischen Schliessen-Knopf und Fensterrand ein toter Streifen
+    // (Nutzer-Foto 13.10.2026).
     private int ZiehzonePx() => Math.Max(8, (int)Math.Round(8.0 * DeviceDpi / 96.0));
 
-    /// <summary>Ziehzone (Padding) je Fensterzustand setzen: maximiert randlos,
-    /// sonst die breite Ziehzone an SEITEN/UNTEN. OBEN ist die Zone 0 und der
-    /// Wrapper malt nichts: Eigner der Oberkante ist allein der CSS-Streifen
-    /// der Kopfzeile (v0.21.5, laeuft in beiden Designs einmal uebers Fenster) -
-    /// ein zusaetzliches Wrapper-Band darunter wirkte als dicker Doppelstreifen
-    /// mit Naht-Artefakten (Nutzer-Fall v0.21.5).</summary>
+    // Sichtbares Band in physischen Pixeln: der Trikolore-Streifen (4 px,
+    // Nutzer-Wunsch v0.18.11). Das WebView2 reicht bis direkt dahinter.
+    private const int BandPx = 4;
+
+    /// <summary>Band (Padding) je Fensterzustand setzen: maximiert randlos,
+    /// sonst der schmale sichtbare Streifen an SEITEN/UNTEN. OBEN ist 0 und
+    /// der Wrapper malt dort nichts: Eigner der Oberkante ist allein der
+    /// CSS-Streifen der Kopfzeile (v0.21.5) - ein zusaetzliches Wrapper-Band
+    /// darunter wirkte als dicker Doppelstreifen mit Naht-Artefakten. Die
+    /// GROSSE Greifzone lebt nur noch im WM_NCHITTEST (ZiehzonePx).</summary>
     public void RandAnwenden()
     {
         EckenAnwenden();   // Eckenrundung mit dem Zustand mitziehen (normal gerundet, maximiert eckig)
         Padding = WindowState == FormWindowState.Maximized
             ? Padding.Empty
-            : new Padding(ZiehzonePx(), 0, ZiehzonePx(), ZiehzonePx());
+            : new Padding(BandPx, 0, BandPx, BandPx);
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -580,12 +588,13 @@ internal sealed class HauptForm : Form
     {
         base.OnPaint(e);
         var g = e.Graphics;
-        int zone = Padding.Left;      // Ziehzone an den Seiten/unten (oben: 0)
+        int zone = Padding.Left;      // Band an den Seiten/unten (oben: 0)
         if (zone == 0) return;   // maximiert: kein Rand
-        // Sichtbar bleibt der duenne Trikolore-Streifen (4 px, Nutzer-Wunsch
-        // v0.18.11) an LINKS/RECHTS/UNTEN - oben liefert die Kopfzeile ihren
-        // eigenen CSS-Streifen (v0.21.5). Die breiteren Zonen werden mit dem
-        // ANGRENZENDEN UI-Hintergrund gefuellt und sind nahezu unsichtbar.
+        // Der duenne Trikolore-Streifen (4 px, Nutzer-Wunsch v0.18.11) an
+        // LINKS/RECHTS/UNTEN - oben liefert die Kopfzeile ihren eigenen
+        // CSS-Streifen (v0.21.5). Das Padding IST seit der v0.21.9-Ergaenzung
+        // nur noch dieser Streifen; die breite Greifzone liegt unsichtbar im
+        // WM_NCHITTEST ueber dem WebView-Rand und wird nicht gemalt.
         int sichtbar = Math.Min(4, zone);
         using (var bi = new SolidBrush(licht ? InnenHell : InnenDunkel))
         {
@@ -687,16 +696,19 @@ internal sealed class HauptForm : Form
             }
             return;
         }
-        // Groesse-Raender nur im Normalzustand und nur wo das WebView2 nicht ueberdeckt
+        // Groesse-Raender nur im Normalzustand und nur wo das WebView2 nicht ueberdeckt.
+        // Greifbreite = ZiehzonePx (8/12), UNABHAENGIG vom schmalen Band-Padding:
+        // die breite Zone ist unsichtbar ueber dem WebView-Rand (v0.21.9-Ergaenzung).
         if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal && Padding.Left > 0)
         {
+            int zone = ZiehzonePx();
             int x = (short)(m.LParam.ToInt32() & 0xFFFF);
             int y = (short)((m.LParam.ToInt32() >> 16) & 0xFFFF);
             var p = PointToClient(new Point(x, y));
-            bool links = p.X <= Padding.Left;
-            bool rechts = p.X >= ClientSize.Width - Padding.Right;
+            bool links = p.X <= zone;
+            bool rechts = p.X >= ClientSize.Width - zone;
             bool oben = Padding.Top > 0 && p.Y <= Padding.Top;   // Oberzone 0: Kopfzeile zieht (v0.21.5)
-            bool unten = p.Y >= ClientSize.Height - Padding.Bottom;
+            bool unten = p.Y >= ClientSize.Height - zone;
             if (links && unten) { m.Result = (IntPtr)HTBOTTOMLEFT; return; }
             if (rechts && unten) { m.Result = (IntPtr)HTBOTTOMRIGHT; return; }
             if (oben) { m.Result = (IntPtr)HTTOP; return; }

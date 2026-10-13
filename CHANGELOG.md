@@ -11,6 +11,12 @@ Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-13.
 - Maximiert bleibt das Fenster eckig, wie man es von anderen Programmen
   kennt. Auf Windows 10 (keine Rundung im Standard) bleibt alles beim
   Alten — die Anfragen werden dort einfach ignoriert.
+- Nachgereicht (Nutzer-Hinweis mit Screenshot): Der Schließen-Knopf saß
+  mit einem toten dunklen Streifen vor dem Fensterrand. Die breite
+  Greifzone fürs Größeneinstellen (8/12 px) liegt jetzt unsichtbar über
+  dem Rand — sichtbar bleibt nur noch das dünne Farbband (4 px), an dem
+  der Knopf bündig anliegt. Die Zone lässt sich genauso greifen wie
+  bisher.
 
 ## v0.21.8 — Text markieren wie im Browser, Zoom-Knöpfe als Icons
 - **Dynamischer Zeiger:** Über Text (auch unsichtbarem OCR-Text) wird der
