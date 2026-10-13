@@ -1,6 +1,26 @@
 # FederPDF — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-11.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-13.
+
+## v0.21.8 — Text markieren wie im Browser, Zoom-Knöpfe als Icons
+- **Dynamischer Zeiger:** Über Text (auch unsichtbarem OCR-Text) wird der
+  Mauszeiger zur Textmarkierung — ziehen markiert zeichengenau, Strg+C
+  kopiert, Doppelklick wählt ein Wort, Rechtsklick bietet das übliche
+  Menü mit Kopieren. Über leeren Stellen greift die Hand und verschiebt
+  die Seite wie gewohnt. Gilt in beiden Zuständen, also auch im
+  Lesemodus.
+- **Zoom-Knöpfe (PDFgear-Art):** Der Textknopf „Passend" ist drei kleinen
+  Icon-Knöpfen gewichen — ganze Seite, Seitenbreite und 1:1 (Original-
+  größe), jeweils mit Tooltip. Der aktive Zoom-Modus färbt sich akzent,
+  bis man frei hinein- oder herauszoomt.
+- **Immer noch da:** Doppelklick auf eine Zeile bearbeitet den Originaltext,
+  Umschalt+Klick sammelt Zeilen, Alt+Ziehen wählt ganze Zeilen auf einmal
+  (KI-Auswahl), und der Lösch-Modus markiert Zeilen wie bisher. Das
+  Kopieren einer ganzen Zeile per einfachem Klick entfällt — den Text
+  markiert man jetzt direkt.
+- Kleinigkeit am Rande: Esc beim Bearbeiten des Originaltexts konnte in
+  einem seltenen Fall intern doppelt anlaufen (gleiche Falle wie 0.16.3,
+  diesmal auf dem Abbruchpfad) — beseitigt.
 
 ## v0.21.7 — Signatur-Kacheln: Vorschau nach dem Entsperren, Drag & Drop-Hinweis
 - Nach dem Eingeben des Passworts zeigt die Kachel wieder das kleine

@@ -15,6 +15,7 @@
     --sel-fill: rgba(230, 180, 0, .16); --sel-border: rgba(230, 180, 0, .55);
     --linehover: rgba(230, 180, 0, .25); --linehover-outline: rgba(230, 180, 0, .6);
     --linesel-fill: rgba(230, 180, 0, .30); --linesel-outline: rgba(230, 180, 0, .65);
+    --txtsel: rgba(230, 180, 0, .38);   /* native Textauswahl auf der Textebene */
     --feld-border: #c79a00; --fokus-ring: rgba(230, 180, 0, .35);
   }
   * { box-sizing: border-box; }
@@ -219,7 +220,7 @@
      modePill-Freiheit). Bearbeitung startet trotzdem automatisch, sobald
      der Nutzer ein Werkzeug waehlt oder eine Signatur aufs Papier zieht
      (Promotion, bearbSicherstellen). */
-  body.bearb-aus .pagewrap, body.bearb-aus .pagewrap img { cursor: default; }
+  body.bearb-aus .pagewrap, body.bearb-aus .pagewrap img { cursor: grab; }   /* Hand auch im Lesemodus: leere Flaeche = Verschieben (v0.21.8) */
   body.bearb-aus .pagewrap .line, body.bearb-aus .pagewrap .annot,
   body.bearb-aus .pagewrap .imgobj, body.bearb-aus .pagewrap .winput { pointer-events: none !important; }
   .spacer { flex:1; }   /* ungenutzt seit v0.16.8 (Theme-Knopf in der fixen Zone) */
@@ -247,6 +248,18 @@
   .imgobj.imgsel { border:1px dashed var(--accent); background: rgba(255,255,255,.55); }
   .hit { position:absolute; z-index:2; background:rgba(255,213,0,.35); outline:1px solid rgba(255,213,0,.8); border-radius:2px; pointer-events:none; }
   .hit.active { background:rgba(255,150,0,.5); outline:2px solid #ff9600; }
+  /* ---------- Textebene (v0.21.8): dynamischer Zeiger + echtes Textmarkieren ----------
+     Unsichtbare Zeilenspannen liegen ueber dem gerasterten Papier: der Zeiger wird
+     ueber Text zum I-Beam (ziehen markiert, Strg+C kopiert, Doppelklick waehlt ein
+     Wort), ueber leeren Flaechen greift die Hand und verschiebt. Der Container ist
+     durchlaessig (pointer-events:none) - nur die Spannen fangen die Maus, jeder
+     Zwischenraum faellt bis zum Bild durch und kann die Seite ziehen. */
+  .textebene { position:absolute; inset:0; z-index:3; pointer-events:none; }
+  .textebene span { position:absolute; pointer-events:auto; cursor:text; color:transparent;
+                    white-space:pre; transform-origin:0 0; user-select:text; -webkit-user-select:text; }
+  .textebene span::selection { background:var(--txtsel); }
+  .mode-sign .textebene span, .mode-text .textebene span, .mode-mark .textebene span,
+  .mode-draw .textebene span, .mode-delete .textebene span { pointer-events:none; }
   .line.blockhover { background: var(--linehover); }
   .line.origmark { background: var(--linesel-fill) !important; outline: 1px solid var(--linesel-outline); }
   .line.origmark.blockhover { background: var(--linesel-fill) !important; }
@@ -304,6 +317,7 @@
   .sbtn { background:transparent; border:1px solid transparent; color:var(--text); border-radius:5px;
           padding:3px 8px; cursor:pointer; font-size:12px; display:inline-flex; align-items:center; gap:5px; }
   .sbtn:hover { background:var(--hover); }
+  .sbtn.fitaktiv { color:var(--accent); border-color:var(--accent-dim); background:var(--hover); }   /* aktiver Zoom-Modus (PDFgear-Art) */
   .sbtn .i { font-family:var(--icon); font-size:13px; }
   .sbtn:disabled { opacity:.35; cursor:default; }
   #pgInput { width:38px; text-align:center; background:var(--chrome2); color:var(--text); border:1px solid var(--border);
@@ -474,6 +488,7 @@
                --sel-fill: rgba(76, 194, 255, .16); --sel-border: rgba(76, 194, 255, .55);
                --linehover: rgba(76, 194, 255, .25); --linehover-outline: rgba(76, 194, 255, .6);
                --linesel-fill: rgba(76, 140, 255, .32); --linesel-outline: rgba(76, 140, 255, .7);
+               --txtsel: rgba(76, 140, 255, .35);
                --feld-border: #2a6fd6; --fokus-ring: rgba(76, 194, 255, .35); }
   body.light .pagewrap { box-shadow:0 1px 4px rgba(30,40,60,.25), 0 0 0 1px rgba(0,0,0,.06); }
   body.light ::-webkit-scrollbar-thumb { background:#c4cbd6; border-color:var(--bg); }
@@ -612,9 +627,9 @@
     <div id="fields" class="muted">&ndash;</div>
     <h3>Kurzhilfe</h3>
     <p class="muted">
-      <b>Lesemodus:</b> Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Lesen/Bearbeiten“ (Auge ↔ Stift) in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch.<br>
-      <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus.<br>
-      <b>Kopieren:</b> einzelne Zeile anklicken oder mit <b>Alt+Ziehen</b> Text aufziehen (Strg+Klick hängt an).<br>
+      <b>Lesemodus:</b> Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Lesen/Bearbeiten“ (Auge ↔ Stift) in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch. Text markieren und kopieren geht auch im Lesemodus.<br>
+      <b>Verschieben:</b> aufs Papier klicken und ziehen – die Seite folgt der Maus. Die Hand greift auf leeren Stellen, über Text zeigt der Zeiger die Markierung.<br>
+      <b>Kopieren:</b> Zeiger über Text wird zur Markierung – ziehen markiert, Strg+C kopiert, Doppelklick wählt ein Wort (auch im Lesemodus). Mit <b>Alt+Ziehen</b> ganze Zeilen aufziehen (Strg+Klick hängt an).<br>
       <b>Signatur:</b> Kachel im Menü „Signatur…" direkt aufs Papier ziehen – danach greifen &amp; ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.<br>
       <b>Löschen:</b> Signatur/Text/Form anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen".<br>
       <b>Markieren:</b> Werkzeug „Markieren" wählen, Text aufziehen – Marker, Unterstreichen, Durchstreichen oder Wellenlinie; Farbe, Deckkraft und Stärke oben einstellen. Markierung anklicken und ziehen verschiebt sie.<br>
@@ -631,7 +646,7 @@
       <b>Suchen:</b> Lupe in der Leiste oder Strg+F – Eingabe springt auf Treffer, Enter/Umschalt+Enter blättert weiter, Esc schließt.<br>
       <b>Bereiche:</b> Seitenvorschau und Lesezeichen klappen am Rand ein/aus und wechseln mit dem Pfeilknopf die Seite.<br>
       <b>Bild:</b> eingebettete Grafiken anklicken und ziehen – die alte Stelle wird weiß überdeckt (Scans bleiben fix). Anker unten rechts skaliert proportional, runder Griff dreht (Umschalt = 15°-Raster), Rechtsklick dreht in 90°-Schritten; Größe/Position exakt in der Leiste oben.<br>
-      <b>Zoom:</b> Strg+Mausrad oder Leiste unten.<br>
+      <b>Zoom:</b> Strg+Mausrad oder Leiste unten (Knöpfe: ganze Seite, Breite, 1:1 – der aktive Modus färbt sich).<br>
       Alles wird erst mit <b>Speichern</b> dauerhaft.
     </p>
   </aside>
@@ -647,7 +662,9 @@
   <button class="sbtn" onclick="zoomStep(-1)" title="Verkleinern (Strg+Mausrad)"><span class="i">&#xE71F;</span></button>
   <span id="zoomLabel">100 %</span>
   <button class="sbtn" onclick="zoomStep(1)" title="Vergrößern"><span class="i">&#xE8A3;</span></button>
-  <button class="sbtn" onclick="fitWidth()" title="Seitenbreite einpassen">Passend</button>
+  <button class="sbtn" id="fitSeiteBtn" onclick="fitSeite()" title="Ganze Seite einpassen"><svg width="13" height="15" viewBox="0 0 13 15"><rect x="1" y="1" width="11" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M3.7 11.3 L9.3 3.7 M3.7 11.3 v-2.5 M3.7 11.3 h2.5 M9.3 3.7 v2.5 M9.3 3.7 h-2.5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="sbtn" id="fitBreiteBtn" onclick="fitWidth()" title="Seitenbreite einpassen"><svg width="13" height="15" viewBox="0 0 13 15"><rect x="1" y="1" width="11" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M3.2 7.5 h6.6 M3.2 7.5 l1.9 -1.9 M3.2 7.5 l1.9 1.9 M9.8 7.5 l-1.9 -1.9 M9.8 7.5 l-1.9 1.9" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button class="sbtn" id="zoom100Btn" onclick="zoom100()" title="Originalgröße (100 %)"><span style="font-weight:600; font-size:10.5px; letter-spacing:.3px">1:1</span></button>
   <div class="sep"></div>
   <button class="sbtn" onclick="rotatePage()" title="Seite 90° drehen" disabled><span class="i">&#xE72C;</span> Drehen</button>
   <button class="sbtn" onclick="removePage()" title="Diese Seite löschen" disabled><span class="i">&#xE74D;</span> Seite</button>
@@ -1047,8 +1064,9 @@ const WOERTER = {
   "Seite zurück": "Previous page", "Seite vor": "Next page",
   "Verkleinern (Strg+Mausrad)": "Zoom out (Ctrl+wheel)",
   "Vergrößern": "Zoom in",
-  "Passend": "Fit",
+  "Ganze Seite einpassen": "Fit whole page",
   "Seitenbreite einpassen": "Fit page width",
+  "Originalgröße (100 %)": "Actual size (100%)",
   "Seite 90° drehen": "Rotate page 90°",
   "Diese Seite löschen": "Delete this page",
   "Ungespeicherte Änderungen": "Unsaved changes",
@@ -1123,12 +1141,12 @@ const WOERTER = {
   "Suchen:": "Search:", "Bereiche:": "Panels:", "Bild:": "Image:", "Zoom:": "Zoom:",
   "Alt+Ziehen": "Alt+drag", "Strg": "Ctrl", "Rechtsklick": "Right-click",
   /* Kurzhlfe: Textfragmente (exakt wie im Markup, getrimmt) */
-  "Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Lesen/Bearbeiten“ (Auge ↔ Stift) in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch.":
-    "When opening, the paper rests (no block-marking on hover). The “Read/Edit” button (eye ↔ pen) in the toolbar unlocks editing – a tool or a dragged signature does it automatically.",
-  "aufs Papier klicken und ziehen – die Seite folgt der Maus.":
-    "click the paper and drag – the page follows the mouse.",
-  "einzelne Zeile anklicken oder mit": "click a single line, or drag over text with",
-  "Text aufziehen (Strg+Klick hängt an).": "to select text (Ctrl+Click appends).",
+  "Beim Öffnen ruht das Papier (kein Block-Markieren beim Überfahren). Knopf „Lesen/Bearbeiten“ (Auge ↔ Stift) in der Leiste schaltet die Bearbeitung frei – ein Werkzeug oder eine gezogene Signatur tut es automatisch. Text markieren und kopieren geht auch im Lesemodus.":
+    "When opening, the paper rests (no block-marking on hover). The “Read/Edit” button (eye ↔ pen) in the toolbar unlocks editing – a tool or a dragged signature does it automatically. Text selection and copying also work in read mode.",
+  "aufs Papier klicken und ziehen – die Seite folgt der Maus. Die Hand greift auf leeren Stellen, über Text zeigt der Zeiger die Markierung.":
+    "click the paper and drag – the page follows the mouse. The hand grabs empty areas; over text the pointer becomes a text cursor.",
+  "Zeiger über Text wird zur Markierung – ziehen markiert, Strg+C kopiert, Doppelklick wählt ein Wort (auch im Lesemodus). Mit": "the pointer becomes a text cursor over text – drag to select, Ctrl+C to copy, double-click selects a word (also in read mode). Drag with ",
+  "ganze Zeilen aufziehen (Strg+Klick hängt an).": "to select whole lines (Ctrl+Click appends).",
   "Kachel im Menü „Signatur…\" direkt aufs Papier ziehen – danach greifen & ziehen, Anker unten rechts verändert die Größe. Beim Hochladen Vorschau, Hintergrund-Transparenz und Passwort einstellen; Passwort später über das Schloss-Symbol an der Kachel.":
     "drag a tile from the “Signature…” menu straight onto the paper – then grab & drag; the anchor at the bottom right changes the size. On upload you set preview, background transparency and password; the password later via the padlock icon on the tile.",
   "Signatur/Text/Form anklicken, dann Entf-Taste – oder Rechtsklick → „Löschen\".":
@@ -1164,7 +1182,7 @@ const WOERTER = {
     "Page thumbnails and bookmarks collapse at the edge and switch sides with the arrow button.",
   "eingebettete Grafiken anklicken und ziehen – die alte Stelle wird weiß überdeckt (Scans bleiben fix). Anker unten rechts skaliert proportional, runder Griff dreht (Umschalt = 15°-Raster), Rechtsklick dreht in 90°-Schritten; Größe/Position exakt in der Leiste oben.":
     "click and drag embedded images – the old spot is covered in white (scans stay fixed). The bottom-right anchor scales proportionally, the round handle rotates (Shift = 15° steps), right-click rotates in 90° steps; exact size/position in the bar above.",
-  "Strg+Mausrad oder Leiste unten.": "Ctrl+mouse wheel or the bar below.",
+  "Strg+Mausrad oder Leiste unten (Knöpfe: ganze Seite, Breite, 1:1 – der aktive Modus färbt sich).": "Ctrl+mouse wheel or the bar below (buttons: whole page, width, 1:1 – the active mode is highlighted).",
   "Alles wird erst mit": "Nothing becomes permanent until you press",
   "dauerhaft.": "."
 };
@@ -1345,7 +1363,7 @@ function makePageEl(n) {
 function pageUrl(n) { return `/api/page/${cur.id}/${n}?dpi=${Math.round(BASE_DPI*zoom)}&t=${Date.now()}`; }
 function buildPage(img) {
   img._gen = (img._gen || 0) + 1;   // noch laufende Overlay-Bauten aelterer Durchlaeufe entwerten
-  img.parentElement.querySelectorAll('.line,.annot,.winput,.seldrag,.imgobj').forEach(e => e.remove());
+  img.parentElement.querySelectorAll('.line,.annot,.winput,.seldrag,.imgobj,.textebene').forEach(e => e.remove());
   // pageW SOFORT aus der Naturalgroesse setzen: addLines liefert den exakten
   // Wert erst asynchron - bei Riesenseiten (Scan-MediaBoxen bis 2400 pt)
   // queuen sich die /api/text-Antworten hinter den Seitenrenderings, und bis
@@ -1371,7 +1389,7 @@ function buildPage(img) {
 function refreshPage(n) {
   const img = document.querySelector('#page' + n + ' img');
   if (!img) return;
-  img.parentElement.querySelectorAll('.line,.annot,.winput,.hit,.seldrag,.imgobj').forEach(e => e.remove());
+  img.parentElement.querySelectorAll('.line,.annot,.winput,.hit,.seldrag,.imgobj,.textebene').forEach(e => e.remove());
   img.onload = () => buildPage(img);
   img.dataset.renderedDpi = Math.round(BASE_DPI * zoom);
   img.src = pageUrl(n);
@@ -1407,6 +1425,7 @@ document.getElementById('pgInput').addEventListener('change', (ev) => {
 function kOfZoom() { return BASE_DPI * zoom / 72; }
 
 function reposition(el, k) {
+  if (el.classList.contains('txtspan')) { textspanForm(el, k); return; }   // Textebene: Form + scaleX neu
   if (el._pdfRect) positionRect(el, el._pdfRect, k);
   if (el._fs != null) el.style.fontSize = (el.classList.contains('winput') ? Math.max(9, el._fs * k / 1.1) : el._fs * k) + 'px';
   if (el._annot && (el._annot.type === 'shape' || el._annot.type === 'markup'))
@@ -1419,7 +1438,7 @@ function resizeWrap(w) {
   const k = kOfZoom();
   img.style.width = (parseFloat(img.dataset.pageW) * k) + 'px';   // altes Raster bleibt sichtbar, wird gestretcht
   img.dataset.k = k;
-  w.querySelectorAll('.line,.annot,.winput,.hit,.seldrag,.imgobj').forEach(el => reposition(el, k));
+  w.querySelectorAll('.line,.annot,.winput,.hit,.seldrag,.imgobj,.textebene span').forEach(el => reposition(el, k));
 }
 
 /* Zoom-Untergrenze seitenabhaengig: die Seite soll mindestens ~240 css-px
@@ -1438,6 +1457,7 @@ function applyZoom(z, focus) {
   if (z2 === zoom) return;   // am Limit: nichts skalieren, also auch nicht scrollen
   zoom = z2;
   document.getElementById('zoomLabel').textContent = Math.round(zoom * 100) + ' %';
+  zoomModusAktualisieren();
   if (!cur) return;
   const viewer = document.getElementById('viewer');
   const anchor = topVisiblePage();
@@ -1493,6 +1513,48 @@ function fitWidth() {
   else if (img) pageWpt = img.naturalWidth / (BASE_DPI * zoom) * 72;
   applyZoom(avail * 72 / (pageWpt * BASE_DPI));
 }
+
+/* Ganze Seite einpassen (v0.21.8): Zoom so, dass Breite UND Hoehe in den
+   Sichtraum passen - PDFgear-Art neben "Breite" und "1:1" in der Fussleiste. */
+function fitSeite() {
+  if (!cur) return;
+  const img = document.querySelector('.pagewrap img');
+  if (!img || !img.dataset.pageW) return;
+  const v = document.getElementById('viewer');
+  const pw = parseFloat(img.dataset.pageW), ph = parseFloat(img.dataset.pageH || img.dataset.pageW);
+  const z = Math.min((v.clientWidth - 44) / (pw * BASE_DPI / 72), (v.clientHeight - 56) / (ph * BASE_DPI / 72));
+  const r = v.getBoundingClientRect();
+  applyZoom(z, zoomFocus(r.left + r.width / 2, r.top + r.height / 2));
+}
+
+function zoom100() {
+  if (!cur) return;
+  const r = document.getElementById('viewer').getBoundingClientRect();
+  applyZoom(1, zoomFocus(r.left + r.width / 2, r.top + r.height / 2));
+}
+
+/* Zielzoom der Einpass-Knoepfe (fuer die aktive Anzeige, nicht zum Schalten):
+   mit Untergrenze, weil applyZoom sonst den Wert klemmen wuerde. */
+function fitZoomWert(ganzeSeite) {
+  const img = document.querySelector('.pagewrap img');
+  if (!img || !img.dataset.pageW) return 0;
+  const v = document.getElementById('viewer');
+  const pw = parseFloat(img.dataset.pageW), ph = parseFloat(img.dataset.pageH || img.dataset.pageW);
+  const breite = (v.clientWidth - 44) / (pw * BASE_DPI / 72);
+  if (!ganzeSeite) return Math.max(zoomUntergrenze(), breite);
+  return Math.max(zoomUntergrenze(), Math.min(breite, (v.clientHeight - 56) / (ph * BASE_DPI / 72)));
+}
+
+/* Aktiven Zoom-Modus an der Fussleiste zeigen (PDFgear-Art, Nutzer-Wunsch):
+   der Knopf, dessen Zielzoom (~2 % Toleranz) erreicht ist, faerbt sich akzent. */
+function zoomModusAktualisieren() {
+  if (!document.getElementById('fitSeiteBtn')) return;
+  const naeher = (ziel) => ziel > 0 && Math.abs(zoom - ziel) / ziel < 0.02;
+  document.getElementById('fitSeiteBtn').classList.toggle('fitaktiv', naeher(fitZoomWert(true)));
+  document.getElementById('fitBreiteBtn').classList.toggle('fitaktiv', naeher(fitZoomWert(false)));
+  document.getElementById('zoom100Btn').classList.toggle('fitaktiv', Math.abs(zoom - 1) < 0.02);
+}
+window.addEventListener('resize', zoomModusAktualisieren);
 
 function scheduleRerender() {
   clearTimeout(rerenderTimer);
@@ -1556,7 +1618,9 @@ async function addLines(img) {
   if (img._gen !== gen) return;
   const k = img.clientWidth / data.page_w;
   img.dataset.k = k; img.dataset.pageW = data.page_w;
+  if (data.page_h) img.dataset.pageH = data.page_h;
   const wrap = img.parentElement;
+  const te = document.createElement('div'); te.className = 'textebene';   // Markier-/Kopier-Ebene (v0.21.8)
   for (const ln of data.lines) {
     const d = document.createElement('div');
     d.className = 'line';
@@ -1614,7 +1678,19 @@ async function addLines(img) {
       }
     };
     wrap.appendChild(d);
+    const s = document.createElement('span');       // unsichtbare Zeilenspanne: I-Beam + native Auswahl
+    s.className = 'txtspan';
+    s.textContent = ln.t;
+    s._pdfRect = [ln.x0, ln.y0, ln.x1, ln.y1];
+    s._text = ln.t;
+    textspanForm(s, k);
+    s.addEventListener('mousedown', (ev) => textspanMausRunter(ev, img));
+    s.addEventListener('click', (ev) => textspanKlick(ev, img, n));
+    s.addEventListener('dblclick', (ev) => textspanDoppelklick(ev, img, n));
+    te.appendChild(s);
   }
+  wrap.appendChild(te);
+  zoomModusAktualisieren();   // pageW/pageH sind da: aktiven Zoom-Modus jetzt bewerten
 }
 function blockZeilen(img, b) {
   return [...img.parentElement.querySelectorAll(`.line[data-b="${b}"]`)];
@@ -1631,6 +1707,92 @@ function blockHover(img, b, an) {
 function positionRect(d, rect, k) {
   d.style.left = (rect[0]*k)+'px'; d.style.top = (rect[1]*k)+'px';
   d.style.width = ((rect[2]-rect[0])*k)+'px'; d.style.height = ((rect[3]-rect[1])*k)+'px';
+}
+
+/* ---------- Textebene (v0.21.8): Markieren/Kopieren wie im Browser ----------
+   Spannen tragen den echten Zeilentext (transparent) und werden per scaleX auf
+   die Zeilenbreite gestreckt - der Browser mappt Zeigerpositionen auf Zeichen
+   und liefert Auswahl + Strg+C gratis. Form nach positionRect-Art, k-gebunden
+   (Zoom ruft sie ueber reposition wieder auf). */
+const _textmesser = document.createElement('canvas').getContext('2d');
+function textspanForm(s, k) {
+  const r = s._pdfRect, h = Math.max(2, (r[3] - r[1]) * k), w = (r[2] - r[0]) * k;
+  s.style.left = (r[0] * k) + 'px';
+  s.style.top = (r[1] * k) + 'px';
+  s.style.height = h + 'px';
+  const fs = Math.max(5, h * 0.78);
+  s.style.fontSize = fs + 'px';
+  _textmesser.font = fs + 'px "Segoe UI",sans-serif';
+  const nat = _textmesser.measureText(s._text).width;
+  s.style.transform = 'scaleX(' + (nat > 0 ? w / nat : 1) + ')';
+}
+function nativesAuswahlVorhanden() {
+  const s = window.getSelection();
+  return !!(s && s.rangeCount && !s.isCollapsed);
+}
+function nativesAuswahlLeeren() {
+  const s = window.getSelection();
+  if (s && s.rangeCount) s.removeAllRanges();
+}
+/* Maus auf einer Zeilenspanne: ohne Zusatztaste markiert der Browser nativ.
+   Umschalt+Klick sammelt Zeilen zum gemeinsamen Bearbeiten, Alt+Ziehen bleibt
+   die Freihand-Zeilenauswahl (KI-Auswahl, wie beim Aufsetzen auf dem Papier). */
+function textspanMausRunter(ev, img) {
+  if (ev.button !== 0 || mode !== 'normal') return;
+  clearFreeSel();
+  bildAbwaehlen();
+  if (ev.shiftKey) { ev.preventDefault(); return; }   // Sammeln-Klick: keine native Auswahl anfassen
+  if (ev.altKey) {
+    ev.preventDefault();   // keine native Auswahl: das Zeilenrechteck ist die Geste
+    selDrag = {n: parseInt(img.dataset.page), img, startX: ev.clientX, startY: ev.clientY,
+               active: false, div: null};
+  }
+  // sonst Default lassen: der Browser startet die Textauswahl
+}
+function textspanKlick(ev, img, n) {
+  if (lastWasDrag || ev.detail > 1 || !ev.shiftKey) return;
+  if (mode !== 'normal' || !bearb) return;   // Lesemodus: einfacher Klick setzt nur den Cursor
+  const zeile = zeileAnPunkt(img, ev.clientX, ev.clientY);
+  if (!zeile) return;
+  zeile.classList.toggle('origmark');
+  stat(zeile.classList.contains('origmark')
+    ? E('Zeile gesammelt – Doppelklick auf eine gesammelte Zeile bearbeitet alle (Doppelklick auf eine andere Zeile oder Esc verwirft).', 'Line collected – double-click a collected line to edit all of them (double-click another line or Esc discards).')
+    : E('Zeile aus der Sammlung entfernt.', 'Line removed from the selection.'));
+}
+function textspanDoppelklick(ev, img, n) {
+  ev.stopPropagation();
+  if (mode !== 'normal' || !bearb) return;   // Lesemodus: Doppelklick waehlt das Wort (nativ)
+  const zeile = zeileAnPunkt(img, ev.clientX, ev.clientY);
+  if (!zeile) return;
+  nativesAuswahlLeeren();                    // Wortwahl soll dem Editor nicht ins Gehege fahren
+  const gesammelt = origMarkAufSeite(img);
+  let divs;
+  if (zeile.classList.contains('origmark')) {
+    divs = gesammelt;
+  } else if (gesammelt.length) {
+    origmarkLeeren();
+    stat(E('Sammlung verworfen – bearbeite die angeklickte Zeile.', 'Selection discarded – editing the clicked line.'));
+    divs = blockZeilen(img, zeile.dataset.b);
+  } else {
+    divs = blockZeilen(img, zeile.dataset.b);
+  }
+  startOriginalEdit(n, divs);
+}
+/* Zeilen-Div am PDF-Punkt finden (eng gesetzte Zeilen: naechste Mitten-Hoehe
+   gewinnt, +-1.5 pt Toleranz an den Kanten). */
+function zeileAnPunkt(img, cx, cy) {
+  const k = parseFloat(img.dataset.k);
+  if (!k || !isFinite(k)) return null;
+  const wr = img.getBoundingClientRect();
+  const x = (cx - wr.left) / k, y = (cy - wr.top) / k;
+  let best = null, bestAb = Infinity;
+  img.parentElement.querySelectorAll('.line').forEach(el => {
+    const r = el._pdfRect;
+    if (!r || x < r[0] - 1 || x > r[2] + 1 || y < r[1] - 1.5 || y > r[3] + 1.5) return;
+    const ab = Math.abs((r[1] + r[3]) / 2 - y);
+    if (ab < bestAb) { bestAb = ab; best = el; }
+  });
+  return best;
 }
 async function deleteMarked() {
   if (!marked.length) return;
@@ -2143,6 +2305,7 @@ window.pwMaximiert = (max) => {
 
 document.addEventListener('contextmenu', (ev) => {
   if (ev.target.closest('input, textarea')) return;   // natives Menü in Eingabefeldern erlauben
+  if (ev.target.closest('.textebene span') && nativesAuswahlVorhanden()) return;   // Textauswahl: natives Menü mit Kopieren (v0.21.8)
   ev.preventDefault();                                 // kein WebView2-Bildmenü ("Bild speichern" etc.)
   if (mode === 'text' && !ev.target.closest('.annot')) { setMode('normal'); return; }   // Rechtsklick daneben: Text-Modus beenden
   const div = ev.target.closest('.annot');
@@ -2743,9 +2906,10 @@ function originalEditBlockForm(pageN, zeilen) {
 }
 function teardownOriginalEdit() {
   if (!origEdit) return;
-  origEdit.ta.remove();
-  origEdit.delBtn.remove();
-  origEdit = null;
+  const st = origEdit;
+  origEdit = null;   // ZUERST entziehen: ta.remove() feuert blur synchron, der blur-Handler
+  st.ta.remove();    // committet sonst wiedereintrittend (v0.16.3-Muster, hier Abbruchpfad)
+  st.delBtn.remove();
   origmarkLeeren();   // Abbruch raumt auch die Sammlung weg (v0.20.1)
   kontextLeiste();
 }
@@ -3701,6 +3865,7 @@ document.addEventListener('keydown', (ev) => {
     else if (origEdit) cancelOriginalEdit();
     else if (freeSel.length) clearFreeSel();
     else if (document.querySelector('.line.origmark')) { origmarkLeeren(); stat(E('Zeilen-Sammlung geleert.', 'Line selection cleared.')); }
+    else if (nativesAuswahlVorhanden()) nativesAuswahlLeeren();
     else if (mode !== 'normal') setMode(mode);
   }
   else if (ev.key === 'Delete' && selAnnot && selAnnot.div) {
@@ -3860,6 +4025,7 @@ function paperDragStart(ev, img) {
     selDrag = {n: parseInt(img.dataset.page), img, startX: ev.clientX, startY: ev.clientY,
                active: false, div: null};
   } else {
+    nativesAuswahlLeeren();   // Klick/Zug aufs freie Papier: Markierung aufheben (PDF-Programm-Konvention)
     panDrag = {startX: ev.clientX, startY: ev.clientY, lastX: ev.clientX, lastY: ev.clientY,
                active: false};
     ev.preventDefault();   // kein nativer Bild-Drag beim Ziehen
