@@ -441,6 +441,73 @@ internal sealed class HauptForm : Form
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
 
+    // Eckenrundung wie bei Win11-Programmen ueblich (Nutzer-Wunsch v0.21.9):
+    // DWMWA_WINDOW_CORNER_PREFERENCE = 33; DWMWCP_ROUND = 2, DONOTROUND = 1.
+    // Der DWM rundet damit auch rahmenlose Fenster (unser FormBorderStyle.None)
+    // und schneidet den Fensterinhalt an der Rundung; Schatten liefert das
+    // System mit. Win10 kennt das Attribut nicht - der Aufruf scheitert mit
+    // Fehlercode und das Fenster bleibt eckig (dort Standard).
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribut, ref int wert, int groesse);
+
+    private const int DwmwaBorderColor = 34;
+    private const int DwmwaColorNone = unchecked((int)0xFFFFFFFE);   // keine Haarlinie
+
+    // Der DWM-Standardbogen (~8 px logisch) ist kaum erkennbar (Nutzer-Runde 2,
+    // 13.10.2026): das Fenster schneidet sich deshalb SELBST mit einem groesseren
+    // gerundeten Radius. Eine Region ist hartkantig (kein Antialiasing), aber bei
+    // 14 px logisch hochskaliert sauber; der Schatten bleibt vom System.
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(int links, int oben, int rechts, int unten, int bogenBreite, int bogenHoehe);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool neuZeichnen);
+
+    private int eckenAktuell = -1;   // zuletzt gesetzter DWM-Wert (Skip von Doppel-Setzungen)
+
+    /// <summary>Eckenradius in physischen Pixeln: 14 px logisch - deutlich
+    /// erkennbar runder als der Win11-Standardbogen (~8 px), ohne Kasper-Figur.</summary>
+    private int EckenRadiusPx() => Math.Max(10, (int)Math.Round(14.0 * DeviceDpi / 96.0));
+
+    /// <summary>Eckenrundung je Fensterzustand: normal gerundet (DWM-Schatten +
+    /// eigene, groessere Region), maximiert NICHT — das System quadriert
+    /// maximierte Fenster normalerweise selbst, wir verlassen uns aber nicht
+    /// darauf. Läuft über RandAnwenden mit, weil jeder Zustandswechsel dort
+    /// vorbeikommt; der DWM-Wert wird gemerkt, die Region setzt pro Größe neu.
+    /// Die DWM-Haarlinie (BORDER_COLOR) nehmen wir NUR: sie folgt dem kleineren
+    /// 8px-Bogen und würde sonst sichtbar durch die eigene Ecke laufen.</summary>
+    private void EckenAnwenden()
+    {
+        if (!IsHandleCreated) return;
+        try
+        {
+            if (WindowState == FormWindowState.Maximized)
+            {
+                SetzeDwmEcke(1);   // DONOTROUND
+                _ = SetWindowRgn(Handle, IntPtr.Zero, false);   // Region lösen: eckig bis zum Rand
+                return;
+            }
+            SetzeDwmEcke(2);      // ROUND: der System-Schatten bleibt
+            int r = EckenRadiusPx();
+            IntPtr region = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, r, r);
+            _ = SetWindowRgn(Handle, region, false);   // System übernimmt die Region
+        }
+        catch { }   // Win10/alt: eckig lassen, nie zum Startproblem machen
+    }
+
+    private void SetzeDwmEcke(int wert)
+    {
+        if (wert == eckenAktuell) return;
+        try
+        {
+            _ = DwmSetWindowAttribute(Handle, 33, ref wert, sizeof(int));
+            int keine = DwmwaColorNone;   // Haarlinie ab: folgt dem 8px-Bogen, nicht unserer Region
+            _ = DwmSetWindowAttribute(Handle, DwmwaBorderColor, ref keine, sizeof(int));
+            eckenAktuell = wert;
+        }
+        catch { eckenAktuell = wert; }
+    }
+
     /// <summary>Ziehen der Kopfzeile an das System uebergeben (inkl. Snap an Bildschirmraender).</summary>
     public void Titelziehen()
     {
@@ -488,9 +555,16 @@ internal sealed class HauptForm : Form
     /// mit Naht-Artefakten (Nutzer-Fall v0.21.5).</summary>
     public void RandAnwenden()
     {
+        EckenAnwenden();   // Eckenrundung mit dem Zustand mitziehen (normal gerundet, maximiert eckig)
         Padding = WindowState == FormWindowState.Maximized
             ? Padding.Empty
             : new Padding(ZiehzonePx(), 0, ZiehzonePx(), ZiehzonePx());
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        EckenAnwenden();   // Handle(-neu)aufbau: Attribut ist fenstergebunden, wieder setzen
     }
 
     /// <summary>Native Größenänderung an der Ecke unten rechts starten (der

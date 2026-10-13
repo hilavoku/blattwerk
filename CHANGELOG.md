@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-13.
 
+## v0.21.9 — Abgerundete Ecken, deutlich sichtbar
+- Das Programmfenster bekommt gerundete Ecken. Der Standardbogen von
+  Windows 11 war dabei kaum zu erkennen (Nutzer-Runde 2), darum schneidet
+  das Fenster sich selbst mit einem deutlich größeren Radius (14 px bei
+  100 % Skalierung, mitwachsend) — der bunte Rand und der Fensterschatten
+  laufen mit um die Kurve.
+- Maximiert bleibt das Fenster eckig, wie man es von anderen Programmen
+  kennt. Auf Windows 10 (keine Rundung im Standard) bleibt alles beim
+  Alten — die Anfragen werden dort einfach ignoriert.
+
 ## v0.21.8 — Text markieren wie im Browser, Zoom-Knöpfe als Icons
 - **Dynamischer Zeiger:** Über Text (auch unsichtbarem OCR-Text) wird der
   Mauszeiger zur Textmarkierung — ziehen markiert zeichengenau, Strg+C
