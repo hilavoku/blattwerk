@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.16"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.17"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -984,13 +984,32 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
     neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
     pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
     # Chirurgie-Pfad (v0.21.15): Drehen als cm-Matrix auf dem ORIGINAL-Bitmap
-    # (keine Rasterung, keine Qualitaetsverluste, kein Deckel, kein Geist)
+    # (keine Rasterung, keine Qualitaetsverluste, kein Deckel, kein Geist).
+    # v0.21.17: Das Delta wird mit der BESTEHENDEN Platzierung KOMPONIERT -
+    # die Huellbox eines schon gedrehten Objekts ist kein Bildmass! (Nutzer-
+    # Fund: erneutes Drehen verzerrte.) Bildmasse/Winkel leben in der Matrix;
+    # die neue Huelle wird aus den Ecken der komponierten Matrix gelesen.
     plaetze = [_bild_platzierung(d, pg, v, alt_r) for v in xr]
     if all(plaetze):
         hoehe = pg.rect.height
-        if _bild_chirurgie(d, pg, plaetze,
-                           lambda p, h: _cm_dreh_matrix(alt_r.width, alt_r.height,
-                                                        rot, neu_r, h)):
+        from math import sin, cos, radians
+        rad = radians(rot)
+        r_mat = (cos(rad), -sin(rad), sin(rad), cos(rad), 0.0, 0.0)
+
+        def _rot_fn(p, h, _r=r_mat):
+            m = _mat_mult(tuple(p["ctm"]), _r)     # R(delta) o alt: Skalierung bleibt
+            a2, b2, c2, d2 = m[:4]
+            w_neu = max(0.0, a2, c2, a2 + c2) - min(0.0, a2, c2, a2 + c2)
+            h_neu = max(0.0, b2, d2, b2 + d2) - min(0.0, b2, d2, b2 + d2)
+            ziel = pymupdf.Rect(cx - w_neu / 2, cy - h_neu / 2, cx + w_neu / 2, cy + h_neu / 2)
+            return _cm_anker(m, ziel, h)
+        # Ziel-Rect einmalig aus der ersten Ebene bestimmen (Stack teilt die Geometrie)
+        m0 = _mat_mult(tuple(plaetze[0]["ctm"]), r_mat)
+        a2, b2, c2, d2 = m0[:4]
+        w0 = max(0.0, a2, c2, a2 + c2) - min(0.0, a2, c2, a2 + c2)
+        h0 = max(0.0, b2, d2, b2 + d2) - min(0.0, b2, d2, b2 + d2)
+        neu_r = pymupdf.Rect(cx - w0 / 2, cy - h0 / 2, cx + w0 / 2, cy + h0 / 2)
+        if _bild_chirurgie(d, pg, plaetze, _rot_fn):
             push_undo(did, {"op": "image-rotate", "page": page, "xref": xr[0], "xrefs": xr,
                             "alt": list(alt_r), "neu": list(neu_r), "winkel": winkel,
                             "matrizen": [list(p["ctm"]) for p in plaetze]})

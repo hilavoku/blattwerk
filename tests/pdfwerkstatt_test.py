@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (117 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (118 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -809,6 +809,15 @@ try:
     check("Chirurgie: gedreht verschoben - Winkel erhalten (Mitte schwarz, Ecke weiss)",
           r.get("ok") and ii["bilder"][0]["bbox"][0] == 354.2
           and ok_k and max(pk) < 120 and ok_e and min(pe2) > 200, f"{ii['bilder']}/{pk}/{pe2}")
+    # v0.21.17: GEDREHTES Objekt ERNEUT drehen - komponiert mit der Platzierung,
+    # nicht aus der Huellbox neu gebaut (vorher: Verzerrung). 100x50-Maske bei
+    # 30°, +15° mehr = 45° -> Huelle 106.1x106.1 (nicht huellen-gedreht 119.8!)
+    r = requests.post(f"{BASE}/api/image/rotate/{tid}", data={
+        "page": "0", "xref": str(tx), "alt": "[354.2,318.4,465.8,411.6]", "winkel": "15"}, timeout=15).json()
+    check("Chirurgie: nochmals gedreht (30+15=45°, Huelle 106.1 quadratisch)",
+          r.get("ok") and abs(r["rect"][0] - 357.0) < 1.5 and abs(r["rect"][1] - 312.0) < 1.5
+          and abs(r["rect"][2] - 463.0) < 1.5 and abs(r["rect"][3] - 418.0) < 1.5, str(r))
+    u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
     u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
     u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
     u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()

@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.17 — Erneutes Drehen gedrehter Bilder verzerrt nicht mehr
+- Fehlerbehobung (Nutzer-Fund): Drehte man ein **bereits gedrehtes** Bild
+  nochmals, wurde es **verzerrt** — dieselbe Wurzel wie beim Verschieben:
+  Die umschließende Box eines gedrehten Bildes wurde als Bildgröße
+  fehlinterpretiert. Das Drehen komponiert jetzt mit der bestehenden
+  Platzierung (Bildmaße und Winkel stecken in der Transformationsmatrix);
+  jede weitere Drehung addiert sich sauber auf den Ist-Winkel, das
+  Seitenverhältnis bleibt immer erhalten.
+
 ## v0.21.16 — Gedrehte Bilder behalten beim Verschieben ihren Winkel
 - Fehlerbehobung (Nutzer-Fund): Verschob man ein **gedrehtes** Bild, fiel
   es auf 0 Grad zurück und wirkte **verzerrt** — das Verschieben setzte
