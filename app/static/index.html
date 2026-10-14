@@ -2192,6 +2192,7 @@ async function applyProps() {
 async function bildCommitMove(div, pageN, alt, neu) {
   const fd = new FormData();
   fd.append('page', pageN); fd.append('xref', div._xref);
+  fd.append('xrefs', JSON.stringify(div._xrefs || [div._xref]));   // gestapelte Ebenen gemeinsam
   fd.append('alt', JSON.stringify(alt.map(v => Math.round(v * 10) / 10)));
   fd.append('neu', JSON.stringify(neu.map(v => Math.round(v * 10) / 10)));
   const r = await fetch(`/api/image/move/${cur.id}`, {method: 'POST', body: fd});
@@ -3326,13 +3327,25 @@ async function addImageInfos(img) {
   if (img._gen !== gen) return;
   const k2 = img.clientWidth / daten.page_w;
   const wrap = img.parentElement;
-  let idx = 0;
+  // Uebereinanderliegende Platzierungen (alle Kanten < 1pt auseinander) sind
+  // fuer den Nutzer EIN Bild - Briefkopflogos bestehen oft aus gestapelten
+  // 1-bit-Masken ("ING" + Loewe, Nutzer-Fund v0.21.12). Sie ziehen als eine
+  // Einheit: nur der oberste Griff war je greifbar, und ein Einzelzug haette
+  // die Nachbarebene unter dem Weissdeckel begraben.
+  const gruppen = [];
   for (const inf of daten.bilder) {
+    const g = gruppen.find(g => g.bbox.every((v, i) => Math.abs(v - inf.bbox[i]) < 1));
+    if (g) g.xrefs.push(inf.xref);
+    else gruppen.push({ bbox: inf.bbox.slice(), xrefs: [inf.xref] });
+  }
+  for (const g of gruppen) {
+    const inf = { bbox: g.bbox, xref: g.xrefs[0] };
     const d = document.createElement('div');
     d.className = 'imgobj';
     d._pdfRect = inf.bbox.slice();
     d._imgbox = inf.bbox.slice();
     d._xref = inf.xref;
+    d._xrefs = g.xrefs;   // alle Ebenen des Stapels (ziehen/drehen gemeinsam)
     d.dataset.page = n;   // Kontextmenü/Undo braucht die Seite am Element
     d.title = E('Bild – ziehen verschiebt, Anker unten rechts skaliert, ↻ dreht (Rechtsklick: 90°-Schritte)', 'Image – drag to move, bottom-right anchor scales, ↻ rotates (right-click: 90° steps)');
     positionRect(d, inf.bbox, k2);
@@ -3344,7 +3357,6 @@ async function addImageInfos(img) {
     rz.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startBildDrag(ev, d, n, k2, 'resize'); });
     ro.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startBildRotate(ev, d, n, k2); });
     wrap.appendChild(d);
-    idx++;
   }
 }
 
@@ -3427,6 +3439,7 @@ function startBildRotate(ev, div, pageN, k) {
     const ziel = Math.round(deltaGesamt * 100) / 100;
     const fd = new FormData();
     fd.append('page', pageN); fd.append('xref', div._xref);
+    fd.append('xrefs', JSON.stringify(div._xrefs || [div._xref]));   // Ebenen drehen gemeinsam
     fd.append('alt', JSON.stringify(div._pdfRect.map(v => Math.round(v * 10) / 10)));
     fd.append('winkel', ziel);
     const rr = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
@@ -3446,6 +3459,7 @@ function startBildRotate(ev, div, pageN, k) {
 async function bildDrehen(div, pageN, winkel) {   // Kontextmenü: 90°-Schritte
   const fd = new FormData();
   fd.append('page', pageN); fd.append('xref', div._xref);
+  fd.append('xrefs', JSON.stringify(div._xrefs || [div._xref]));   // Ebenen drehen gemeinsam
   fd.append('alt', JSON.stringify(div._pdfRect.map(v => Math.round(v * 10) / 10)));
   fd.append('winkel', winkel);
   const r = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});

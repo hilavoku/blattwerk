@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (95 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (99 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -516,6 +516,68 @@ try:
     check("Datei-Level: 30-Grad-Huelle gespeichert",
           any(all(abs(a - b) < 1.2 for a, b in zip(p, huelle)) for p in platz), str(platz))
     frisch.close()
+
+    # ---------- v0.21.12: Bild-Geister bei ImageMask-Briefkoepfen (Nutzer-Fund) ----------
+    # Briefkopflogos bestehen oft aus gestapelten 1-bit-ImageMask-Bildern ("ING"
+    # + Loewe). get_bboxlog meldet sie als "fill-imgmask" - zaehlte der Geister-
+    # Filter nur "fill-image", divergierte die Zaehlung gegen get_image_info und
+    # das Sicherheitsnetz schaltete ihn KOMPLETT ab: der weiss ueberdeckte Geist
+    # blieb greifbar, jeder Zug erzeugte eine sichtbare Kopie (Loewe weg, ING
+    # haufenweise). Der Raw-Fixture geht bewusst an PyMuPDF vorbei (insert_image
+    # erzeugt nie ImageMask-Objekte).
+    import io
+    import json
+
+    def _masken_pdf():
+        def roh_xobj(daten):
+            return (b"<< /Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true "
+                    b"/BitsPerComponent 1 /Length " + str(len(daten)).encode() + b" >>\nstream\n"
+                    + daten + b"\nendstream")
+        inhalt = (b"q 0 0 0 rg 200 0 0 140 80 582 cm /MA0 Do Q\n"
+                  b"q 0 0 0 rg 200 0 0 140 80 582 cm /MA1 Do Q")
+        objekte = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /XObject << /MA0 5 0 R /MA1 6 0 R >> >> /Contents 4 0 R >>",
+            b"<< /Length " + str(len(inhalt)).encode() + b" >>\nstream\n" + inhalt + b"\nendstream",
+            roh_xobj(bytes([0b10101010] * 8)),
+            roh_xobj(bytes([0b01010101] * 8)),
+        ]
+        out = io.BytesIO()
+        out.write(b"%PDF-1.4\n%pw\n")
+        offs = []
+        for i, o in enumerate(objekte, start=1):
+            offs.append(out.tell())
+            out.write(f"{i} 0 obj\n".encode() + o + b"\nendobj\n")
+        xp = out.tell()
+        out.write(f"xref\n0 {len(objekte)+1}\n".encode() + b"0000000000 65535 f \n")
+        for off in offs:
+            out.write(f"{off:010d} 00000 n \n".encode())
+        out.write(f"trailer\n<< /Size {len(objekte)+1} /Root 1 0 R >>\nstartxref\n{xp}\n%%EOF".encode())
+        return out.getvalue()
+
+    r = requests.post(f"{BASE}/api/upload", files={"file": ("pw_masken_test.pdf", _masken_pdf(), "application/pdf")},
+                      timeout=15).json()
+    check("Masken-PDF hochgeladen", r.get("id"), str(r))
+    mid = r["id"]
+    ii = requests.get(f"{BASE}/api/imageinfo/{mid}/0", timeout=10).json()
+    check("Masken-Stapel: 2 Ebenen am selben Ort",
+          len(ii["bilder"]) == 2 and ii["bilder"][0]["bbox"] == ii["bilder"][1]["bbox"] == [80.0, 120.0, 280.0, 260.0]
+          and all(b["xref"] > 0 for b in ii["bilder"]), str(ii))
+    ma, mb_ = ii["bilder"][0]["xref"], ii["bilder"][1]["xref"]
+    r = requests.post(f"{BASE}/api/image/move/{mid}", data={
+        "page": "0", "xref": str(ma), "xrefs": json.dumps([ma, mb_]),
+        "alt": "[80,120,280,260]", "neu": "[300,150,500,290]"}, timeout=10).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{mid}/0", timeout=10).json()
+    check("Ebenen-Zug: alte Stelle geisterfrei (fill-imgmask gezaehlt)",
+          r.get("ok") and len(ii["bilder"]) == 2
+          and all(b["bbox"] == [300.0, 150.0, 500.0, 290.0] for b in ii["bilder"]), str(ii["bilder"]))
+    u = requests.post(f"{BASE}/api/undo/{mid}", timeout=10).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{mid}/0", timeout=10).json()
+    check("Undo: Ebenen zurueck, Zielstelle geisterfrei",
+          u.get("undone") and len(ii["bilder"]) == 2
+          and all(b["bbox"] == [80.0, 120.0, 280.0, 260.0] for b in ii["bilder"]), str(ii["bilder"]))
 
     # ---------- v0.21.11: Textfarbe (Nutzer-Fund: gruener Text wurde schwarz) ----------
     # Zwei Fallen: Das Farbfeld des PDFW-TXT-Markers wurde hinter spacing/leading

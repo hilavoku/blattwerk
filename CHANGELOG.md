@@ -2,6 +2,24 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.12 — Bildverschieben kopiert nicht mehr (Briefkopf-Logos)
+- Fehlerbehobung (Nutzer-Fund, ING-Wertpapierbrief): Verschob man das
+  Logo oben links, blieb ein **weißes, weiter verschiebbares Objekt**
+  zurück — jeder Zug darauf erzeugte eine **weitere sichtbare Kopie**
+  des Logos, und der Löwe daneben war verschwunden.
+- Grund: Solche Briefköpfe bestehen aus **gestapelten 1-Bit-Maskenbildern**
+  (eine Ebene „ING", eine Ebene Löwe, exakt übereinander). FederPDF
+  überdeckt beim Verschieben die alte Stelle weiß und merkt sich die
+  überdeckte Alt-Platzierung als unsichtbar — der Merker erkannte aber
+  nur „normale" Bilder. Maskenbilder wurden übersehen, die Sicherheits-
+  abschaltung griff, und der Geist blieb dauerhaft anklickbar.
+- Behoben: Maskenbilder zählen jetzt mit; überdeckte Alt-Stellen sind
+  nicht mehr greifbar (nichts liegt mehr als weißes Objekt herum).
+- Außerdem: Erkannte übereinanderliegende Bildebenen (Briefkopflogo!)
+  ziehen jetzt **als ein einziges Objekt** — der Löwe wandert mit und
+  bleibt erhalten. Drehen am merger Objekt dreht alle Ebenen gemeinsam,
+  Strg+Z macht den Zug in einem Rutsch rückgängig.
+
 ## v0.21.11 — Textfarbe wird endlich übernommen
 - Fehlerbehobung (Nutzer-Fund): Legte man neuen Text in einer Farbe an
   (z. B. grün), blieb bzw. wurde er **stets schwarz** — egal, welche

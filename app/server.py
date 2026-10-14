@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.11"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.12"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -443,13 +443,19 @@ def _bild_geister(pg, erwartet: int):
     war bislang weiter waehlbar; ihr Verschieben erzeugte eine sichtbare Kopie.
     Markerlose Erkennung: get_bboxlog liefert Bilder und Pfade in Content-Stream-
     Reihenfolge (fill-image/fill-path), get_drawings die Farbe (nur reines Weiss
-    mit Deckkraft 1 zaehlt)."""
+    mit Deckkraft 1 zaehlt). ImageMask-Bilder (1-bit-Faxmasken, Briefkoepfe!)
+    meldet get_bboxlog als "fill-imgmask" - sie zaehlen mit, sonst divergiert
+    die Zaehlung gegen get_image_info und das Sicherheitsnetz schaltete den
+    Filter fuer solche Dokumente KOMPLETT ab (Nutzer-Fund v0.21.12, ING-Briefkopf
+    mit gestapelten ING-/Loewen-Masken: Geist blieb greifbar, jeder Zug kopierte).
+    Reihenfolge der gemischten Liste == get_image_info (empirisch geprueft)."""
     try:
         log = pg.get_bboxlog()
         zeichnungen = pg.get_drawings()
     except Exception:
         return set()
-    log_bilder = [(i, e[1]) for i, e in enumerate(log) if e[0] == "fill-image"]
+    log_bilder = [(i, e[1]) for i, e in enumerate(log)
+                  if e[0] in ("fill-image", "fill-imgmask")]
     if len(log_bilder) != erwartet:   # Zaehlung divergiert: lieber gar nicht filtern
         return set()
     weiss = set()
@@ -514,21 +520,31 @@ def _weissdeckel(r: pymupdf.Rect) -> pymupdf.Rect:
 
 
 @app.post("/api/image/move/{did}")
-async def image_move(did: str, page: int = Form(...), xref: int = Form(...),
-                     alt: str = Form(...), neu: str = Form(...)):
+async def image_move(did: str, page: int = Form(...), xref: int = Form(0),
+                     xrefs: str = Form(""), alt: str = Form(...), neu: str = Form(...)):
     """Bild verschieben: alte Platzierung weiss ueberdecken, Bild an der neuen
-    Stelle wieder einsetzen (gleiche eingebettete Grafik per xref, kein Re-Embedding)."""
+    Stelle wieder einsetzen (gleiche eingebettete Grafik per xref, kein Re-Embedding).
+    xrefs (JSON-Liste) verschiebt MEHRERE uebereinanderliegende Ebenen in einem
+    Zug (Briefkopflogos bestehen oft aus gestapelten Masken: "ING" + Loewe) -
+    ein Deckel, Einfuegen in Ebenen-Reihenfolge, EIN Undo-Eintrag."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
-    if xref <= 0:
+    try:
+        xr = [int(v) for v in json.loads(xrefs)] if xrefs else []
+    except Exception:
+        raise HTTPException(400, "xrefs ist keine Liste")
+    if not xr:
+        xr = [xref]
+    if not xr or any(v <= 0 for v in xr):
         raise HTTPException(400, "Dieses Bild ist nicht verschiebbar")
     alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
     neu_r = pymupdf.Rect(*[float(v) for v in json.loads(neu)])
     pg = d[page]
     pg.draw_rect(_weissdeckel(alt_r), color=None, fill=(1, 1, 1), overlay=True)
-    pg.insert_image(neu_r, xref=xref)
-    push_undo(did, {"op": "image-move", "page": page, "xref": xref,
+    for v in xr:
+        pg.insert_image(neu_r, xref=v)
+    push_undo(did, {"op": "image-move", "page": page, "xref": xr[0], "xrefs": xr,
                     "alt": list(alt_r), "neu": list(neu_r)})
     return {"ok": True}
 
@@ -581,33 +597,44 @@ def image_file(did: str, page: int, xref: int):
 
 
 @app.post("/api/image/rotate/{did}")
-async def image_rotate(did: str, page: int = Form(...), xref: int = Form(...),
-                       alt: str = Form(...), winkel: float = Form(...)):
+async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
+                       xrefs: str = Form(""), alt: str = Form(...), winkel: float = Form(...)):
     """Eingebettetes Bild um DELTA-Grad weiterdrehen (Uhrzeigersinn positiv).
     Eingebettete Bilder tragen keine Rotations-Metadaten (anders als Signatur-
     NM-Marker) - daher wird immer der JETZTige Bildzustand um den Delta-Winkel
     vorgedreht (expand), die alte Stelle weiss ueberdeckt und die gedrehte
-    Huelle um die alte Kastenmitte gesetzt."""
+    Huelle um die alte Kastenmitte gesetzt. xrefs (JSON-Liste) dreht gestapelte
+    Ebenen GEMEINSAM (gleiche Huelle um dieselbe Mitte -> sie bleiben ausgerichtet)."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
-    if xref <= 0:
+    try:
+        xr = [int(v) for v in json.loads(xrefs)] if xrefs else []
+    except Exception:
+        raise HTTPException(400, "xrefs ist keine Liste")
+    if not xr:
+        xr = [xref]
+    if not xr or any(v <= 0 for v in xr):
         raise HTTPException(400, "Dieses Bild ist nicht drehbar")
     alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
-    png = _bild_bytes_vom_xref(d, xref)
     from PIL import Image
     rot = float(winkel) % 360.0
-    with Image.open(io.BytesIO(png)) as im:
-        gedreht = im.rotate(-rot, expand=True, resample=Image.BICUBIC)
-    buf = io.BytesIO()
-    gedreht.save(buf, format="PNG")
+    gedrehte_pngs = []
+    for v in xr:
+        png = _bild_bytes_vom_xref(d, v)
+        with Image.open(io.BytesIO(png)) as im:
+            gedreht = im.rotate(-rot, expand=True, resample=Image.BICUBIC)
+        buf = io.BytesIO()
+        gedreht.save(buf, format="PNG")
+        gedrehte_pngs.append(buf.getvalue())
     hw, hh = _bbox_gedreht(alt_r.width, alt_r.height, rot)
     cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
     neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
     pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
     pg.draw_rect(_weissdeckel(alt_r), color=None, fill=(1, 1, 1), overlay=True)
-    pg.insert_image(neu_r, stream=buf.getvalue())
-    push_undo(did, {"op": "image-rotate", "page": page, "xref": xref,
+    for p in gedrehte_pngs:
+        pg.insert_image(neu_r, stream=p)
+    push_undo(did, {"op": "image-rotate", "page": page, "xref": xr[0], "xrefs": xr,
                     "alt": list(alt_r), "neu": list(neu_r)})
     return {"ok": True, "rect": [round(v, 1) for v in neu_r]}
 
@@ -1739,7 +1766,8 @@ def undo(did: str):
     elif op in ("image-move", "image-rotate"):   # invers: neue Stelle weiss, Original zurueck
         o = e
         pg.draw_rect(_weissdeckel(pymupdf.Rect(*o["neu"])), color=None, fill=(1, 1, 1), overlay=True)
-        pg.insert_image(pymupdf.Rect(*o["alt"]), xref=o["xref"])
+        for v in (o.get("xrefs") or [o["xref"]]):   # gestapelte Ebenen gemeinsam zurueck
+            pg.insert_image(pymupdf.Rect(*o["alt"]), xref=v)
     elif op == "text-replace":
         o = e
         o0 = o["origin"]
