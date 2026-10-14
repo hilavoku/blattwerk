@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (115 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (117 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -790,6 +790,27 @@ try:
     ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()
     check("Chirurgie-Undo: Rotation zurueck (Matrix wortwörtlich)",
           u.get("undone") and ii["bilder"][0]["bbox"] == [300.0, 300.0, 400.0, 350.0], str(ii["bilder"]))
+    # v0.21.16: GEDREHTES Objekt verschieben - der Winkel muss erhalten bleiben
+    # (vorher: axis-aligned neu gesetzt -> 0 Grad + auf Huellenmass verzerrt).
+    # Diskriminator: voll gemalte Maske bleibt ein GEDREHTES Viereck - die
+    # Huellenecken bleiben weiss, die Mitte schwarz. Waere die Drehung weg,
+    # waere die ganze Huelle schwarz.
+    r = requests.post(f"{BASE}/api/image/rotate/{tid}", data={
+        "page": "0", "xref": str(tx), "alt": "[300,300,400,350]", "winkel": "30"}, timeout=15).json()
+    check("Chirurgie: 30 Grad gedreht (Huelle 111.6x93.3)",
+          r.get("ok") and abs(r["rect"][0] - 294.2) < 1.5 and abs(r["rect"][1] - 278.4) < 1.5
+          and abs(r["rect"][2] - 405.8) < 1.5 and abs(r["rect"][3] - 371.6) < 1.5, str(r))
+    r = requests.post(f"{BASE}/api/image/move/{tid}", data={
+        "page": "0", "xref": str(tx), "alt": "[294.2,278.4,405.8,371.6]",
+        "neu": "[354.2,318.4,465.8,411.6]"}, timeout=15).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()
+    pk, ok_k = _pixel(tid, 410, 365)      # Mitte: gedrehte Maske gemalt
+    pe2, ok_e = _pixel(tid, 461, 407)     # Huellenecke: ausserhalb des gedrehten Vierecks
+    check("Chirurgie: gedreht verschoben - Winkel erhalten (Mitte schwarz, Ecke weiss)",
+          r.get("ok") and ii["bilder"][0]["bbox"][0] == 354.2
+          and ok_k and max(pk) < 120 and ok_e and min(pe2) > 200, f"{ii['bilder']}/{pk}/{pe2}")
+    u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
+    u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
     u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
     u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
     ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()

@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.15"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.16"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -876,13 +876,22 @@ async def image_move(did: str, page: int = Form(...), xref: int = Form(0),
     pg = d[page]
     # Chirurgie-Pfad (v0.21.15): Platzierung wirklich verschieben - kein Deckel,
     # kein Geist, Hintergrund/Text unter der alten Stelle bleibt unversehrt
-    # (PDFgear-Paritaet, Nutzer-Fund). Fallback nur bei unsauberen Bloecken.
+    # (PDFgear-Paritaet, Nutzer-Fund). Die LINEARE Transformation der Platzierung
+    # bleibt erhalten (v0.21.16: gedrehte Objekte behalten beim Ziehen ihren
+    # Winkel - vorher wurde axis-aligned neu gesetzt: Drehung weg + verzerrt):
+    # Skalierung im BILDRAUM vorschalten (mat_mult(S, M)), Translation ueber
+    # den Huellen-Anker (_cm_anker).
     plaetze = [_bild_platzierung(d, pg, v, alt_r) for v in xr]
     if all(plaetze):
         hoehe = pg.rect.height
-        if _bild_chirurgie(d, pg, plaetze,
-                           lambda p, h: (neu_r.width, 0, 0, neu_r.height,
-                                         neu_r.x0, h - neu_r.y1)):
+        s_x = (neu_r.width / alt_r.width) if alt_r.width > 0.01 else 1.0
+        s_y = (neu_r.height / alt_r.height) if alt_r.height > 0.01 else 1.0
+
+        def _move_fn(p, h, _sx=s_x, _sy=s_y):
+            a, b, c, dd, e, f = p["ctm"]
+            return _cm_anker(_mat_mult((_sx, 0, 0, _sy, 0, 0), (a, b, c, dd, e, f)),
+                             neu_r, h)
+        if _bild_chirurgie(d, pg, plaetze, _move_fn):
             push_undo(did, {"op": "image-move", "page": page, "xref": xr[0], "xrefs": xr,
                             "alt": list(alt_r), "neu": list(neu_r),
                             "matrizen": [list(p["ctm"]) for p in plaetze]})

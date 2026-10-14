@@ -2,6 +2,16 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.16 — Gedrehte Bilder behalten beim Verschieben ihren Winkel
+- Fehlerbehobung (Nutzer-Fund): Verschob man ein **gedrehtes** Bild, fiel
+  es auf 0 Grad zurück und wirkte **verzerrt** — das Verschieben setzte
+  die Bildmaße neu an, statt die Drehung mitzunehmen (die umschließende
+  Box eines gedrehten Bildes ist größer als das Bild selbst und wurde
+  fälschlich als neue Bildgröße interpretiert). FederPDF erhält jetzt die
+  komplette Transformation (Drehung + Seitenverhältnis) beim Ziehen und
+  Skalieren; nur die Position (bzw. Größe) ändert sich. Rückgängig
+  funktioniert wie gehabt.
+
 ## v0.21.15 — Wirklich verschieben wie im Profi-Editor (PDFgear-Parität)
 - Große Verbesserung (Nutzer-Beweis an PDFgear): Eingebettete Bilder
   werden beim Verschieben/Drehen jetzt **wirklich verschoben** — die
