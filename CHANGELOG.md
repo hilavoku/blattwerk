@@ -2,6 +2,25 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.15 — Wirklich verschieben wie im Profi-Editor (PDFgear-Parität)
+- Große Verbesserung (Nutzer-Beweis an PDFgear): Eingebettete Bilder
+  werden beim Verschieben/Drehen jetzt **wirklich verschoben** — die
+  alte Platzierung wird aus dem Seiteninhalt herausgeschnitten und an der
+  neuen Stelle neu gesetzt. Bisher wurde die alte Stelle nur überdeckt.
+- Was das bringt: Bilder lassen sich nun **auch auf Text oder Fotos
+  verschieben und wieder wegziehen** — der darunterliegende Inhalt bleibt
+  unversehrt (keine weißen Flecken mehr, keine „Hintergrund nicht
+  einfarbig"-Verweigerung bei sauberen Platzierungen). Kein „Geist" mehr,
+  der versehentlich wieder auftaucht.
+- Drehen ist jetzt verlustfrei: Statt das Bild neu zu berechnen wird eine
+  Drehmatrix gesetzt — auch mehrfaches Drehen erhält die Originalqualität.
+- Rückgängig funktioniert weiterhin beliebig oft und stellt die
+  Ausgangslage exakt wieder her (die ursprüngliche Platzierung wird
+  gespeichert und wiederhergestellt).
+- Sicherheit: Die Segment-Chirurgie greift nur bei sauber isolierbaren
+  Platzierungen (der Block darf außer dem Bild nichts anderes malen).
+  Andernfalls fällt FederPDF auf das frühere Überdecken-Verfahren zurück.
+
 ## v0.21.14 — Bilder bleiben anpackbar und behalten ihre Griffe
 - Fehlerbehobung (Nutzer-Fund): Hatte man ein Bild **auf einen Textbereich**
   verschoben, ließ es sich danach nicht mehr anfassen — die unsichtbaren

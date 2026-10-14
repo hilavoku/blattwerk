@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (108 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (115 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -587,6 +587,17 @@ try:
     # gemessener Hintergrundfarbe, Verweigerung bei ungleichmaessigem Grund.
     from PIL import Image as _PILImage
 
+    def _dunkel(did_, x0, y0, x1, y1):
+        """Dunkelstes Pixel in der Region (Beweis: Text-Tinte sichtbar)."""
+        png = requests.get(f"{BASE}/api/page/{did_}/0", timeout=15).content
+        im = _PILImage.open(io.BytesIO(png)).convert("RGB")
+        box = (int(x0 / 595 * im.width), int(y0 / 842 * im.height),
+               int(x1 / 595 * im.width), int(y1 / 842 * im.height))
+        klein = 255
+        for px in im.crop(box).getdata():
+            klein = min(klein, min(px))
+        return klein
+
     def _farb_masken_pdf():
         def roh_xobj(daten):
             return (b"<< /Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true "
@@ -694,11 +705,100 @@ try:
     sid = r["id"]
     ii = requests.get(f"{BASE}/api/imageinfo/{sid}/0", timeout=10).json()
     sx = ii["bilder"][0]["xref"]
+    # v0.21.15 Chirurgie: auch auf ungleichmaessigem Grund (Kante gelb/weiss)
+    # verschiebbar - kein Deckel mehr, der Grund bleibt unversehrt
     r = requests.post(f"{BASE}/api/image/move/{sid}", data={
         "page": "0", "xref": str(sx),
-        "alt": "[200,120,400,260]", "neu": "[300,400,500,540]"}, timeout=15)
-    check("Unleichmaessiger Hintergrund: Zug verweigert",
-          r.status_code == 400 and "einfarbig" in r.text, f"{r.status_code} {r.text[:80]}")
+        "alt": "[200,120,400,260]", "neu": "[300,400,500,540]"}, timeout=15).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{sid}/0", timeout=10).json()
+    check("Chirurgie: ungleichmaessiger Grund kein Hindernis mehr",
+          r.get("ok") and len(ii["bilder"]) == 1 and ii["bilder"][0]["bbox"] == [300.0, 400.0, 500.0, 540.0],
+          str(ii["bilder"]))
+    p1, o1 = _pixel(sid, 250, 190)      # alte Stelle: gelber Streifen unversehrt
+    p2, o2 = _pixel(sid, 350, 190)      # alter Platz rechte Haelfte: weiss unversehrt
+    check("Chirurgie: Grund an alter Stelle unversehrt (gelb/weiss-Kante)",
+          o1 and p1[0] > 180 and p1[2] < 90 and o2 and min(p2) > 200, f"{p1}/{p2}")
+
+    # ---------- v0.21.15: Chirurgie = wirkliches Verschieben (PDFgear-Paritaet) ----------
+    # Platzierung wird aus dem Content-Stream herausgeschnitten und anderswo
+    # neu gesetzt: kein Deckel, kein Geist, Text unter dem Bild ueberlebt -
+    # auch mehrfach hin- und her- und GEDREHT (Matrix statt Rasterung).
+    def _text_masken_pdf():
+        def roh_xobj(daten):
+            return (b"<< /Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true "
+                    b"/BitsPerComponent 1 /Length " + str(len(daten)).encode() + b" >>\nstream\n"
+                    + daten + b"\nendstream")
+        inhalt = (b"BT /F1 12 Tf 72 742 Td (Beispielzeile Chirurgie) Tj ET\n"
+                  b"q 0 0 0 rg 100 0 0 50 80 700 cm /MA0 Do Q")
+        objekte = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources "
+            b"<< /Font << /F1 7 0 R >> /XObject << /MA0 5 0 R >> >> /Contents 4 0 R >>",
+            b"<< /Length " + str(len(inhalt)).encode() + b" >>\nstream\n" + inhalt + b"\nendstream",
+            roh_xobj(bytes([0x00] * 8)),
+            b"<< >>",               # Platzhalter (xref 6 unbenutzt)
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        ]
+        out = io.BytesIO()
+        out.write(b"%PDF-1.4\n%pw\n")
+        offs = []
+        for i, o in enumerate(objekte, start=1):
+            offs.append(out.tell())
+            out.write(f"{i} 0 obj\n".encode() + o + b"\nendobj\n")
+        xp = out.tell()
+        out.write(f"xref\n0 {len(objekte)+1}\n".encode() + b"0000000000 65535 f \n")
+        for off in offs:
+            out.write(f"{off:010d} 00000 n \n".encode())
+        out.write(f"trailer\n<< /Size {len(objekte)+1} /Root 1 0 R >>\nstartxref\n{xp}\n%%EOF".encode())
+        return out.getvalue()
+
+    r = requests.post(f"{BASE}/api/upload",
+                      files={"file": ("pw_text_maske.pdf", _text_masken_pdf(), "application/pdf")},
+                      timeout=15).json()
+    check("Text-Masken-PDF hochgeladen", r.get("id"), str(r))
+    tid = r["id"]
+    ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()
+    tx = ii["bilder"][0]["xref"]
+    text_vor = requests.get(f"{BASE}/api/text/{tid}/0", timeout=10).json()["lines"]
+    # AUF die Textzeile ziehen (früher: verweigert / Deckel haette Text gefressen)
+    r = requests.post(f"{BASE}/api/image/move/{tid}", data={
+        "page": "0", "xref": str(tx), "alt": "[80,92,180,142]", "neu": "[70,80,170,130]"},
+        timeout=15).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()
+    check("Chirurgie: Bild AUF Text verschoben",
+          r.get("ok") and len(ii["bilder"]) == 1 and ii["bilder"][0]["bbox"] == [70.0, 80.0, 170.0, 130.0],
+          str(ii["bilder"]))
+    # Und wieder WEG - der Text muss unversehrt zum Vorschein kommen
+    r = requests.post(f"{BASE}/api/image/move/{tid}", data={
+        "page": "0", "xref": str(tx), "alt": "[70,80,170,130]", "neu": "[300,300,400,350]"},
+        timeout=15).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()
+    text_nach = requests.get(f"{BASE}/api/text/{tid}/0", timeout=10).json()["lines"]
+    check("Chirurgie: nach Wegziehen Text unversehrt (kein Geist, kein Fleck)",
+          r.get("ok") and len(ii["bilder"]) == 1 and ii["bilder"][0]["bbox"] == [300.0, 300.0, 400.0, 350.0]
+          and text_nach == text_vor and _dunkel(tid, 72, 80, 220, 100) < 120,
+          f"{ii['bilder']}/{_dunkel(tid, 72, 80, 220, 100)}")
+    # Drehen 90°: Huelle getauscht (100x50 -> 50x100), Farben bleiben (Maskenfarbe schwarz)
+    r = requests.post(f"{BASE}/api/image/rotate/{tid}", data={
+        "page": "0", "xref": str(tx), "alt": "[300,300,400,350]", "winkel": "90"}, timeout=15).json()
+    pr, _r = _pixel(tid, 350, 325)
+    check("Chirurgie-Rotation: Huelle 50x100 um Mitte, Maske gemalt",
+          r.get("ok") and r.get("rect") == [325.0, 275.0, 375.0, 375.0] and max(pr) < 120,
+          f"{r}/{pr}")
+    u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()
+    check("Chirurgie-Undo: Rotation zurueck (Matrix wortwörtlich)",
+          u.get("undone") and ii["bilder"][0]["bbox"] == [300.0, 300.0, 400.0, 350.0], str(ii["bilder"]))
+    u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
+    u = requests.post(f"{BASE}/api/undo/{tid}", timeout=10).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{tid}/0", timeout=10).json()
+    text_end = requests.get(f"{BASE}/api/text/{tid}/0", timeout=10).json()["lines"]
+    check("Chirurgie-Undo: beide Zuege zurueck, Text immer noch heil",
+          ii["bilder"][0]["bbox"] == [80.0, 92.0, 180.0, 142.0] and text_end == text_vor
+          and _dunkel(tid, 72, 80, 220, 100) < 120,
+          f"{ii['bilder']}/{_dunkel(tid, 72, 80, 220, 100)}")
+
 
     # ---------- v0.21.11: Textfarbe (Nutzer-Fund: gruener Text wurde schwarz) ----------
     # Zwei Fallen: Das Farbfeld des PDFW-TXT-Markers wurde hinter spacing/leading

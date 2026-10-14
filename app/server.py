@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.14"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.15"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -575,16 +575,19 @@ def _bild_namen(d, pg, xref: int):
     return namen
 
 
-def _platzierung_farben(d, pg, xref: int, ziel_r: pymupdf.Rect):
-    """Fuellfarbe (r,g,b 0-1), in der die Platzierung ziel_r des Bildes xref
-    gemalt wird - oder None. ImageMask-Bilder haben KEINE eigene Farbe, sie
-    werden in der aktuellen Fuellfarbe des Content-Streams gemalt (Briefkopf-
-    Logos aus Fax-PDFs: 'ING' navy, Loewe orange - Nutzer-Fund v0.21.13, das
-    Verschieben liess die Farbe weg, weil insert_image die Farbe nicht
-    mitschreibt). Der Scan trackt q/Q-Stapel, cm-Matrizen und rg/g/k/sc/scn
-    ueber die Content-Streams (inkl. Form-XObjects) und nimmt das Do, dessen
-    Bildkasten zu ziel_r passt; ohne bbox-Treffer die erste Fundstelle.
-    Best-Effort: bei jedem Problem None (= bisheriges Schwarz-Verhalten)."""
+_CHIRURGIE_MALER = {b"Tj", b"TJ", b"'", b'"', b"Do", b"sh", b"EI",
+                    b"S", b"s", b"f", b"F", b"f*", b"B", b"B*", b"b", b"b*"}
+
+
+def _bild_platzierung(d, pg, xref: int, ziel_r: pymupdf.Rect):
+    """Die Platzierung von Bild xref, deren Kasten zu ziel_r passt - mit allem,
+    was die Chirurgie (v0.21.15) braucht: Paint-Farbe, aufrufendem Ressourcen-
+    Namen, Content-Stream-xref und den BYTE-GRENZEN des innersten q..Q-Blocks
+    (nur loeschbar, wenn der Block AUSSER unserem Do keine malenden Operatoren
+    enthaelt - sonst chirugiere wir nicht, sondern fallen auf den Deckel-Pfad
+    zurueck). None, wenn nicht auffindbar. Beispiel ING-Briefkopf:
+    '... rg  q 1 0 0 1 55.2 787.8 cm ... /MA2 Do  Q' - der rg steht AUSSERHALB,
+    der Block ist sauber isolierbar."""
     try:
         ziel_namen = _bild_namen(d, pg, xref)
         if not ziel_namen:
@@ -592,83 +595,120 @@ def _platzierung_farben(d, pg, xref: int, ziel_r: pymupdf.Rect):
         seite = _xobj_map(d, pg.xref)
         if not seite:
             seite = {e[7]: e[0] for e in pg.get_images(full=True)}
-        treffer = []
+        hoehe = pg.rect.height
+        fund = []
 
-        def scanne(stream: bytes, res_map: dict, zustand, tiefe: int):
+        def scanne(stream: bytes, sxref, res_map: dict, zustand, tiefe: int):
             if tiefe > 4:
                 return
-            toks = _CSTROM_TOKEN.findall(stream)
-            operanden, letzter_name, stapel = [], b"", []
+            toks = list(_CSTROM_TOKEN.finditer(stream))
+            operanden, letzter_name = [], b""
+            stapel = []          # je q: {"ctm", "farbe", "start", "ops": [tok...]}
             i = 0
             while i < len(toks):
-                tok = toks[i]
-                if tok == b"BI":                  # Inline-Bild: alles bis EI ueberspringen
-                    while i < len(toks) and toks[i] != b"EI":
+                m = toks[i]
+                tok = m.group(0)
+                if tok == b"BI":                  # Inline-Bild: alles bis EI skippen
+                    while i < len(toks) and toks[i].group(0) != b"EI":
                         i += 1
                     i += 1
                     continue
                 if tok == b"q":
-                    stapel.append((zustand["ctm"], zustand["farbe"]))
+                    stapel.append({"ctm": zustand["ctm"], "farbe": zustand["farbe"],
+                                   "start": m.start(), "ops": []})
                     operanden.clear()
                 elif tok == b"Q":
                     if stapel:
-                        zustand["ctm"], zustand["farbe"] = stapel.pop()
+                        rahmen = stapel.pop()
+                        if rahmen.get("ziel"):
+                            fund.append({"farbe": rahmen["farbe"],
+                                         "name": rahmen["ziel"],
+                                         "bbox": rahmen["bbox"],
+                                         "ctm": rahmen["ctm"],
+                                         "stream": sxref,
+                                         "start": rahmen["start"], "ende": m.end(),
+                                         "sauber": rahmen["ops"] == [b"Do"]})
                     operanden.clear()
-                elif tok == b"cm" and len(operanden) >= 6:
-                    zustand["ctm"] = _mat_mult(tuple(operanden[-6:]), zustand["ctm"])
+                elif tok == b"cm" and len(operanden) >= 6 and stapel:
+                    rahmen = stapel[-1]
+                    rahmen["ctm"] = _mat_mult(tuple(operanden[-6:]), rahmen["ctm"])
                     operanden.clear()
                 elif tok == b"rg" and len(operanden) >= 3:
                     zustand["farbe"] = ("rgb", tuple(operanden[-3:]))
+                    if stapel:
+                        stapel[-1]["farbe"] = zustand["farbe"]
                     operanden.clear()
                 elif tok == b"g" and operanden:
                     zustand["farbe"] = ("grau", (operanden[-1],))
+                    if stapel:
+                        stapel[-1]["farbe"] = zustand["farbe"]
                     operanden.clear()
                 elif tok == b"k" and len(operanden) >= 4:
                     zustand["farbe"] = ("cmyk", tuple(operanden[-4:]))
+                    if stapel:
+                        stapel[-1]["farbe"] = zustand["farbe"]
                     operanden.clear()
                 elif tok in (b"sc", b"scn") and operanden:
                     zustand["farbe"] = ("sc", tuple(operanden))
+                    if stapel:
+                        stapel[-1]["farbe"] = zustand["farbe"]
                     operanden.clear()
                 elif tok == b"Do":
                     name = letzter_name[1:].decode("latin-1", "replace")
                     operanden.clear()
-                    if name in ziel_namen:
-                        a, b, c, dd, e, f = zustand["ctm"]
-                        xs = (e, a + e, c + f, a + c + e)
+                    if stapel:
+                        stapel[-1]["ops"].append(b"Do")
+                    if name in ziel_namen and stapel:
+                        a, b, c, dd, e, f = stapel[-1]["ctm"]
+                        xs = (e, a + e, c + e, a + c + e)
                         ys = (f, b + f, dd + f, b + dd + f)
-                        treffer.append((zustand["farbe"], (min(xs), min(ys), max(xs), max(ys))))
-                    else:
+                        box = pymupdf.Rect(min(xs), hoehe - max(ys), max(xs), hoehe - min(ys))
+                        stapel[-1]["ziel"] = name
+                        stapel[-1]["bbox"] = box
+                    elif name not in ziel_namen:
                         fxref = res_map.get(name)
                         if fxref:
                             try:
                                 if "/Subtype/Form" in d.xref_object(fxref, compressed=True):
-                                    scanne(d.xref_stream(fxref), _xobj_map(d, fxref),
-                                           {"ctm": zustand["ctm"], "farbe": zustand["farbe"]},
+                                    scanne(d.xref_stream(fxref), None, _xobj_map(d, fxref),
+                                           {"ctm": stapel[-1]["ctm"] if stapel else zustand["ctm"],
+                                            "farbe": stapel[-1]["farbe"] if stapel else zustand["farbe"]},
                                            tiefe + 1)
                             except Exception:
                                 pass
+                elif tok in _CHIRURGIE_MALER:
+                    if stapel:
+                        stapel[-1]["ops"].append(tok)
+                    operanden.clear()
                 elif tok.startswith(b"/"):
                     letzter_name = tok
                 else:
                     try:
                         operanden.append(float(tok))
                     except ValueError:
-                        operanden.clear()          # Nicht-Zahl: Operandenliste verwerfen
+                        operanden.clear()
                 i += 1
 
-        zustand = {"ctm": (1, 0, 0, 1, 0, 0), "farbe": None}
-        scanne(pg.read_contents(), seite, zustand, 0)
-        if not treffer:
+        for sxref in pg.get_contents():
+            scanne(d.xref_stream(sxref), sxref, seite, {"ctm": (1, 0, 0, 1, 0, 0), "farbe": None}, 0)
+        if not fund:
             return None
-        hoehe = pg.rect.height
-        for farbe, (x0, y0, x1, y1) in treffer:
-            box = pymupdf.Rect(x0, hoehe - y1, x1, hoehe - y0)
+        for f in fund:
+            box = f["bbox"]
             if (abs(box.x0 - ziel_r.x0) < 2 and abs(box.y0 - ziel_r.y0) < 2
                     and abs(box.x1 - ziel_r.x1) < 2 and abs(box.y1 - ziel_r.y1) < 2):
-                return _farbe_zu_rgb(farbe)
-        return _farbe_zu_rgb(treffer[0][0])
+                return f
+        return None
     except Exception:
         return None
+
+
+def _platzierung_farben(d, pg, xref: int, ziel_r: pymupdf.Rect):
+    """Fuellfarbe (r,g,b 0-1) der Platzierung ziel_r - duenner Wrapper ueber
+    _bild_platzierung (v0.21.13: Maskenfarben; v0.21.15: liefert auch die
+    Blockgrenzen fuer die Chirurgie)."""
+    pl = _bild_platzierung(d, pg, xref, ziel_r)
+    return pl["farbe"] if pl else None
 
 
 def _xobj_map(d, besitzer_xref: int):
@@ -742,6 +782,76 @@ def _bild_einsetzen(d, pg, rect: pymupdf.Rect, xref: int, farbe):
         pass                                       # ohne Farbe = bisheriges Verhalten
 
 
+def _cm_anker(matrix, ziel_r: pymupdf.Rect, hoehe: float):
+    """cm-Matrix so verschieben, dass die bemalte Einheitsquadr-Huelle exakt
+    auf ziel_r landet (Ecken numerisch, top-down -> PDF-y)."""
+    a, b, c, dd, e, f = matrix
+    xs = (e, a + e, c + e, a + c + e)
+    ys = (f, b + f, dd + f, b + dd + f)
+    return (a, b, c, dd, e + ziel_r.x0 - min(xs), f + (hoehe - ziel_r.y1) - min(ys))
+
+
+def _cm_dreh_matrix(w: float, h: float, rot: float, neu_r: pymupdf.Rect, hoehe: float):
+    """cm-Matrix: Bild (w x h) um rot Grad (Uhrzeigersinn auf dem Schirm) drehen
+    und in die Huelle neu_r legen (Ankerung ueber _cm_anker - je nach Winkel
+    bildet eine andere Ecke den Huellenrand)."""
+    from math import sin, cos, radians
+    r = radians(rot)
+    c_, s_ = cos(r), sin(r)
+    return _cm_anker((w * c_, -w * s_, h * s_, h * c_, 0.0, 0.0), neu_r, hoehe)
+
+
+def _chirurgie_block(name: str, farbe, matrix) -> bytes:
+    """Ein selbstenthaltenene q..Q-Block, der das Bild per Ressourcen-Namen an
+    der Matrix-Position malt (inkl. Masken-Fuellfarbe)."""
+    rgb = b""
+    if farbe:
+        rgb = b"%.4f %.4f %.4f rg\n" % tuple(farbe)
+    a, b, c, dd, e, f = matrix
+    return (b"q\n" + rgb
+            + b"%.4f %.4f %.4f %.4f %.4f %.4f cm\n" % (a, b, c, dd, e, f)
+            + b"/" + name.encode("latin-1", "replace") + b" Do Q\n")
+
+
+def _bild_chirurgie(d, pg, plaetze, matrix_fn):
+    """Echte Objekt-Chirurgie (v0.21.15, PDFgear-Paritaet): die alten Platz-
+    ierungs-Bloecke werden aus den Content-Streams HERAUSGESCHNITTEN (kein
+    Deckel, kein Geist, Text unterm Bild bleibt unversehrt) und als frische
+    Bloecke an den LETZTEN Content-Stream angehaengt. matrix_fn(platz, hoehe)
+    liefert die Ziel-cm-Matrix (verschieben/strecken oder drehen). True bei
+    Erfolg; None, wenn ein Block nicht sauber isolierbar ist (dann ruft der
+    Aufrufer den Deckel-Fallback). Das Undo ist SELBST eine Chirurgie
+    (Platzierung an der Zielstelle selbst finden und invers zurueckschieben) -
+    keine Byte-Positionen merken, verkettete Undos bleiben robust."""
+    try:
+        if not plaetze or not all(p.get("sauber") for p in plaetze):
+            return None
+        inhalte = pg.get_contents()
+        if not inhalte:
+            return None
+        letzte = inhalte[-1]
+        daten = {sx: d.xref_stream(sx) for sx in {p["stream"] for p in plaetze} | {letzte}}
+        hoehe = pg.rect.height
+        # Bloecke aus ihren Streams loeschen - absteigend je Stream, damit die
+        # Offsets der weiteren Bloecke im selben Stream gueltig bleiben
+        for sx in sorted({p["stream"] for p in plaetze}):
+            gruppe = sorted([p for p in plaetze if p["stream"] == sx],
+                            key=lambda p: p["start"], reverse=True)
+            strom = daten[sx]
+            for p in gruppe:
+                strom = strom[:p["start"]] + strom[p["ende"]:]
+            daten[sx] = strom
+        # Anhaenge (Ebenen-Reihenfolge) an den letzten Stream
+        anhaenge = [_chirurgie_block(p["name"], _farbe_zu_rgb(p["farbe"]),
+                                     matrix_fn(p, hoehe)) for p in plaetze]
+        daten[letzte] = daten[letzte] + b"\n" + b"".join(anhaenge)
+        for sx, strom in daten.items():
+            d.update_stream(sx, strom)
+        return True
+    except Exception:
+        return None
+
+
 @app.post("/api/image/move/{did}")
 async def image_move(did: str, page: int = Form(...), xref: int = Form(0),
                      xrefs: str = Form(""), alt: str = Form(...), neu: str = Form(...)):
@@ -764,6 +874,20 @@ async def image_move(did: str, page: int = Form(...), xref: int = Form(0),
     alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
     neu_r = pymupdf.Rect(*[float(v) for v in json.loads(neu)])
     pg = d[page]
+    # Chirurgie-Pfad (v0.21.15): Platzierung wirklich verschieben - kein Deckel,
+    # kein Geist, Hintergrund/Text unter der alten Stelle bleibt unversehrt
+    # (PDFgear-Paritaet, Nutzer-Fund). Fallback nur bei unsauberen Bloecken.
+    plaetze = [_bild_platzierung(d, pg, v, alt_r) for v in xr]
+    if all(plaetze):
+        hoehe = pg.rect.height
+        if _bild_chirurgie(d, pg, plaetze,
+                           lambda p, h: (neu_r.width, 0, 0, neu_r.height,
+                                         neu_r.x0, h - neu_r.y1)):
+            push_undo(did, {"op": "image-move", "page": page, "xref": xr[0], "xrefs": xr,
+                            "alt": list(alt_r), "neu": list(neu_r),
+                            "matrizen": [list(p["ctm"]) for p in plaetze]})
+            return {"ok": True}
+    # Fallback: alte Stelle deckeln (nur bei nicht isolierbaren Platzierungen)
     deckel_r = _weissdeckel(alt_r)
     deckelfarbe, gleichmaessig = _deckelfarbe(pg, deckel_r)
     if not gleichmaessig:
@@ -845,8 +969,25 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
     if not xr or any(v <= 0 for v in xr):
         raise HTTPException(400, "Dieses Bild ist nicht drehbar")
     alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
-    from PIL import Image
     rot = float(winkel) % 360.0
+    hw, hh = _bbox_gedreht(alt_r.width, alt_r.height, rot)
+    cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
+    neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
+    pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
+    # Chirurgie-Pfad (v0.21.15): Drehen als cm-Matrix auf dem ORIGINAL-Bitmap
+    # (keine Rasterung, keine Qualitaetsverluste, kein Deckel, kein Geist)
+    plaetze = [_bild_platzierung(d, pg, v, alt_r) for v in xr]
+    if all(plaetze):
+        hoehe = pg.rect.height
+        if _bild_chirurgie(d, pg, plaetze,
+                           lambda p, h: _cm_dreh_matrix(alt_r.width, alt_r.height,
+                                                        rot, neu_r, h)):
+            push_undo(did, {"op": "image-rotate", "page": page, "xref": xr[0], "xrefs": xr,
+                            "alt": list(alt_r), "neu": list(neu_r), "winkel": winkel,
+                            "matrizen": [list(p["ctm"]) for p in plaetze]})
+            return {"ok": True, "rect": [round(v, 1) for v in neu_r]}
+    # Fallback: Bitmap drehen + alte Stelle deckeln (nur bei unsauberen Bloecken)
+    from PIL import Image
     gedrehte_pngs = []
     for v in xr:
         png = _bild_bytes_vom_xref(d, v)
@@ -855,10 +996,6 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
         buf = io.BytesIO()
         gedreht.save(buf, format="PNG")
         gedrehte_pngs.append(buf.getvalue())
-    hw, hh = _bbox_gedreht(alt_r.width, alt_r.height, rot)
-    cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
-    neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
-    pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
     deckel_r = _weissdeckel(alt_r)
     deckelfarbe, gleichmaessig = _deckelfarbe(pg, deckel_r)
     if not gleichmaessig:
@@ -1996,14 +2133,36 @@ def undo(did: str):
         d.xref_set_key(a.xref, "NM",
                        f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]}:{sp}:{ld})")
         _freetext_ap_mit_abstand(d, a, pg.rect.height, sp, ld)   # immer eigener AP
-    elif op in ("image-move", "image-rotate"):   # invers: neue Stelle deckeln, Original zurueck
+    elif op in ("image-move", "image-rotate"):
         o = e
-        deckel_r = _weissdeckel(pymupdf.Rect(*o["neu"]))
-        deckelfarbe, _gleich = _deckelfarbe(pg, deckel_r)   # nie verweigern: Notfall weiss
-        pg.draw_rect(deckel_r, color=None, fill=deckelfarbe or (1, 1, 1), overlay=True)
         alt_r = pymupdf.Rect(*o["alt"])
-        for v in (o.get("xrefs") or [o["xref"]]):   # gestapelte Ebenen gemeinsam zurueck
-            _bild_einsetzen(d, pg, alt_r, v, _platzierung_farben(d, pg, v, alt_r))
+        neu_r = pymupdf.Rect(*o["neu"])
+        xr_u = o.get("xrefs") or [o["xref"]]
+        # Undo als EIGENE Chirurgie (v0.21.15): Platzierung an der Zielstelle
+        # selbst finden und mit inverser Matrix zurueckschieben - robust ueber
+        # beliebig lange Undo-Ketten, keine Byte-Buchhaltung.
+        plaetze = [_bild_platzierung(d, pg, v, neu_r) for v in xr_u]
+        zurueck = False
+        if all(plaetze) and o.get("matrizen"):
+            # Undo = die VORHER-Matrix wortwörtlich neu anwenden (Chirurgie).
+            # Exakt, ohne inverse Komposition - der Zustand unmittelbar vor dem
+            # Operationstag wird wiederhergestellt.
+            basis_map = {id(p): tuple(m) for p, m in zip(plaetze, o["matrizen"])}
+
+            def mfn(p, h, _bm=basis_map):
+                return _bm.get(id(p)) or _bm[next(iter(_bm))]
+            zurueck = bool(_bild_chirurgie(d, pg, plaetze, mfn))
+        if all(plaetze) and not zurueck and not o.get("matrizen"):
+            hoehe = pg.rect.height
+            mfn = lambda p, h: (alt_r.width, 0, 0, alt_r.height,
+                                alt_r.x0, h - alt_r.y1)
+            zurueck = bool(_bild_chirurgie(d, pg, plaetze, mfn))
+        if not zurueck:                            # Deckel-Pfad (Legacy/unsaubere Bloecke)
+            deckel_r = _weissdeckel(neu_r)
+            deckelfarbe, _gleich = _deckelfarbe(pg, deckel_r)   # nie verweigern: Notfall weiss
+            pg.draw_rect(deckel_r, color=None, fill=deckelfarbe or (1, 1, 1), overlay=True)
+            for v in xr_u:   # gestapelte Ebenen gemeinsam zurueck
+                _bild_einsetzen(d, pg, alt_r, v, _platzierung_farben(d, pg, v, alt_r))
     elif op == "text-replace":
         o = e
         o0 = o["origin"]
