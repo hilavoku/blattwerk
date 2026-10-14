@@ -2,6 +2,24 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.14 — Bilder bleiben anpackbar und behalten ihre Griffe
+- Fehlerbehobung (Nutzer-Fund): Hatte man ein Bild **auf einen Textbereich**
+  verschoben, ließ es sich danach nicht mehr anfassen — die unsichtbaren
+  Textzeilen-Flächen (für Markieren/Kopieren) lagen über dem Bild und haben
+  den Mauszeiger abgefangen. Bilder liegen jetzt über der Textebene (wie
+  Annotationen schon immer): das Bild ist wieder greifbar, egal worüber es
+  liegt. In Lesemodus und Werkzeugmoden ändert sich nichts — dort sind die
+  Bilder weiterhin ruhig gestellt, und Text markieren funktioniert überall.
+- Fehlerbehobung (Nutzer-Fund): Nach jedem Verschieben/Skalieren/Drehen
+  verlor das Bild seine **Griffe** (Größenanker, Drehgriff) und musste erst
+  wieder angeklickt werden. Die Auswahl wird jetzt über den Seiten-Neuaufbau
+  gerettet: Nach dem Zug ist das Objekt sofort wieder ausgewählt, mit Griffen
+  und Eigenschaftenleiste an der neuen Position.
+- Bleibt gewollt: Liegt ein Bild einmal auf Text/Foto, verweigert FederPDF
+  das weitere Verschieben mit einer klaren Meldung — das Überdecken der
+  alten Stelle würde dort sichtbaren Inhalt auslöschen (Strg+Z macht den
+  Zug rückgängig).
+
 ## v0.21.13 — Logo-Farben bleiben erhalten, Deckel folgen dem Hintergrund
 - Fehlerbehobung (Nutzer-Fund): Nach dem Verschieben des Briefkopf-Logos
   war der Löwe **orange-los** — das Logo erschien nur noch schwarz-weiß.

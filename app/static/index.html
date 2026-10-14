@@ -242,7 +242,12 @@
   .line.marked { background:rgba(229,83,75,.4) !important; outline:1px solid var(--danger); }
   .mode-sign .line, .mode-text .line, .mode-sign .imgobj, .mode-text .imgobj,
   .mode-delete .winput, .mode-delete .annot, .mode-delete .imgobj { pointer-events:none; }
-  .imgobj { position:absolute; z-index:1; cursor:move; border:1px dashed transparent; border-radius:2px;
+  /* z-index:4 (v0.21.14): Bilder liegen UEBER der Textebene (z3) - sonst fangen
+     die Zeilenspannen den Zeiger ab, sobald ein Bild auf Text verschoben wurde,
+     und es laesst sich nicht mehr anpacken (Nutzer-Fund). Wie .annot (z5):
+     Direktmanipulation schlaegt Textauswahl. In Lesemodus/Werkzeugmodi sind die
+     Bilder pointer-events:none - die Spannen arbeiten dort unbehindert. */
+  .imgobj { position:absolute; z-index:4; cursor:move; border:1px dashed transparent; border-radius:2px;
             transition: border-color var(--d1) var(--e-standard), background var(--d1) var(--e-standard); }
   .imgobj:hover { border-color: var(--sel-border); }
   .imgobj.imgsel { border:1px dashed var(--accent); background: rgba(255,255,255,.55); }
@@ -2122,6 +2127,11 @@ function selectAnnot(sel) {
    leiste zeigt X/Y/B/H (Winkelfeld bleibt Signaturen vorbehalten - eingebettete
    Bilder tragen keine Rotations-Metadaten, nach Reload ist der Winkel unbekannt). */
 let bildSel = null;
+let bildSelMerk = null;   // {seite, xrefs, rect} - Auswahl ueber den Seiten-Neuaufbau retten
+function bildSelMerken(div, pageN, rect) {
+  bildSelMerk = { seite: pageN, xrefs: (div._xrefs || [div._xref]).slice(),
+                  rect: rect.map(v => Math.round(v * 10) / 10) };
+}
 function bildProps(div) {
   const r = div._pdfRect;
   document.getElementById('prTyp').textContent = E('Bild', 'Image');
@@ -2213,7 +2223,7 @@ async function bildPropsAnwenden() {
   const erg = await bildCommitMove(div, pageN, alt, neu);
   if (!erg.ok) { stat(erg.detail || E('Fehler beim Setzen', 'Setting failed')); return; }
   div._pdfRect = neu.slice(); div._imgbox = neu.slice();
-  setDirty(true); bildAbwaehlen(); refreshPage(pageN);
+  setDirty(true); bildSelMerken(div, pageN, neu); bildAbwaehlen(); refreshPage(pageN);
   stat(E('Position/Größe gesetzt – Speichern macht es dauerhaft.', 'Position/size set – save to make it permanent.'), true);
 }
 ['prX','prY','prW','prH'].forEach(id => document.getElementById(id).addEventListener('change', applyProps));
@@ -3361,6 +3371,20 @@ async function addImageInfos(img) {
     ro.addEventListener('mousedown', (ev) => { ev.stopPropagation(); startBildRotate(ev, d, n, k2); });
     wrap.appendChild(d);
   }
+  // Auswahl nach Verschieben/Skalieren/Drehen wiederherstellen (Nutzer-Wunsch
+  // v0.21.14: Griffe nicht nach jedem Zug verlieren) - das frische Objekt an
+  // xrefs + Ziel-Rect erkennen und wieder anwaehlen.
+  if (bildSelMerk && bildSelMerk.seite === n) {
+    for (const d of wrap.querySelectorAll('.imgobj')) {
+      const xg = d._xrefs || [d._xref];
+      if (xg.length === bildSelMerk.xrefs.length && xg.every((x, i) => x === bildSelMerk.xrefs[i])
+          && d._pdfRect.every((v, i) => Math.abs(v - bildSelMerk.rect[i]) < 1.5)) {
+        bildSelMerk = null;
+        selectBild(d);
+        break;
+      }
+    }
+  }
 }
 
 /* ---------- Eingebettete Bilder: verschieben, skalieren, drehen (v0.19.1) ----------
@@ -3402,7 +3426,7 @@ function startBildDrag(ev, div, pageN, k, kind) {
       stat(erg.detail || E('Änderung fehlgeschlagen', 'Change failed'));
       return;
     }
-    setDirty(true); bildAbwaehlen(); refreshPage(pageN);   // Raster neu aufbauen - Auswahl lebt im Neuaufbau nicht weiter
+    setDirty(true); bildSelMerken(div, pageN, neu); bildAbwaehlen(); refreshPage(pageN);   // Neuaufbau, Auswahl wird in addImageInfos wiederhergestellt
     stat(E(kind === 'resize' ? 'Bild skaliert – Speichern macht es dauerhaft.' :
          'Bild verschoben – Speichern macht es dauerhaft.', kind === 'resize' ? 'Image scaled – save to make it permanent.' :
          'Image moved – save to make it permanent.'), true);
@@ -3448,7 +3472,8 @@ function startBildRotate(ev, div, pageN, k) {
     fd.append('winkel', ziel);
     const rr = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
     if (rr.ok) {
-      setDirty(true); bildAbwaehlen(); refreshPage(pageN);
+      const j = await rr.json().catch(() => ({}));
+      setDirty(true); bildSelMerken(div, pageN, j.rect || div._pdfRect); bildAbwaehlen(); refreshPage(pageN);
       stat(E('Bild um ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', 'Image rotated by ' + ziel + '\u00B0 – Ctrl+Z rotates back.'), true);
     } else {
       div.style.transform = ''; div.style.backgroundImage = '';
@@ -3468,7 +3493,8 @@ async function bildDrehen(div, pageN, winkel) {   // Kontextmenü: 90°-Schritte
   fd.append('winkel', winkel);
   const r = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
   if (r.ok) {
-    setDirty(true); bildAbwaehlen(); refreshPage(pageN);
+    const j = await r.json().catch(() => ({}));
+    setDirty(true); bildSelMerken(div, pageN, j.rect || div._pdfRect); bildAbwaehlen(); refreshPage(pageN);
     stat(E('Bild um ' + winkel + '\u00B0 gedreht – Strg+Z dreht zurück.', 'Image rotated by ' + winkel + '\u00B0 – Ctrl+Z rotates back.'), true);
   } else {
     const j = await r.json().catch(() => ({}));
