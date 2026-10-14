@@ -2,6 +2,24 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.11 — Textfarbe wird endlich übernommen
+- Fehlerbehobung (Nutzer-Fund): Legte man neuen Text in einer Farbe an
+  (z. B. grün), blieb bzw. wurde er **stets schwarz** — egal, welche
+  Farbe man im Farbfeld wählte. Zwei Fehler wirkten zusammen, beide seit
+  der Einführung des Zeichenabstands (v0.14.4): Die Textfarbe steckt
+  unsichtbar in einer Merkzeile am Textobjekt, hinter Schrift, Größe,
+  Zeichen- und Zeilenabstand — beim Wiederauslesen lief das Auswerten am
+  Zeilenabstand sticken und fiel still auf Schwarz zurück; zusätzlich
+  rechnete der Darstellungsbauer den kleinen Farbwert (0–1) fälschlich
+  als großen (0–255) und erzeugte damit ebenfalls fast Schwarz.
+- Beides behoben. **Bestehende Dateien heilen automatisch:** Beim Öffnen
+  vergleicht FederPDF jetzt die gemerkte Farbe mit der tatsächlich im
+  Dokument gespeicherten — weichen sie ab (Altbestand mit schwarz
+  geratenem Text), wird der Text aus der gemerkten Farbe neu aufgebaut.
+  Betroffene Dokumente einfach öffnen und speichern, fertig.
+- Das Einbrennen („Speichern mit eingebrannten Änderungen") farbiger
+  Texte nutzt dieselbe korrigierte Farbzuweisung.
+
 ## v0.21.10 — Textauswahl frisst nicht mehr die ganze Seite
 - Fehlerbehobung (Nutzer-Fund): Zog man eine Textmarkierung über das Ende
   des Textes hinaus, färbte sich die **ganze Seite blau** — der Mauszeiger

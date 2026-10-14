@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.10"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.11"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -105,18 +105,69 @@ def push_undo(did, entry):
 
 
 def _txt_props(did_page_annot_nm, fallback_rect=None):
-    """Liest Text-Eigenschaften aus einem PDFW-TXT-NM-Marker."""
+    """Liest Text-Eigenschaften aus einem PDFW-TXT-NM-Marker. Farb-Falle
+    (v0.21.11): Hinter der Farbe stehen noch spacing/leading
+    ("...:r,g,b:spacing:leading") - deshalb maxsplit=5; das Farbfeld (3. Feld,
+    Kommaliste ohne Doppelpunkt) bleibt so sauber. Frueher maxsplit=3 liess das
+    Nachfolgefeld in die Farbe rutschen -> float() starb -> still Schwarz."""
     nm = did_page_annot_nm or ""
     font, size, color = "helv", 11.0, [0, 0, 0]
     if nm.startswith("PDFW-TXT:"):
         try:
-            _, f, s, c = nm.split(":", 3)
-            font = f or font
-            size = float(s)
-            color = [float(v) for v in c.split(",")]
+            teile = nm.split(":", 5)
+            if len(teile) >= 4:
+                font = teile[1] or font
+                size = float(teile[2])
+                color = [float(v) for v in teile[3].split(",")]
         except Exception:
             pass
     return font, size, color
+
+
+def _txt_farbe01(farbe):
+    """Marker-Farbliste als geklemmtes 0-1-Tupel. Der Marker traegt 0-1-Werte
+    (die UI schickt Hex/255); nur die TEXTPAGE liefert 0-255. Werte > 1
+    (fremde Eintraege) gelten als 0-255-Skala - niemals blind /255 rechnen
+    (zweite Schwarz-Falle bis v0.21.10)."""
+    werte = [float(c) for c in (list(farbe) + [0, 0, 0])[:3]]
+    if max(werte) > 1.0:
+        werte = [c / 255 for c in werte]
+    return tuple(max(0.0, min(1.0, c)) for c in werte)
+
+
+def _ap_farbe(doc, xref):
+    """Erste rg-Farbangabe aus dem Normal-AP der Annotation (0-1-Tripel) oder None."""
+    try:
+        typ, wert = doc.xref_get_key(xref, "AP/N")
+        if typ != "xref":
+            return None
+        m = re.search(rb"([0-9.]+) ([0-9.]+) ([0-9.]+) rg", doc.xref_stream(int(wert.split()[0])) or b"")
+        return tuple(float(v) for v in m.groups()) if m else None
+    except Exception:
+        return None
+
+
+def _txt_ap_auffrischen(doc):
+    """Bestandsdateien heilen (v0.21.11): Bis v0.21.10 geriet die Farbe von
+    Freitexten im Appearance-Stream auf Schwarz (Farbfeld des PDFW-TXT-Markers
+    wurde nicht mehr geparst bzw. durch 255 geteilt). Der Marker selbst traegt
+    die richtige Farbe - APs, deren rg-Wert davon abweicht, beim Oeffnen neu
+    bauen. Frisch angelegte APs passen exakt und bleiben unangetastet."""
+    for pg_i in range(doc.page_count):
+        pg = doc[pg_i]
+        for a in list(pg.annots() or []):
+            if a.type[1] != "FreeText":
+                continue
+            nm = a.info.get("id", "") or ""
+            if not nm.startswith("PDFW-TXT:"):
+                continue
+            soll = _txt_farbe01(_txt_props(nm)[2])
+            ist = _ap_farbe(doc, a.xref)
+            if ist is None:
+                continue
+            if max(abs(ist[i] - soll[i]) for i in range(3)) > 0.01:
+                _freetext_ap_mit_abstand(doc, a, pg.rect.height,
+                                         _txt_spacing(nm), _txt_leading(nm))
 
 
 def _doc(did: str) -> pymupdf.Document:
@@ -133,6 +184,7 @@ def _open(path: str) -> dict:
         doc = pymupdf.open(path)
     except Exception as e:
         raise HTTPException(400, "Kann PDF nicht oeffnen: " + str(e))
+    _txt_ap_auffrischen(doc)   # alte Dateien mit schwarz geratenen Text-APs heilen
     did = uuid.uuid4().hex[:12]
     docs[did] = {"path": path, "doc": doc}
     current.clear()
@@ -577,7 +629,7 @@ def save(did: str, flatten: int = 0):
                 if not sp:
                     continue
                 font, size, color = _txt_props(nm)
-                col01 = tuple(c / 255 for c in color)
+                col01 = _txt_farbe01(color)   # Farb-Falle v0.21.11 (frueher /255 -> Schwarz)
                 r = a.rect
                 text = (a.info.get("content") or "").replace("\r\n", "\n")
                 if font.startswith("doc~"):
@@ -1000,16 +1052,7 @@ def annots(did: str, n: int):
         t = a.type[1]
         if t == "FreeText":
             name = a.info.get("id", "") or ""
-            font, size, color = "helv", 11.0, [0, 0, 0]
-            spacing = 0.0
-            if name.startswith("PDFW-TXT:"):
-                try:
-                    _, f, s, c = name.split(":", 3)
-                    font = f or "helv"
-                    size = float(s)
-                    color = [float(v) for v in c.split(",")]
-                except Exception:
-                    pass
+            font, size, color = _txt_props(name)   # zentral parsen (Farb-Falle v0.21.11)
             spacing = _txt_spacing(name)
             out.append({
                 "xref": a.xref, "type": "text", "rect": list(a.rect),
@@ -1450,7 +1493,7 @@ def _freetext_ap_mit_abstand(doc, an, page_h, spacing, leading=0.0, did_hint=Non
     nm = an.info.get("id", "") or ""
     font, size, color = _txt_props(nm)
     basefont = FONTS_AP.get(font, "Helvetica")
-    color01 = tuple(c / 255 for c in color)
+    color01 = _txt_farbe01(color)   # Marker ist 0-1; /255 war die zweite Schwarz-Falle
     docfont = None
     if font.startswith("doc~"):
         docfont = _docfont_aufloesen(doc, font)

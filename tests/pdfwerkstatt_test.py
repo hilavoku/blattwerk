@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (89 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (95 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -516,6 +516,66 @@ try:
     check("Datei-Level: 30-Grad-Huelle gespeichert",
           any(all(abs(a - b) < 1.2 for a, b in zip(p, huelle)) for p in platz), str(platz))
     frisch.close()
+
+    # ---------- v0.21.11: Textfarbe (Nutzer-Fund: gruener Text wurde schwarz) ----------
+    # Zwei Fallen: Das Farbfeld des PDFW-TXT-Markers wurde hinter spacing/leading
+    # nicht mehr geparst (seit v0.14.4), und der AP-Builder teilte die 0-1-Farbe
+    # zusaetzlich durch 255. Beides endete in stillem Schwarz.
+    import pymupdf
+    farbe_pfad = os.path.join(FIXDIR, "pw_test_farbe.pdf")
+    fsrc = pymupdf.open()
+    fsrc.new_page().insert_text((72, 90), "Farbprobe", fontsize=12)
+    fsrc.save(farbe_pfad)
+    fsrc.close()
+    rd = requests.get(f"{BASE}/api/open", params={"q": farbe_pfad}, timeout=10).json()
+    fdid = rd["id"]
+    r = requests.post(f"{BASE}/api/annot/text/{fdid}", data={
+        "page": "0", "rect": "[100,100,260,132]", "text": "gruen bezahlt",
+        "size": "16", "font": "helv", "color": "0,0.6,0"}, timeout=10).json()
+    gruen_xref = r.get("xref")
+    lann = requests.get(f"{BASE}/api/annots/{fdid}/0", timeout=10).json()
+    ltxt = next((a for a in lann if a.get("xref") == gruen_xref), None)
+    check("Textfarbe in der Eigenschaftenliste",
+          ltxt and len(ltxt.get("color") or []) == 3
+          and all(abs(ltxt["color"][i] - v) < 0.01 for i, v in enumerate([0, 0.6, 0])), str(ltxt))
+    requests.post(f"{BASE}/api/save/{fdid}", timeout=15)
+    fdoc = pymupdf.open(farbe_pfad)
+    ap_streams = []
+    for fpg in fdoc:
+        for fa in fpg.annots() or []:
+            if fa.type[1] == "FreeText":
+                _t, apw = fdoc.xref_get_key(fa.xref, "AP/N")
+                ap_streams.append(fdoc.xref_stream(int(apw.split()[0])) or b"")
+    fdoc.close()
+    check("Textfarbe im Appearance-Stream (0 0.6 0 rg)",
+          any(b"0 0.6 0 rg" in s for s in ap_streams), str(ap_streams[:1]))
+    # Bestands-Heilung: Datei im Alt-Zustand (Marker gruen, AP schwarz) oeffnen -
+    # der Server baut den AP beim Oeffnen aus der Markerfarbe neu.
+    kaputt_pfad = os.path.join(FIXDIR, "pw_test_farbe_kaputt.pdf")
+    bsrc = pymupdf.open()
+    bpg = bsrc.new_page()
+    ba = bpg.add_freetext_annot(pymupdf.Rect(100, 100, 260, 132), "alt gruen", fontsize=16,
+                                fontname="Helv", text_color=(0, 0, 0))
+    ba.update()
+    bsrc.xref_set_key(ba.xref, "NM", "(PDFW-TXT:helv:16:0,0.6,0:0:0)")
+    bsrc.save(kaputt_pfad)
+    bsrc.close()
+    rk = requests.get(f"{BASE}/api/open", params={"q": kaputt_pfad}, timeout=10).json()
+    kid = rk["id"]
+    lann2 = requests.get(f"{BASE}/api/annots/{kid}/0", timeout=10).json()
+    ktxt = next((a for a in lann2 if a.get("type") == "text"), None)
+    check("Altbestand: Farbe aus dem Marker gelistet",
+          ktxt and abs((ktxt.get("color") or [0, 0, 0])[1] - 0.6) < 0.01, str(ktxt))
+    requests.post(f"{BASE}/api/save/{kid}", timeout=15)
+    kdoc = pymupdf.open(kaputt_pfad)
+    geheilt = False
+    for fpg in kdoc:
+        for fa in fpg.annots() or []:
+            if fa.type[1] == "FreeText":
+                _t, apw = kdoc.xref_get_key(fa.xref, "AP/N")
+                geheilt = geheilt or b"0 0.6 0 rg" in (kdoc.xref_stream(int(apw.split()[0])) or b"")
+    kdoc.close()
+    check("Altbestand geheilt: AP-Farbe aus Marker", geheilt, "")
 
     # --- Sperrzustand nach Server-Neustart (zweiter Prozess, anderer Port) ---
     PORT2 = PORT + 1
