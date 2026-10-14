@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (99 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (108 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -578,6 +578,127 @@ try:
     check("Undo: Ebenen zurueck, Zielstelle geisterfrei",
           u.get("undone") and len(ii["bilder"]) == 2
           and all(b["bbox"] == [80.0, 120.0, 280.0, 260.0] for b in ii["bilder"]), str(ii["bilder"]))
+
+    # ---------- v0.21.13: Masken-FARBEN + Hintergrund-Deckel (Nutzer-Fund) ----------
+    # ImageMask-Bilder haben keine eigene Farbe - sie werden in der Fuellfarbe
+    # des Content-Streams gemalt. Das Verschieben setzte sie farblos (schwarz)
+    # wieder ein: das ING-Logo wurde s/w. Und auf farbigem Hintergrund hinterlies
+    # der Weissdeckel einen weissen Fleck. Jetzt: Farb-Scan vor dem Do, Deckel in
+    # gemessener Hintergrundfarbe, Verweigerung bei ungleichmaessigem Grund.
+    from PIL import Image as _PILImage
+
+    def _farb_masken_pdf():
+        def roh_xobj(daten):
+            return (b"<< /Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true "
+                    b"/BitsPerComponent 1 /Length " + str(len(daten)).encode() + b" >>\nstream\n"
+                    + daten + b"\nendstream")
+        # ImageMask: Sample 0 = malen. MA0 obere Haelfte (rot), MA1 untere (blau).
+        ma0 = bytes([0x00] * 4 + [0xFF] * 4)
+        ma1 = bytes([0xFF] * 4 + [0x00] * 4)
+        inhalt = (b"q 1 1 0 rg 0 0 595 842 re f Q\n"          # gelber Hintergrund
+                  b"q 1 0 0 rg 200 0 0 140 80 582 cm /MA0 Do Q\n"
+                  b"q 0 0 1 rg 200 0 0 140 80 582 cm /MA1 Do Q")
+        objekte = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /XObject << /MA0 5 0 R /MA1 6 0 R >> >> /Contents 4 0 R >>",
+            b"<< /Length " + str(len(inhalt)).encode() + b" >>\nstream\n" + inhalt + b"\nendstream",
+            roh_xobj(ma0), roh_xobj(ma1),
+        ]
+        out = io.BytesIO()
+        out.write(b"%PDF-1.4\n%pw\n")
+        offs = []
+        for i, o in enumerate(objekte, start=1):
+            offs.append(out.tell())
+            out.write(f"{i} 0 obj\n".encode() + o + b"\nendobj\n")
+        xp = out.tell()
+        out.write(f"xref\n0 {len(objekte)+1}\n".encode() + b"0000000000 65535 f \n")
+        for off in offs:
+            out.write(f"{off:010d} 00000 n \n".encode())
+        out.write(f"trailer\n<< /Size {len(objekte)+1} /Root 1 0 R >>\nstartxref\n{xp}\n%%EOF".encode())
+        return out.getvalue()
+
+    def _pixel(did_, x, y, toleranz=40):
+        png = requests.get(f"{BASE}/api/page/{did_}/0", timeout=15).content
+        im = _PILImage.open(io.BytesIO(png)).convert("RGB")
+        px, py = int(x / 595 * im.width), int(y / 842 * im.height)
+        nahe = [im.getpixel((max(0, min(im.width - 1, px + dx)), max(0, min(im.height - 1, py + dy))))
+                for dx in (-2, 0, 2) for dy in (-2, 0, 2)]
+        ziel = nahe[4]
+        ok_ = all(all(abs(a - b) <= toleranz for a, b in zip(p, ziel)) for p in nahe)
+        return ziel, ok_
+
+    r = requests.post(f"{BASE}/api/upload", files={"file": ("pw_farb_masken.pdf", _farb_masken_pdf(), "application/pdf")},
+                      timeout=15).json()
+    check("Farb-Masken-PDF hochgeladen", r.get("id"), str(r))
+    fid = r["id"]
+    ii = requests.get(f"{BASE}/api/imageinfo/{fid}/0", timeout=10).json()
+    check("Farb-Masken-Stapel erkannt",
+          len(ii["bilder"]) == 2 and ii["bilder"][0]["bbox"] == ii["bilder"][1]["bbox"], str(ii))
+    fa, fb_ = ii["bilder"][0]["xref"], ii["bilder"][1]["xref"]
+    r = requests.post(f"{BASE}/api/image/move/{fid}", data={
+        "page": "0", "xref": str(fa), "xrefs": json.dumps([fa, fb_]),
+        "alt": "[80,120,280,260]", "neu": "[300,150,500,290]"}, timeout=15).json()
+    check("Farb-Zug ok", r.get("ok"), str(r))
+    ii = requests.get(f"{BASE}/api/imageinfo/{fid}/0", timeout=10).json()
+    check("Farb-Deckel: alte Stelle geisterfrei (beliebige Deckfarbe)",
+          len(ii["bilder"]) == 2 and all(b["bbox"] == [300.0, 150.0, 500.0, 290.0] for b in ii["bilder"]),
+          str(ii["bilder"]))
+    p1, o1 = _pixel(fid, 180, 190)      # alte Stelle: jetzt gelber Deckel
+    check("Alte Stelle in Hintergrundfarbe (gelb)", o1 and p1[0] > 180 and p1[1] > 180 and p1[2] < 90, str(p1))
+    p2, o2 = _pixel(fid, 400, 185)      # neue Stelle oben: rote Maske
+    check("Maske oben bleibt rot", o2 and p2[0] > 180 and p2[1] < 90 and p2[2] < 90, str(p2))
+    p3, o3 = _pixel(fid, 400, 255)      # neue Stelle unten: blaue Maske
+    check("Maske unten bleibt blau", o3 and p3[2] > 180 and p3[0] < 90 and p3[1] < 90, str(p3))
+    u = requests.post(f"{BASE}/api/undo/{fid}", timeout=10).json()
+    p4, o4 = _pixel(fid, 180, 155)      # nach Undo: oben wieder rot am alten Ort
+    p5, o5 = _pixel(fid, 180, 225)      # nach Undo: unten wieder blau
+    p6, o6 = _pixel(fid, 400, 220)      # Zielstelle: gelber Deckel vom Undo
+    check("Undo: Farben am alten Ort, Zielstelle hintergrundfarben",
+          u.get("undone") and o4 and p4[0] > 180 and p4[1] < 90
+          and o5 and p5[2] > 180 and o6 and p6[0] > 180 and p6[2] < 90, f"{p4}/{p5}/{p6}")
+
+    def _streifen_pdf():
+        # gelber Streifen nur links (bis x=300), Maske schlingert darueber ->
+        # Hintergrund ungleichmaessig -> Zug muss verweigert werden
+        def roh_xobj(daten):
+            return (b"<< /Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true "
+                    b"/BitsPerComponent 1 /Length " + str(len(daten)).encode() + b" >>\nstream\n"
+                    + daten + b"\nendstream")
+        inhalt = (b"q 1 1 0 rg 0 0 300 842 re f Q\n"
+                  b"q 0 0 0 rg 200 0 0 140 200 582 cm /MA0 Do Q")
+        objekte = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /XObject << /MA0 5 0 R >> >> /Contents 4 0 R >>",
+            b"<< /Length " + str(len(inhalt)).encode() + b" >>\nstream\n" + inhalt + b"\nendstream",
+            roh_xobj(bytes([0x00] * 8)),
+        ]
+        out = io.BytesIO()
+        out.write(b"%PDF-1.4\n%pw\n")
+        offs = []
+        for i, o in enumerate(objekte, start=1):
+            offs.append(out.tell())
+            out.write(f"{i} 0 obj\n".encode() + o + b"\nendobj\n")
+        xp = out.tell()
+        out.write(f"xref\n0 {len(objekte)+1}\n".encode() + b"0000000000 65535 f \n")
+        for off in offs:
+            out.write(f"{off:010d} 00000 n \n".encode())
+        out.write(f"trailer\n<< /Size {len(objekte)+1} /Root 1 0 R >>\nstartxref\n{xp}\n%%EOF".encode())
+        return out.getvalue()
+
+    r = requests.post(f"{BASE}/api/upload", files={"file": ("pw_streifen.pdf", _streifen_pdf(), "application/pdf")},
+                      timeout=15).json()
+    sid = r["id"]
+    ii = requests.get(f"{BASE}/api/imageinfo/{sid}/0", timeout=10).json()
+    sx = ii["bilder"][0]["xref"]
+    r = requests.post(f"{BASE}/api/image/move/{sid}", data={
+        "page": "0", "xref": str(sx),
+        "alt": "[200,120,400,260]", "neu": "[300,400,500,540]"}, timeout=15)
+    check("Unleichmaessiger Hintergrund: Zug verweigert",
+          r.status_code == 400 and "einfarbig" in r.text, f"{r.status_code} {r.text[:80]}")
 
     # ---------- v0.21.11: Textfarbe (Nutzer-Fund: gruener Text wurde schwarz) ----------
     # Zwei Fallen: Das Farbfeld des PDFW-TXT-Markers wurde hinter spacing/leading

@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.12"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.13"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -442,13 +442,17 @@ def _bild_geister(pg, erwartet: int):
     ein - die alte Platzierung bleibt unsichtbar in der Datei (Bild-Geist) und
     war bislang weiter waehlbar; ihr Verschieben erzeugte eine sichtbare Kopie.
     Markerlose Erkennung: get_bboxlog liefert Bilder und Pfade in Content-Stream-
-    Reihenfolge (fill-image/fill-path), get_drawings die Farbe (nur reines Weiss
-    mit Deckkraft 1 zaehlt). ImageMask-Bilder (1-bit-Faxmasken, Briefkoepfe!)
-    meldet get_bboxlog als "fill-imgmask" - sie zaehlen mit, sonst divergiert
-    die Zaehlung gegen get_image_info und das Sicherheitsnetz schaltete den
-    Filter fuer solche Dokumente KOMPLETT ab (Nutzer-Fund v0.21.12, ING-Briefkopf
-    mit gestapelten ING-/Loewen-Masken: Geist blieb greifbar, jeder Zug kopierte).
-    Reihenfolge der gemischten Liste == get_image_info (empirisch geprueft)."""
+    Reihenfolge (fill-image/fill-path), get_drawings die Farbe (Deckkraft 1,
+    SEIT v0.21.13 in beliebiger Deckfarbe - Deckel folgen der gemessenen
+    Hintergrundfarbe; Vorbehalt: exotische Mischmodi wie Multiply meldet
+    get_drawings nicht, ein solcher Deckel liesse das Bild durchscheinen und
+    wuerde hier zu Unrecht gefiltert - praktisch rar). ImageMask-Bilder
+    (1-bit-Faxmasken, Briefkoepfe!) meldet get_bboxlog als "fill-imgmask" -
+    sie zaehlen mit, sonst divergiert die Zaehlung gegen get_image_info und
+    das Sicherheitsnetz schaltete den Filter fuer solche Dokumente KOMPLETT
+    ab (Nutzer-Fund v0.21.12, ING-Briefkopf mit gestapelten ING-/Loewen-
+    Masken: Geist blieb greifbar, jeder Zug kopierte). Reihenfolge der
+    gemischten Liste == get_image_info (empirisch geprueft)."""
     try:
         log = pg.get_bboxlog()
         zeichnungen = pg.get_drawings()
@@ -458,20 +462,19 @@ def _bild_geister(pg, erwartet: int):
                   if e[0] in ("fill-image", "fill-imgmask")]
     if len(log_bilder) != erwartet:   # Zaehlung divergiert: lieber gar nicht filtern
         return set()
-    weiss = set()
+    deckel = set()
     for dr in zeichnungen:
-        if (dr.get("type") == "f" and dr.get("fill_opacity", 1) >= 0.999 and dr.get("fill")
-                and all(abs(c - 1.0) < 0.01 for c in dr["fill"])):
+        if dr.get("type") == "f" and dr.get("fill_opacity", 1) >= 0.999 and dr.get("fill"):
             r = dr["rect"]
-            weiss.add((r.x0, r.y0, r.x1, r.y1))
-    if not weiss:
+            deckel.add((r.x0, r.y0, r.x1, r.y1))
+    if not deckel:
         return set()
     pfade = []
     for i, e in enumerate(log):
         if e[0] != "fill-path":
             continue
         b = e[1]
-        for (x0, y0, x1, y1) in weiss:
+        for (x0, y0, x1, y1) in deckel:
             if (abs(b[0] - x0) < 0.5 and abs(b[1] - y0) < 0.5
                     and abs(b[2] - x1) < 0.5 and abs(b[3] - y1) < 0.5):
                 pfade.append((i, b))
@@ -519,6 +522,226 @@ def _weissdeckel(r: pymupdf.Rect) -> pymupdf.Rect:
     return pymupdf.Rect(r.x0 - 1, r.y0 - 1, r.x1 + 1, r.y1 + 1)
 
 
+_CSTROM_TOKEN = re.compile(
+    rb"\((?:\\.|[^\\()])*\)"      # Literal-String ueberspringen
+    rb"|<[0-9A-Fa-f\s]*>"         # Hex-String ueberspringen
+    rb"|<<|>>"
+    rb"|/[^\s/\[\]<>(){}]+"
+    rb"|[^\s/\[\]<>(){}<>/]+")
+
+
+def _mat_mult(m, n):
+    a1, b1, c1, d1, e1, f1 = m
+    a2, b2, c2, d2, e2, f2 = n
+    return (a1 * a2 + b1 * c2, a1 * b2 + b1 * d2,
+            c1 * a2 + d1 * c2, c1 * b2 + d1 * d2,
+            e1 * a2 + f1 * c2 + e2, e1 * b2 + f1 * d2 + f2)
+
+
+def _farbe_zu_rgb(farbe):
+    """Getrackte Fuellfarbe -> (r,g,b) 0-1, oder None."""
+    if not farbe:
+        return None
+    typ, k = farbe
+    try:
+        if typ == "rgb":
+            return tuple(k)
+        if typ == "grau":
+            return (k[0],) * 3
+        if typ == "cmyk":
+            c, m, y, s = k
+            return ((1 - c) * (1 - s), (1 - m) * (1 - s), (1 - y) * (1 - s))
+        if typ == "sc":
+            if len(k) == 1:
+                return (k[0],) * 3
+            if len(k) == 3:
+                return tuple(k)
+            if len(k) == 4:
+                c, m, y, s = k
+                return ((1 - c) * (1 - s), (1 - m) * (1 - s), (1 - y) * (1 - s))
+    except Exception:
+        return None
+    return None
+
+
+def _bild_namen(d, pg, xref: int):
+    """Alle Ressourcen-Namen, unter denen das Bild xref auf der Seite gemalt
+    wird (auch die fzImgN-Namen frisch eingesetzter Kopien)."""
+    namen = {name for name, fxref in _xobj_map(d, pg.xref).items() if fxref == xref}
+    if not namen:
+        for e in pg.get_images(full=True):
+            if e[0] == xref:
+                namen.add(e[7])
+    return namen
+
+
+def _platzierung_farben(d, pg, xref: int, ziel_r: pymupdf.Rect):
+    """Fuellfarbe (r,g,b 0-1), in der die Platzierung ziel_r des Bildes xref
+    gemalt wird - oder None. ImageMask-Bilder haben KEINE eigene Farbe, sie
+    werden in der aktuellen Fuellfarbe des Content-Streams gemalt (Briefkopf-
+    Logos aus Fax-PDFs: 'ING' navy, Loewe orange - Nutzer-Fund v0.21.13, das
+    Verschieben liess die Farbe weg, weil insert_image die Farbe nicht
+    mitschreibt). Der Scan trackt q/Q-Stapel, cm-Matrizen und rg/g/k/sc/scn
+    ueber die Content-Streams (inkl. Form-XObjects) und nimmt das Do, dessen
+    Bildkasten zu ziel_r passt; ohne bbox-Treffer die erste Fundstelle.
+    Best-Effort: bei jedem Problem None (= bisheriges Schwarz-Verhalten)."""
+    try:
+        ziel_namen = _bild_namen(d, pg, xref)
+        if not ziel_namen:
+            return None
+        seite = _xobj_map(d, pg.xref)
+        if not seite:
+            seite = {e[7]: e[0] for e in pg.get_images(full=True)}
+        treffer = []
+
+        def scanne(stream: bytes, res_map: dict, zustand, tiefe: int):
+            if tiefe > 4:
+                return
+            toks = _CSTROM_TOKEN.findall(stream)
+            operanden, letzter_name, stapel = [], b"", []
+            i = 0
+            while i < len(toks):
+                tok = toks[i]
+                if tok == b"BI":                  # Inline-Bild: alles bis EI ueberspringen
+                    while i < len(toks) and toks[i] != b"EI":
+                        i += 1
+                    i += 1
+                    continue
+                if tok == b"q":
+                    stapel.append((zustand["ctm"], zustand["farbe"]))
+                    operanden.clear()
+                elif tok == b"Q":
+                    if stapel:
+                        zustand["ctm"], zustand["farbe"] = stapel.pop()
+                    operanden.clear()
+                elif tok == b"cm" and len(operanden) >= 6:
+                    zustand["ctm"] = _mat_mult(tuple(operanden[-6:]), zustand["ctm"])
+                    operanden.clear()
+                elif tok == b"rg" and len(operanden) >= 3:
+                    zustand["farbe"] = ("rgb", tuple(operanden[-3:]))
+                    operanden.clear()
+                elif tok == b"g" and operanden:
+                    zustand["farbe"] = ("grau", (operanden[-1],))
+                    operanden.clear()
+                elif tok == b"k" and len(operanden) >= 4:
+                    zustand["farbe"] = ("cmyk", tuple(operanden[-4:]))
+                    operanden.clear()
+                elif tok in (b"sc", b"scn") and operanden:
+                    zustand["farbe"] = ("sc", tuple(operanden))
+                    operanden.clear()
+                elif tok == b"Do":
+                    name = letzter_name[1:].decode("latin-1", "replace")
+                    operanden.clear()
+                    if name in ziel_namen:
+                        a, b, c, dd, e, f = zustand["ctm"]
+                        xs = (e, a + e, c + f, a + c + e)
+                        ys = (f, b + f, dd + f, b + dd + f)
+                        treffer.append((zustand["farbe"], (min(xs), min(ys), max(xs), max(ys))))
+                    else:
+                        fxref = res_map.get(name)
+                        if fxref:
+                            try:
+                                if "/Subtype/Form" in d.xref_object(fxref, compressed=True):
+                                    scanne(d.xref_stream(fxref), _xobj_map(d, fxref),
+                                           {"ctm": zustand["ctm"], "farbe": zustand["farbe"]},
+                                           tiefe + 1)
+                            except Exception:
+                                pass
+                elif tok.startswith(b"/"):
+                    letzter_name = tok
+                else:
+                    try:
+                        operanden.append(float(tok))
+                    except ValueError:
+                        operanden.clear()          # Nicht-Zahl: Operandenliste verwerfen
+                i += 1
+
+        zustand = {"ctm": (1, 0, 0, 1, 0, 0), "farbe": None}
+        scanne(pg.read_contents(), seite, zustand, 0)
+        if not treffer:
+            return None
+        hoehe = pg.rect.height
+        for farbe, (x0, y0, x1, y1) in treffer:
+            box = pymupdf.Rect(x0, hoehe - y1, x1, hoehe - y0)
+            if (abs(box.x0 - ziel_r.x0) < 2 and abs(box.y0 - ziel_r.y0) < 2
+                    and abs(box.x1 - ziel_r.x1) < 2 and abs(box.y1 - ziel_r.y1) < 2):
+                return _farbe_zu_rgb(farbe)
+        return _farbe_zu_rgb(treffer[0][0])
+    except Exception:
+        return None
+
+
+def _xobj_map(d, besitzer_xref: int):
+    """Ressourcen-XObject-Namen -> xref fuer Seite oder Form-XObject."""
+    art, wert = d.xref_get_key(besitzer_xref, "Resources/XObject")
+    if art == "xref":
+        try:
+            wert = d.xref_object(int(str(wert).split()[0]), compressed=True)
+            art = "dict"
+        except Exception:
+            wert = None
+    aus = {}
+    if art == "dict" and wert:
+        for m in re.finditer(r"/(\S+?) (\d+) 0 R", str(wert)):
+            aus[m.group(1)] = int(m.group(2))
+    return aus
+
+
+def _deckelfarbe(pg, r: pymupdf.Rect):
+    """Hintergrundfarbe um Rect r messen (Ring ~6pt aus dem gerasterten Papier,
+    Annotationen ausgenommen). Liefert (rgb 0-1 | None, gleichmaessig).
+    gleichmaessig=False heisst: Foto-/Verlaufs-/Gemischhintergrund - JEDE
+    Deckelfarbe liesse einen sichtbaren Fleck zurueck, der Aufrufer verweigert
+    den Zug dann besser."""
+    try:
+        ring = pymupdf.Rect(r.x0 - 6, r.y0 - 6, r.x1 + 6, r.y1 + 6) & pg.rect
+        if ring.is_empty or ring.width < 3 or ring.height < 3:
+            return None, False
+        pix = pg.get_pixmap(clip=ring, annots=False)
+        w, h, n = pix.width, pix.height, pix.n
+        sx, sy = ring.width / w, ring.height / h
+        punkte = []
+        for y in range(h):
+            py = ring.y0 + (y + 0.5) * sy
+            for x in range(w):
+                px = ring.x0 + (x + 0.5) * sx
+                if r.x0 - 0.5 <= px <= r.x1 + 0.5 and r.y0 - 0.5 <= py <= r.y1 + 0.5:
+                    continue                       # Objektflaeche selbst: ausklammern
+                i = (y * w + x) * n
+                punkte.append((pix.samples[i], pix.samples[i + 1], pix.samples[i + 2]))
+        if len(punkte) < 30:
+            return None, False
+        med = tuple(sorted(p[k] for p in punkte)[len(punkte) // 2] for k in range(3))
+        gut = sum(1 for p in punkte
+                  if abs(p[0] - med[0]) <= 24 and abs(p[1] - med[1]) <= 24 and abs(p[2] - med[2]) <= 24)
+        if gut / len(punkte) < 0.97:
+            return None, False
+        return tuple(v / 255 for v in med), True
+    except Exception:
+        return None, False
+
+
+def _bild_einsetzen(d, pg, rect: pymupdf.Rect, xref: int, farbe):
+    """Bild per xref einsetzen und - bei ImageMask-Platzierungen - die
+    Paint-Farbe in den frischen Insert-Stream schreiben (insert_image kennt
+    keine Fuellfarbe, ohne sie werden Masken schwarz). Der Wrap in ein eigenes
+    q...Q bleibt gnadenlos balanciert, egal wie der Stream aussieht."""
+    pg.insert_image(rect, xref=xref)
+    if not farbe:
+        return
+    try:
+        inhalte = pg.get_contents()
+        if not inhalte:
+            return
+        daten = d.xref_stream(inhalte[-1])
+        if b"Do" not in daten:
+            return                                 # nicht unser frischer Insert-Stream
+        zusatz = b"q\n%.4f %.4f %.4f rg\n" % tuple(farbe)
+        d.update_stream(inhalte[-1], zusatz + daten + b"\nQ\n")
+    except Exception:
+        pass                                       # ohne Farbe = bisheriges Verhalten
+
+
 @app.post("/api/image/move/{did}")
 async def image_move(did: str, page: int = Form(...), xref: int = Form(0),
                      xrefs: str = Form(""), alt: str = Form(...), neu: str = Form(...)):
@@ -541,9 +764,14 @@ async def image_move(did: str, page: int = Form(...), xref: int = Form(0),
     alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
     neu_r = pymupdf.Rect(*[float(v) for v in json.loads(neu)])
     pg = d[page]
-    pg.draw_rect(_weissdeckel(alt_r), color=None, fill=(1, 1, 1), overlay=True)
+    deckel_r = _weissdeckel(alt_r)
+    deckelfarbe, gleichmaessig = _deckelfarbe(pg, deckel_r)
+    if not gleichmaessig:
+        raise HTTPException(400, "Hintergrund ist hier nicht einfarbig - "
+                                 "das Bild lie\u00dfe sich nur mit sichtbarem Fleck verschieben")
+    pg.draw_rect(deckel_r, color=None, fill=deckelfarbe or (1, 1, 1), overlay=True)
     for v in xr:
-        pg.insert_image(neu_r, xref=v)
+        _bild_einsetzen(d, pg, neu_r, v, _platzierung_farben(d, pg, v, alt_r))
     push_undo(did, {"op": "image-move", "page": page, "xref": xr[0], "xrefs": xr,
                     "alt": list(alt_r), "neu": list(neu_r)})
     return {"ok": True}
@@ -631,7 +859,12 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
     cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
     neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
     pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
-    pg.draw_rect(_weissdeckel(alt_r), color=None, fill=(1, 1, 1), overlay=True)
+    deckel_r = _weissdeckel(alt_r)
+    deckelfarbe, gleichmaessig = _deckelfarbe(pg, deckel_r)
+    if not gleichmaessig:
+        raise HTTPException(400, "Hintergrund ist hier nicht einfarbig - "
+                                 "das Bild lie\u00dfe sich nur mit sichtbarem Fleck drehen")
+    pg.draw_rect(deckel_r, color=None, fill=deckelfarbe or (1, 1, 1), overlay=True)
     for p in gedrehte_pngs:
         pg.insert_image(neu_r, stream=p)
     push_undo(did, {"op": "image-rotate", "page": page, "xref": xr[0], "xrefs": xr,
@@ -1763,11 +1996,14 @@ def undo(did: str):
         d.xref_set_key(a.xref, "NM",
                        f"(PDFW-TXT:{e['font']}:{e['size']}:{e['color'][0]},{e['color'][1]},{e['color'][2]}:{sp}:{ld})")
         _freetext_ap_mit_abstand(d, a, pg.rect.height, sp, ld)   # immer eigener AP
-    elif op in ("image-move", "image-rotate"):   # invers: neue Stelle weiss, Original zurueck
+    elif op in ("image-move", "image-rotate"):   # invers: neue Stelle deckeln, Original zurueck
         o = e
-        pg.draw_rect(_weissdeckel(pymupdf.Rect(*o["neu"])), color=None, fill=(1, 1, 1), overlay=True)
+        deckel_r = _weissdeckel(pymupdf.Rect(*o["neu"]))
+        deckelfarbe, _gleich = _deckelfarbe(pg, deckel_r)   # nie verweigern: Notfall weiss
+        pg.draw_rect(deckel_r, color=None, fill=deckelfarbe or (1, 1, 1), overlay=True)
+        alt_r = pymupdf.Rect(*o["alt"])
         for v in (o.get("xrefs") or [o["xref"]]):   # gestapelte Ebenen gemeinsam zurueck
-            pg.insert_image(pymupdf.Rect(*o["alt"]), xref=v)
+            _bild_einsetzen(d, pg, alt_r, v, _platzierung_farben(d, pg, v, alt_r))
     elif op == "text-replace":
         o = e
         o0 = o["origin"]

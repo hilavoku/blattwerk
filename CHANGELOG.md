@@ -2,6 +2,23 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.13 — Logo-Farben bleiben erhalten, Deckel folgen dem Hintergrund
+- Fehlerbehobung (Nutzer-Fund): Nach dem Verschieben des Briefkopf-Logos
+  war der Löwe **orange-los** — das Logo erschien nur noch schwarz-weiß.
+  Grund: Solche Logos sind 1-Bit-Maskenbilder ohne eigene Farbe; ihre
+  Farbe steht im Seiteninhalt als „Füllfarbe beim Malen" (ING navy,
+  Löwe orange). Beim Wiedereinsetzen an der neuen Stelle fehlte dieser
+  Farbbefehl, und die Maske wurde in Schwarz gemalt. FederPDF liest jetzt
+  die Paint-Farbe je Platzierung aus dem Seiteninhalt und schreibt sie
+  beim Verschieben **mit** (auch beim Rückgängig-Machen).
+- Auch auf **farbigem Hintergrund** ist Verschieben jetzt sauber: FederPDF
+  misst die Hintergrundfarbe rund um das Objekt und überdeckt die alte
+  Stelle in genau dieser Farbe statt in Weiß. Ist der Hintergrund nicht
+  einfarbig (Foto, Verlauf, Kanten), wird der Zug mit einer klaren
+  Meldung verweigert — jede Überdeckung hätte dort einen sichtbaren
+  Fleck hinterlassen. Das Rückgängig-Machen funktioniert in beiden
+  Fällen farbrichtig.
+
 ## v0.21.12 — Bildverschieben kopiert nicht mehr (Briefkopf-Logos)
 - Fehlerbehobung (Nutzer-Fund, ING-Wertpapierbrief): Verschob man das
   Logo oben links, blieb ein **weißes, weiter verschiebbares Objekt**

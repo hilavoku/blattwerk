@@ -2196,7 +2196,9 @@ async function bildCommitMove(div, pageN, alt, neu) {
   fd.append('alt', JSON.stringify(alt.map(v => Math.round(v * 10) / 10)));
   fd.append('neu', JSON.stringify(neu.map(v => Math.round(v * 10) / 10)));
   const r = await fetch(`/api/image/move/${cur.id}`, {method: 'POST', body: fd});
-  return r.ok;
+  if (r.ok) return { ok: true };
+  const j = await r.json().catch(() => ({}));
+  return { ok: false, detail: typeof j.detail === 'string' ? j.detail : '' };
 }
 async function bildPropsAnwenden() {
   const div = bildSel, pageN = parseInt(div.dataset.page);
@@ -2208,7 +2210,8 @@ async function bildPropsAnwenden() {
   const alt = div._pdfRect.slice();
   const neu = [x, y, x + w, y + h];
   if (neu.every((v, i) => Math.abs(v - alt[i]) < 0.5)) return;
-  if (!(await bildCommitMove(div, pageN, alt, neu))) { stat(E('Fehler beim Setzen', 'Setting failed')); return; }
+  const erg = await bildCommitMove(div, pageN, alt, neu);
+  if (!erg.ok) { stat(erg.detail || E('Fehler beim Setzen', 'Setting failed')); return; }
   div._pdfRect = neu.slice(); div._imgbox = neu.slice();
   setDirty(true); bildAbwaehlen(); refreshPage(pageN);
   stat(E('Position/Größe gesetzt – Speichern macht es dauerhaft.', 'Position/size set – save to make it permanent.'), true);
@@ -3393,9 +3396,10 @@ function startBildDrag(ev, div, pageN, k, kind) {
     const neu = div._neu || box;
     div._neu = null;
     if (neu.every((v, i) => Math.abs(v - box[i]) < 0.15)) return;   // praktisch unveraendert
-    if (!(await bildCommitMove(div, pageN, box, neu))) {
+    const erg = await bildCommitMove(div, pageN, box, neu);
+    if (!erg.ok) {
       positionRect(div, box, k);
-      stat(E('Änderung fehlgeschlagen', 'Change failed'));
+      stat(erg.detail || E('Änderung fehlgeschlagen', 'Change failed'));
       return;
     }
     setDirty(true); bildAbwaehlen(); refreshPage(pageN);   // Raster neu aufbauen - Auswahl lebt im Neuaufbau nicht weiter
