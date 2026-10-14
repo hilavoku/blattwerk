@@ -2,6 +2,19 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.18 — Übereinanderliegende Bildebenen getrennt greifbar (wie PDFgear)
+- Verbesserung (Nutzer-Wunsch): Besteht ein Logo aus **übereinander
+  gelegten Bildebenen** (wie der ING-Briefkopf aus „ING"-Schriftzug und
+  Löwe), sind diese jetzt **getrennt verschiebbar** — jede Ebene ist ihr
+  eigenes Objekt. Bisher wurden exakt übereinanderliegende Ebenen als ein
+  Objekt gemeinsam gezogen (das war Schadensvermeidung aus der Zeit vor
+  der Echten-Verschieben-Umstellung; seitdem berührt das Ziehen einer
+  Ebene die Nachbarebene nicht mehr).
+- Bedienung wie in Word/PowerPoint: **Klick** wählt die oberste Ebene,
+  **Alt+Klick** schaltet durch den Stapel durch. Ziehen, Skalieren,
+  Drehen und Rückgängig gelten für die gewählte Ebene allein; die
+  Auswahl bleibt nach jedem Zug auf der Ebene liegen.
+
 ## v0.21.17 — Erneutes Drehen gedrehter Bilder verzerrt nicht mehr
 - Fehlerbehobung (Nutzer-Fund): Drehte man ein **bereits gedrehtes** Bild
   nochmals, wurde es **verzerrt** — dieselbe Wurzel wie beim Verschieben:
