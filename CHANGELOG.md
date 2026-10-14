@@ -2,6 +2,15 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.20 — Tintenrahmen bleibt auch beim Drehen erhalten
+- Fehlerbehobung (Nutzer-Fund): Nach dem Drehen eines Bildes sprang der
+  Auswahlrahmen zurück auf die **volle Bildfläche** — die Tintenmessung
+  lief bisher nur bei ungedrehten Platzierungen. Jetzt werden die
+  Tinten-Pixelecken durch die Platzierungs-Transformationsmatrix auf die
+  Seite gerechnet: Der Rahmen bleibt in **jeder Lage** eng an der Kontur
+  (bei Drehwinkeln ist er die Umbox der gedrehten Kontur — minimal größer
+  als die Kontur selbst, aber deutlich enger als die Vollfläche).
+
 ## v0.21.19 — Auswahlrahmen um die sichtbare Kontur (Tintenrahmen)
 - Verbesserung (Nutzer-Wunsch): Der Rahmen eines Bildes liegt jetzt eng um
   die **sichtbare Kontur**, nicht mehr um die ganze Bildfläche. Bei

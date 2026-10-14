@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.19"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.20"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -492,17 +492,20 @@ def _bild_geister(pg, erwartet: int):
 
 
 def _tinten_box(d, inf):
-    """Enge Box der GEMALTEN Pixel einer (achsenparallelen) Bildplatzierung,
-    Seiten-Koordinaten in pt - oder None (= volle Platzierungsbox). Grundlage
-    der Tintenrahmen (v0.21.19): Briefkopf-Masken sind Vollflaechen, deren
-    sichtbare Tinte nur 15-20 % bedeckt ('ING'-Zug links, Loewe rechts) - der
-    Rahmen soll die Kontur zeigen, nicht die Folie. Gemessen wird die Maske
+    """Enge Huelle der GEMALTEN Pixel einer Bildplatzierung, Seiten-Koordinaten
+    in pt - oder None (= volle Platzierungsbox). Grundlage der Tintenrahmen
+    (v0.21.19): Briefkopf-Masken sind Vollflaechen, deren sichtbare Tinte nur
+    15-20 % bedeckt ('ING'-Zug links, Loewe rechts). Gemessen wird die Maske
     (ImageMask) bzw. die SMask (Alpha); ohne Transparenz ist alles Tinte.
-    Gedrehte Platzierungen liefern None (Bildachsen != Seitenachsen, die
-    lineare Rueckrechnung aufs Huellenrechteck waere falsch)."""
+    SEIT v0.21.20 auch bei GEDREHTEN Platzierungen: die Pixel-Ecken werden
+    durch die Platzierungs-Matrix (inf['transform'], MuPDF-Konvention TOP-DOWN)
+    auf die Seite gerechnet und die achsenparallele Huelle davon genommen -
+    der Rahmen ist dann die Huelle der gedrehten Kontur (etwas groesser als
+    die Kontur selbst, aber deutlich enger als die Vollflaeche; vorher lief
+    die Messung nur achsenparallel und der Rahmen sprang beim Drehen auf die
+    Vollflaeche)."""
     xref = inf.get("xref", 0)
-    tr = inf.get("transform", (1, 0, 0, 1, 0, 0))
-    if xref <= 0 or abs(tr[1]) > 0.001 or abs(tr[2]) > 0.001:
+    if xref <= 0:
         return None
     try:
         quelle = xref
@@ -533,13 +536,18 @@ def _tinten_box(d, inf):
         bb = im.getbbox()
         if not bb:
             return None
+        # Pixelecken -> Einheitsquadr -> Platzierungs-Matrix -> Seite. MuPDFs
+        # inf['transform'] ist TOP-DOWN (f = Oberkante) und v zaehlt wie die
+        # Pixelzeilen von OBEN - keine Hoehen-Spiegelung noetig (Falle: die
+        # Stream-cm selbst ist y-up, transform nicht!).
+        a, b, c, dd, e, f = inf.get("transform", (1, 0, 0, 1, 0, 0))
+        us = (bb[0] / w, bb[2] / w)
+        vs = (bb[1] / h, bb[3] / h)
+        ecken = [(a * u + c * v + e, b * u + dd * v + f) for u in us for v in vs]
+        xs = [p[0] for p in ecken]
+        ys = [p[1] for p in ecken]
+        ix0, iy0, ix1, iy1 = min(xs), min(ys), max(xs), max(ys)
         box = inf["bbox"]
-        sx = (box[2] - box[0]) / pix.width
-        sy = (box[3] - box[1]) / pix.height
-        ix0 = box[0] + bb[0] * sx
-        iy0 = box[1] + bb[1] * sy
-        ix1 = box[0] + bb[2] * sx
-        iy1 = box[1] + bb[3] * sy
         if (ix1 - ix0) * (iy1 - iy0) > 0.95 * (box[2] - box[0]) * (box[3] - box[1]):
             return None                        # fast volle Flaeche: keine Verengung wert
         return [ix0, iy0, ix1, iy1]

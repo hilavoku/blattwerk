@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (119 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (120 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -671,6 +671,17 @@ try:
     check("Undo: Farben am alten Ort, Zielstelle hintergrundfarben",
           u.get("undone") and o4 and p4[0] > 180 and p4[1] < 90
           and o5 and p5[2] > 180 and o6 and p6[0] > 180 and p6[2] < 90, f"{p4}/{p5}/{p6}")
+    # v0.21.20: Tintenrahmen ueberlebt Drehungen (Matrix-Ecken-Transformation) -
+    # vorher sprang der Rahmen bei gedrehter Platzierung auf die Vollflaeche.
+    # 90° im Uhrzeigersinn: obere Haelfte (Tinte) wandert auf die rechte Haelfte.
+    r = requests.post(f"{BASE}/api/image/rotate/{fid}", data={
+        "page": "0", "xref": str(fa), "xrefs": json.dumps([fa, fb_]),
+        "alt": "[80,120,280,260]", "winkel": "90"}, timeout=15).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{fid}/0", timeout=10).json()
+    check("Tintenrahmen nach 90°-Drehung (Tinte = rechte Haelfte)",
+          r.get("ok") and r.get("rect") == [110.0, 90.0, 250.0, 290.0]
+          and ii["bilder"][0].get("ink") == [180.0, 90.0, 250.0, 290.0], str(ii["bilder"][0]))
+    u = requests.post(f"{BASE}/api/undo/{fid}", timeout=10).json()
 
     def _streifen_pdf():
         # gelber Streifen nur links (bis x=300), Maske schlingert darueber ->
