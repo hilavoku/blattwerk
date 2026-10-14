@@ -3365,12 +3365,18 @@ async function addImageInfos(img) {
   for (const inf of daten.bilder) {
     const d = document.createElement('div');
     d.className = 'imgobj';
-    d._pdfRect = inf.bbox.slice();
+    d._pdfRect = inf.bbox.slice();          // Platzierung: WAHRHEIT fuer Server/Chirurgie
     d._imgbox = inf.bbox.slice();
     d._xref = inf.xref;
+    // Tintenrahmen (v0.21.19): Rahmen/Klick/Griffe um die SICHTBARE Kontur,
+    // nicht um die Vollflaechen-Platzierung. Offset+Masse relativ zur Platzierung;
+    // alle Operationen (Ziehen/Skalieren/Drehen/Undo) rechnen intern weiter mit
+    // _pdfRect und blenden das Ergebnis auf den Tintenrahmen ab.
+    d._ink = inf.ink ? { ox: inf.ink[0] - inf.bbox[0], oy: inf.ink[1] - inf.bbox[1],
+                         w: inf.ink[2] - inf.ink[0], h: inf.ink[3] - inf.ink[1] } : null;
     d.dataset.page = n;   // Kontextmenü/Undo braucht die Seite am Element
     d.title = E('Bild – ziehen verschiebt, Anker unten rechts skaliert, ↻ dreht (Rechtsklick: 90°-Schritte; Alt+Klick schaltet bei Übereinanderliegendem durch)', 'Image – drag to move, bottom-right anchor scales, ↻ rotates (right-click: 90° steps; Alt+click cycles through stacked images)');
-    positionRect(d, inf.bbox, k2);
+    positionRect(d, inf.ink || inf.bbox, k2);   // Anzeige am Tintenrahmen (falls vorhanden)
     const rz = document.createElement('div'); rz.className = 'rz'; d.appendChild(rz);
     const ro = document.createElement('div'); ro.className = 'ro'; ro.textContent = '\u21BB';
     ro.title = E('Drehen – ziehen (Umschalt-Taste rastet auf 15°-Schritte)', 'Rotate – drag (Shift snaps to 15° steps)');
@@ -3410,6 +3416,22 @@ async function addImageInfos(img) {
    Winkel vorgedreht (eingebettete Bilder tragen keine Rotations-Metadaten wie
    Signatur-NM-Marker - daher Delta statt Absolutwinkel), Huelle um die alte
    Kastenmitte. Live-Vorschau: Bild in den Kasten laden + CSS mitdrehen. */
+function bildDrehMitte(div) {
+  /* Drehmitte in PDF-Koordinaten: Mitte des SICHTBAREN (Tinten-)Rahmens -
+     die CSS-Vorschau dreht um die Rahmenmitte des div, der Server soll um
+     denselben Punkt drehen (v0.21.19), sonst springt das Bild nach dem Zug. */
+  const r = div._pdfRect;
+  if (!div._ink) return [(r[0] + r[2]) / 2, (r[1] + r[3]) / 2];
+  const t = div._ink;
+  return [r[0] + t.ox + t.w / 2, r[1] + t.oy + t.h / 2];
+}
+function bildAnzeigeRect(div, plac) {
+  /* Tintenrahmen-Anzeige fuer eine Platzierungs-Rect: bei reinem Verschieben
+     bleibt der Tinten-Offset konstant (v0.21.19). */
+  if (!div._ink) return plac;
+  const t = div._ink;
+  return [plac[0] + t.ox, plac[1] + t.oy, plac[0] + t.ox + t.w, plac[1] + t.oy + t.h];
+}
 function startBildDrag(ev, div, pageN, k, kind) {
   if (mode !== 'normal' || !bearb || ev.button !== 0) return;   // Lesemodus: Bilder ruhen
   ev.preventDefault(); ev.stopPropagation();
@@ -3418,16 +3440,24 @@ function startBildDrag(ev, div, pageN, k, kind) {
   const sx = ev.clientX, sy = ev.clientY;
   const bewege = (ev2) => {
     const dx = (ev2.clientX - sx) / k, dy = (ev2.clientY - sy) / k;
-    let neu;
-    if (kind === 'resize') {   // Ecke unten rechts: proportional, Anker oben links (wie Signatur)
-      const aspect = (box[3] - box[1]) / (box[2] - box[0] || 1);
-      const nb = Math.max(8, (box[2] - box[0]) + dx);
-      neu = [box[0], box[1], box[0] + nb, box[1] + nb * aspect];
+    let neu, anzeige;
+    if (kind === 'resize') {   // Ecke unten rechts: proportional; Anker = sichtbare (Tinten-)Ecke
+      const t = div._ink;
+      const sichtW = t ? t.w : (box[2] - box[0]);
+      const placW = box[2] - box[0] || 1, placH = box[3] - box[1];
+      const skala = Math.max(0.05, (sichtW + dx) / sichtW);
+      const ax = t ? box[0] + t.ox : box[0];       // sichtbare Anker-Ecke
+      const ay = t ? box[1] + t.oy : box[1];
+      const px0 = t ? ax - t.ox * skala : box[0];  // Platzierung invers mitnehmen
+      const py0 = t ? ay - t.oy * skala : box[1];
+      neu = [px0, py0, px0 + placW * skala, py0 + placH * skala];
+      anzeige = t ? [ax, ay, ax + t.w * skala, ay + t.h * skala] : neu;
     } else {
       neu = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
+      anzeige = bildAnzeigeRect(div, neu);
     }
     div._neu = neu;
-    positionRect(div, neu, k);
+    positionRect(div, anzeige, k);
   };
   const hoch = async (ev2) => {
     document.removeEventListener('mousemove', bewege);
@@ -3438,7 +3468,7 @@ function startBildDrag(ev, div, pageN, k, kind) {
     if (neu.every((v, i) => Math.abs(v - box[i]) < 0.15)) return;   // praktisch unveraendert
     const erg = await bildCommitMove(div, pageN, box, neu);
     if (!erg.ok) {
-      positionRect(div, box, k);
+      positionRect(div, bildAnzeigeRect(div, box), k);
       stat(erg.detail || E('Änderung fehlgeschlagen', 'Change failed'));
       return;
     }
@@ -3486,6 +3516,7 @@ function startBildRotate(ev, div, pageN, k) {
     fd.append('xrefs', JSON.stringify(div._xrefs || [div._xref]));   // Ebenen drehen gemeinsam
     fd.append('alt', JSON.stringify(div._pdfRect.map(v => Math.round(v * 10) / 10)));
     fd.append('winkel', ziel);
+    fd.append('mitte', JSON.stringify(bildDrehMitte(div)));   // um den SICHTBAREN Rahmen drehen (v0.21.19)
     const rr = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
     if (rr.ok) {
       const j = await rr.json().catch(() => ({}));
@@ -3507,6 +3538,7 @@ async function bildDrehen(div, pageN, winkel) {   // Kontextmenü: 90°-Schritte
   fd.append('xrefs', JSON.stringify(div._xrefs || [div._xref]));   // Ebenen drehen gemeinsam
   fd.append('alt', JSON.stringify(div._pdfRect.map(v => Math.round(v * 10) / 10)));
   fd.append('winkel', winkel);
+  fd.append('mitte', JSON.stringify(bildDrehMitte(div)));   // um den SICHTBAREN Rahmen drehen (v0.21.19)
   const r = await fetch(`/api/image/rotate/${cur.id}`, {method: 'POST', body: fd});
   if (r.ok) {
     const j = await r.json().catch(() => ({}));

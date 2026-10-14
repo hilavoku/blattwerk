@@ -2,6 +2,19 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
 
+## v0.21.19 — Auswahlrahmen um die sichtbare Kontur (Tintenrahmen)
+- Verbesserung (Nutzer-Wunsch): Der Rahmen eines Bildes liegt jetzt eng um
+  die **sichtbare Kontur**, nicht mehr um die ganze Bildfläche. Bei
+  Briefkopf-Logos aus Masken-Ebenen ist die Fläche oft viel größer als die
+  Tinte (beim ING-Briefkopf bedecken „ING"-Zug und Löwe je nur 15–20 % ihrer
+  Ebene) — jetzt zeigt der Rahmen genau den Löwen bzw. die Buchstaben, und
+  auch Klick und Griffe liegen auf der Kontur statt auf unsichtbarer Fläche.
+- Innerlich rechnet FederPDF weiterhin mit der vollen Platzierung (Ziehen,
+  Skalieren, Drehen, Rückgängig unverändert exakt); nur Anzeige und Klick-
+  ziel sind enger. Drehen dreht um die Mitte des sichtbaren Rahmens, damit
+  Vorschau und Ergebnis zusammenpassen. Voll deckende Bilder (Fotos ohne
+  Transparenz) bekommen wie bisher den vollen Rahmen.
+
 ## v0.21.18 — Übereinanderliegende Bildebenen getrennt greifbar (wie PDFgear)
 - Verbesserung (Nutzer-Wunsch): Besteht ein Logo aus **übereinander
   gelegten Bildebenen** (wie der ING-Briefkopf aus „ING"-Schriftzug und

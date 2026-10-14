@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.18"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.19"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -491,10 +491,68 @@ def _bild_geister(pg, erwartet: int):
     return geister
 
 
+def _tinten_box(d, inf):
+    """Enge Box der GEMALTEN Pixel einer (achsenparallelen) Bildplatzierung,
+    Seiten-Koordinaten in pt - oder None (= volle Platzierungsbox). Grundlage
+    der Tintenrahmen (v0.21.19): Briefkopf-Masken sind Vollflaechen, deren
+    sichtbare Tinte nur 15-20 % bedeckt ('ING'-Zug links, Loewe rechts) - der
+    Rahmen soll die Kontur zeigen, nicht die Folie. Gemessen wird die Maske
+    (ImageMask) bzw. die SMask (Alpha); ohne Transparenz ist alles Tinte.
+    Gedrehte Platzierungen liefern None (Bildachsen != Seitenachsen, die
+    lineare Rueckrechnung aufs Huellenrechteck waere falsch)."""
+    xref = inf.get("xref", 0)
+    tr = inf.get("transform", (1, 0, 0, 1, 0, 0))
+    if xref <= 0 or abs(tr[1]) > 0.001 or abs(tr[2]) > 0.001:
+        return None
+    try:
+        quelle = xref
+        obj = d.xref_object(xref, compressed=True)
+        if "/ImageMask" not in obj.replace(" ", ""):
+            smask = d.extract_image(xref).get("smask", 0)
+            if not smask:
+                return None                    # voll deckendes Bild: Tinte == Platzierung
+            quelle = smask
+        pix = pymupdf.Pixmap(d, quelle)
+        from PIL import Image
+        # Graustufen-Kanal zeilenweise ziehen - Pixmap-STRIDE kann Zeilen
+        # auffuellen (CCITT-Masken!), frombytes wuerde dann still werfen
+        w, h, n, stride = pix.width, pix.height, pix.n, pix.stride
+        s = pix.samples
+        if n == 1 and stride == w:
+            kanal = s
+        else:
+            kanal = bytearray(w * h)
+            for y in range(h):
+                base = y * stride
+                if n == 1:
+                    kanal[y * w:(y + 1) * w] = s[base:base + w]
+                else:
+                    for x in range(w):
+                        kanal[y * w + x] = s[base + x * n]
+        im = Image.frombytes("L", (w, h), bytes(kanal))
+        bb = im.getbbox()
+        if not bb:
+            return None
+        box = inf["bbox"]
+        sx = (box[2] - box[0]) / pix.width
+        sy = (box[3] - box[1]) / pix.height
+        ix0 = box[0] + bb[0] * sx
+        iy0 = box[1] + bb[1] * sy
+        ix1 = box[0] + bb[2] * sx
+        iy1 = box[1] + bb[3] * sy
+        if (ix1 - ix0) * (iy1 - iy0) > 0.95 * (box[2] - box[0]) * (box[3] - box[1]):
+            return None                        # fast volle Flaeche: keine Verengung wert
+        return [ix0, iy0, ix1, iy1]
+    except Exception:
+        return None
+
+
 @app.get("/api/imageinfo/{did}/{page}")
 def image_info(did: str, page: int):
-    """Eingebettete Bilder der Seite mit Platzierungsrechteck und xref.
-    Ganzseitenbilder (Scans) und Inline-Bilder werden nicht gemeldet."""
+    """Eingebettete Bilder der Seite mit Platzierungsrechteck und xref; 'ink'
+    ist die enge Tinten-Box (Anzeige/Klick in der UI - die Operationen rechnen
+    weiter mit der Platzierungsbox). Ganzseitenbilder (Scans) und Inline-
+    Bilder werden nicht gemeldet."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
@@ -511,7 +569,11 @@ def image_info(did: str, page: int):
             continue                                   # Ganzseitenbild (Scan): nicht verschiebbar
         if nr in geister:
             continue                                   # unsichtbarer Bild-Geist (weiss ueberdeckt)
-        bilder.append({"bbox": [round(v, 1) for v in b], "xref": inf["xref"]})
+        eintrag = {"bbox": [round(v, 1) for v in b], "xref": inf["xref"]}
+        ink = _tinten_box(d, inf)
+        if ink:
+            eintrag["ink"] = [round(v, 1) for v in ink]
+        bilder.append(eintrag)
     return {"page_w": pw, "bilder": bilder}
 
 
@@ -959,7 +1021,8 @@ def image_file(did: str, page: int, xref: int):
 
 @app.post("/api/image/rotate/{did}")
 async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
-                       xrefs: str = Form(""), alt: str = Form(...), winkel: float = Form(...)):
+                       xrefs: str = Form(""), alt: str = Form(...), winkel: float = Form(...),
+                       mitte: str = Form("")):
     """Eingebettetes Bild um DELTA-Grad weiterdrehen (Uhrzeigersinn positiv).
     Eingebettete Bilder tragen keine Rotations-Metadaten (anders als Signatur-
     NM-Marker) - daher wird immer der JETZTige Bildzustand um den Delta-Winkel
@@ -981,6 +1044,12 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
     rot = float(winkel) % 360.0
     hw, hh = _bbox_gedreht(alt_r.width, alt_r.height, rot)
     cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
+    try:                                    # optionale Drehmitte (v0.21.19: Tintenrahmen-Mitte,
+        if mitte:                           # damit Vorschau und Commit um denselben Punkt drehen)
+            m = json.loads(mitte)
+            cx, cy = float(m[0]), float(m[1])
+    except Exception:
+        pass
     neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
     pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
     # Chirurgie-Pfad (v0.21.15): Drehen als cm-Matrix auf dem ORIGINAL-Bitmap

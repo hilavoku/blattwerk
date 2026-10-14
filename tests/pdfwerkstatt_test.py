@@ -1,5 +1,5 @@
 # FederPDF-Testsuite: startet den gebauten Server und prueft die API
-# end-to-end (118 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
+# end-to-end (119 Checks: Signaturen, Text, Formen, Markieren, OCR, KI,
 # Bilder, Undo, Speichern). Sie erzeugt eigene Wegwerf-Signaturen und
 # Fixtures — Nutzerdaten werden nie angefasst.
 #
@@ -647,6 +647,8 @@ try:
     ii = requests.get(f"{BASE}/api/imageinfo/{fid}/0", timeout=10).json()
     check("Farb-Masken-Stapel erkannt",
           len(ii["bilder"]) == 2 and ii["bilder"][0]["bbox"] == ii["bilder"][1]["bbox"], str(ii))
+    check("Tintenrahmen: obere Haelfte eng gemessen (v0.21.19)",
+          ii["bilder"][0].get("ink") == [80.0, 120.0, 280.0, 190.0], str(ii["bilder"][0]))
     fa, fb_ = ii["bilder"][0]["xref"], ii["bilder"][1]["xref"]
     r = requests.post(f"{BASE}/api/image/move/{fid}", data={
         "page": "0", "xref": str(fa), "xrefs": json.dumps([fa, fb_]),
