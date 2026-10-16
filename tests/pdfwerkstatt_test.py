@@ -850,12 +850,15 @@ try:
     # den Abstand Tintenmitte<->Platzierungsmitte, verkettete Drehungen
     # summierten den Versatz (90° = 50pt, +30° = 73pt im schlimmsten Fall).
     def _tinten_dreh_pdf():
-        def roh_xobj(daten):
-            return (b"<< /Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true "
-                    b"/BitsPerComponent 1 /Length " + str(len(daten)).encode() + b" >>\nstream\n"
-                    + daten + b"\nendstream")
+        def roh_xobj(daten, w=8, h=4):
+            return (b"<< /Type /XObject /Subtype /Image /Width " + str(w).encode()
+                    + b" /Height " + str(h).encode()
+                    + b" /ImageMask true /BitsPerComponent 1 /Length " + str(len(daten)).encode()
+                    + b" >>\nstream\n" + daten + b"\nendstream")
         # nur die LINKEN 3 Spalten malen (Bits 7..5 = 0): Tinte 60x100 pt
-        # innerhalb der 160x100-Vollflaeche -> Tintenmitte 50pt links der Mitte
+        # innerhalb der 160x100-Vollflaeche -> Tintenmitte 50pt links der Mitte.
+        # Bitmap bewusst NICHT quadratisch (8x4): die ?rot=-Huelle der zweiten
+        # Drehung muss das Seitenverhaeltnis tauschen (v0.21.23-Diskriminator)
         inhalt = b"q 1 0 0 rg 160 0 0 100 200 542 cm /MA0 Do Q\n"
         objekte = [
             b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -863,7 +866,7 @@ try:
             b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
             b"/Resources << /XObject << /MA0 5 0 R >> >> /Contents 4 0 R >>",
             b"<< /Length " + str(len(inhalt)).encode() + b" >>\nstream\n" + inhalt + b"\nendstream",
-            roh_xobj(bytes([0x1F] * 8)),
+            roh_xobj(bytes([0x1F] * 4)),
         ]
         out = io.BytesIO()
         out.write(b"%PDF-1.4\n%pw\n")
@@ -921,6 +924,33 @@ try:
     check("Masken-Vorschau-PNG: gemalt in Paintfarbe rot, frei transparent",
           r.status_code == 200 and px_m[0] > 200 and px_m[1] < 60 and px_m[2] < 60
           and px_f[3] < 20, f"HTTP {r.status_code}/{px_m}/{px_f}")
+
+    # ---------- v0.21.23: zweite Drehung verzerrt nicht (Nutzer-Fund Loewe) ----------
+    # Bei schon gedrehten Objekten ist die imageinfo-bbox die HUELLE (groesser
+    # als das Bild) - das Vorschau-Bitmap auf Huellenmass strecken verzerrt.
+    # Jetzt: /api/imageinfo meldet 'winkel' (Gesamtwinkel), /api/image/file
+    # nimmt ?rot= und liefert das VORGEDREHTE Bitmap auf Huellen-Seitenver-
+    # haeltnis (wie die Signatur-Vorschau).
+    ii = requests.get(f"{BASE}/api/imageinfo/{qid}/0", timeout=10).json()
+    check("imageinfo: Gesamtwinkel 0 vor der Drehung",
+          abs(ii["bilder"][0].get("winkel", 999)) < 0.5, str(ii["bilder"][0]))
+    r = requests.post(f"{BASE}/api/image/rotate/{qid}", data={
+        "page": "0", "xref": str(qx), "alt": json.dumps(ii["bilder"][0]["bbox"]),
+        "winkel": "30"}, timeout=10).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{qid}/0", timeout=10).json()
+    check("imageinfo: Gesamtwinkel 30 nach der Drehung",
+          r.get("ok") and abs(ii["bilder"][0].get("winkel", -1) - 30) < 0.5,
+          str(ii["bilder"][0]))
+    r = requests.get(f"{BASE}/api/image/file/{qid}/0/{qx}?rot=90", timeout=10)
+    mv = _PILImage.open(io.BytesIO(r.content)).convert("RGBA")
+    p_o, p_u = mv.getpixel((1, 1)), mv.getpixel((1, 6))
+    check("Vorschau-Bitmap ?rot=90: 8x4-Canvas wird 4x8-Huelle, oben rot, unten frei",
+          mv.size == (4, 8) and p_o[0] > 200 and p_o[3] > 200 and p_u[3] < 20,
+          f"{mv.size}/{p_o}/{p_u}")
+    u = requests.post(f"{BASE}/api/undo/{qid}", timeout=10).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{qid}/0", timeout=10).json()
+    check("Dreh-Undo: Winkel zurueck auf 0",
+          u.get("undone") and abs(ii["bilder"][0].get("winkel", -1)) < 0.5, str(ii["bilder"][0]))
 
 
     # ---------- v0.21.11: Textfarbe (Nutzer-Fund: gruener Text wurde schwarz) ----------

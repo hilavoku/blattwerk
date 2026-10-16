@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.22"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.23"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -578,6 +578,18 @@ def image_info(did: str, page: int):
         if nr in geister:
             continue                                   # unsichtbarer Bild-Geist (weiss ueberdeckt)
         eintrag = {"bbox": [round(v, 1) for v in b], "xref": inf["xref"]}
+        try:
+            # Gesamtwinkel der Platzierung (x-Achsen-Spalte der top-down-
+            # transform, Uhrzeigersinn positiv): die Dreh-VORSCHAU braucht ihn
+            # als ?rot= fuer das vorgedrehte Bitmap (v0.21.23) - die Huelle
+            # eines gedrehten Objekts ist kein Bildmass, das Bitmap auf
+            # Huellenmass zu strecken verzerrt (Nutzer-Fund: "zweite Drehung
+            # immer verzerrter").
+            from math import atan2, degrees
+            a_t, b_t = inf["transform"][:2]
+            eintrag["winkel"] = round(degrees(atan2(b_t, a_t)), 1)
+        except Exception:
+            pass
         ink = _tinten_box(d, inf)
         if ink:
             eintrag["ink"] = [round(v, 1) for v in ink]
@@ -1044,11 +1056,29 @@ def _masken_png(d, xref: int, farbe):
     return buf.getvalue()
 
 
+def _png_drehen(png: bytes, grad: float) -> bytes:
+    """RGBA-PNG als vorgedrehte Vorschau: Uhrzeigersinn positiv, Canvas auf
+    die gedrehte Huelle erweitert (expand) - das Seitenverhaeltnis der Huelle
+    passt dann zur Platzierungs-Huelle, die Vorschau kann es unverzerrt
+    auf _pdfRect-Mass malen (v0.21.23, Muster der Signatur-Vorschau ?rot=)."""
+    from PIL import Image
+    with Image.open(io.BytesIO(png)) as im:
+        im.load()
+        gedreht = im.convert("RGBA").rotate(-grad, expand=True, resample=Image.BICUBIC)
+    buf = io.BytesIO()
+    gedreht.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 @app.get("/api/image/file/{did}/{page}/{xref}")
-def image_file(did: str, page: int, xref: int):
+def image_file(did: str, page: int, xref: int, rot: float = 0):
     """Bildbytes eines eingebetteten Bildes (fuer die Live-Vorschau beim
     Skalieren/Drehen im Client). ImageMask-xrefs werden in ihrer PLACEMENT-
-    Paint-Farbe geliefert (v0.21.22) - sonst waere die Dreh-Vorschau s/w."""
+    Paint-Farbe geliefert (v0.21.22) - sonst waere die Dreh-Vorschau s/w.
+    rot (v0.21.23) dreht das Vorschau-Bitmap vor (Canvas = gedrehte Huelle):
+    der Client schickt den Gesamtwinkel aus /api/imageinfo, damit die zweite
+    Drehung eines schon gedrehten Objekts die Tinte nicht auf Huellenmass
+    streckt."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
@@ -1066,6 +1096,8 @@ def image_file(did: str, page: int, xref: int):
             png = _masken_png(d, xref, farbe)
         else:
             png = _bild_bytes_vom_xref(d, xref)
+        if rot:
+            png = _png_drehen(png, float(rot) % 360.0)
     except Exception:
         raise HTTPException(404, "Bild konnte nicht extrahiert werden")
     return Response(content=png, media_type="image/png")

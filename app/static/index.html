@@ -3368,6 +3368,7 @@ async function addImageInfos(img) {
     d._pdfRect = inf.bbox.slice();          // Platzierung: WAHRHEIT fuer Server/Chirurgie
     d._imgbox = inf.bbox.slice();
     d._xref = inf.xref;
+    d._winkel = inf.winkel || 0;             // Gesamtwinkel (0.21.23): Vorschau-Bitmap ?rot=
     // Tintenrahmen (v0.21.19): Rahmen/Klick/Griffe um die SICHTBARE Kontur,
     // nicht um die Vollflaechen-Platzierung. Offset+Masse relativ zur Platzierung;
     // alle Operationen (Ziehen/Skalieren/Drehen/Undo) rechnen intern weiter mit
@@ -3488,17 +3489,22 @@ function startBildRotate(ev, div, pageN, k) {
   // Live-Vorschau: Bild in den Kasten laden und per CSS mitdrehen. Das Raster
   // unten zeigt bis zum Commit noch die alte Platzierung - der weisse
   // Auswahlton (.imgsel) ueberdeckt sie sichtbar.
-  div.style.backgroundImage = `url(/api/image/file/${cur.id}/${pageN}/${div._xref})`;
   // v0.21.22: Der Rahmen ist die TINTE, das Bitmap die VOLLE Platzierung -
   // background-size 100% 100% wuerde die Tinte auf Rahmengroesse aufblaehen
   // (Nutzer-Fund: "Rahmen fuellt sich beim Drehen schwarz"). Der Hintergrund
   // muss in Platzierungsmassstab, um den Tinten-Offset versetzt, gemalt sein.
+  // v0.21.23: Bei schon GEDREHTEN Objekten ist _pdfRect die HUELLE (groesser
+  // als das Bild) - das Bitmap auf Huellenmass strecken wuerde verzERRen
+  // (Nutzer-Fund: "zweite Drehung immer verzerrter"). Der Server liefert das
+  // Bitmap deshalb VORGEDREHT (?rot=Gesamtwinkel, Canvas = gedrehte Huelle)
+  // - das laesst sich verzugfrei auf _pdfRect-Mass malen, das div dreht das
+  // Delta obendrauf.
+  const th = div._winkel || 0;
+  div.style.backgroundImage = `url(/api/image/file/${cur.id}/${pageN}/${div._xref}?rot=${th})`;
   const t = div._ink;
-  if (t) {
-    const r0 = div._pdfRect;
-    div.style.backgroundSize = `${(r0[2] - r0[0]) * k}px ${(r0[3] - r0[1]) * k}px`;
-    div.style.backgroundPosition = `${-t.ox * k}px ${-t.oy * k}px`;
-  }
+  const r0 = div._pdfRect;
+  div.style.backgroundSize = `${(r0[2] - r0[0]) * k}px ${(r0[3] - r0[1]) * k}px`;
+  div.style.backgroundPosition = t ? `${-t.ox * k}px ${-t.oy * k}px` : '0px 0px';
   const r = div.getBoundingClientRect();
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
   const winkelStart = Math.atan2(-(ev.clientY - cy), ev.clientX - cx);

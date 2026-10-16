@@ -2,6 +2,18 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-16.
 
+## v0.21.23 — Zweite Drehung verzerrt die Vorschau nicht mehr
+- Fehlerbehobung (Nutzer-Fund, ING-Löwe): Die erste Drehung sah korrekt aus,
+  jede weitere verzerrte die Darstellung zunehmend. Ursache: Bei einem schon
+  gedrehten Objekt ist der Platzierungsrahmen die **Hüllbox** (größer als das
+  Bild selbst) — die Vorschau streckte das Bitmap auf Hüllenmaß und zerrte
+  damit die Kontur auseinander. Jetzt liefert `/api/imageinfo` den
+  **Gesamtwinkel** des Objekts mit, und `/api/image/file?rot=` (wie bei der
+  Signatur-Vorschau) das **vorgedrehte** Bitmap auf Hüllen-Seitenverhältnis —
+  die Vorschau malt es verzugfrei auf Rahmenmaß und dreht nur das Delta
+  obendrauf. Betrifft nur die Live-Vorschau; das gespeicherte Ergebnis blieb
+  unberührt verlustfrei.
+
 ## v0.21.22 — Dreh-Vorschau nicht mehr schwarz
 - Fehlerbehobung (Nutzer-Fund): Während des Drehvorgangs füllte sich der
   Rahmen des Objekts schwarz. Zwei Ursachen: (1) Die Live-Vorschau streckte
