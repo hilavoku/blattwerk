@@ -2,6 +2,21 @@
 
 Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-16.
 
+## v0.21.22 — Dreh-Vorschau nicht mehr schwarz
+- Fehlerbehobung (Nutzer-Fund): Während des Drehvorgangs füllte sich der
+  Rahmen des Objekts schwarz. Zwei Ursachen: (1) Die Live-Vorschau streckte
+  das komplette Bitmap (inklusive transparenter Ränder) in den engeren
+  **Tintenrahmen** — die sichtbare Tinte blähte sich auf Rahmengröße auf.
+  Jetzt wird das Bitmap in **Platzierungsmaßstab, um den Tinten-Offset
+  versetzt**, als Hintergrund gemalt — die Tinte steht während des Zugs an
+  Ort und Stelle in ihrer wahren Größe. (2) Masken-Bitmaps (Briefkopf-Logos)
+  haben keine eigene Farbe, sondern werden in der Füllfarbe der Platzierung
+  gemalt — das rohe 1-Bit-Bitmap erschien schwarz-weiß. `/api/image/file`
+  liefert ImageMask-Objekte jetzt als PNG in genau dieser **Paint-Farbe**
+  (unbemalte Pixel transparent).
+- Betrifft nur die Vorschau beim Ziehen des Drehgriffs; das gespeicherte
+  Ergebnis war und bleibt unverändert verlustfrei (cm-Matrix).
+
 ## v0.21.21 — Drehen verschiebt das Objekt nicht mehr zusätzlich
 - Fehlerbehobung (Nutzer-Fund): Im Bearbeitungsmodus sprang ein Bild beim
   **Drehen** zusätzlich an eine andere Stelle. Ursache: Der Server verankerte

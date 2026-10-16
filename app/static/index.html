@@ -3489,6 +3489,16 @@ function startBildRotate(ev, div, pageN, k) {
   // unten zeigt bis zum Commit noch die alte Platzierung - der weisse
   // Auswahlton (.imgsel) ueberdeckt sie sichtbar.
   div.style.backgroundImage = `url(/api/image/file/${cur.id}/${pageN}/${div._xref})`;
+  // v0.21.22: Der Rahmen ist die TINTE, das Bitmap die VOLLE Platzierung -
+  // background-size 100% 100% wuerde die Tinte auf Rahmengroesse aufblaehen
+  // (Nutzer-Fund: "Rahmen fuellt sich beim Drehen schwarz"). Der Hintergrund
+  // muss in Platzierungsmassstab, um den Tinten-Offset versetzt, gemalt sein.
+  const t = div._ink;
+  if (t) {
+    const r0 = div._pdfRect;
+    div.style.backgroundSize = `${(r0[2] - r0[0]) * k}px ${(r0[3] - r0[1]) * k}px`;
+    div.style.backgroundPosition = `${-t.ox * k}px ${-t.oy * k}px`;
+  }
   const r = div.getBoundingClientRect();
   const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
   const winkelStart = Math.atan2(-(ev.clientY - cy), ev.clientX - cx);
@@ -3506,6 +3516,7 @@ function startBildRotate(ev, div, pageN, k) {
     document.removeEventListener('mouseup', hoch);
     if (Math.abs(deltaGesamt) < 0.05) {   // kaum gedreht: ruhig zuruecksetzen
       div.style.transform = ''; div.style.backgroundImage = '';
+      div.style.backgroundSize = ''; div.style.backgroundPosition = '';
       return;
     }
     // transform bleibt STEHEN bis der neue Zustand da ist (kein Rueckflack,
@@ -3524,6 +3535,7 @@ function startBildRotate(ev, div, pageN, k) {
       stat(E('Bild um ' + ziel + '\u00B0 gedreht – Strg+Z dreht zurück.', 'Image rotated by ' + ziel + '\u00B0 – Ctrl+Z rotates back.'), true);
     } else {
       div.style.transform = ''; div.style.backgroundImage = '';
+      div.style.backgroundSize = ''; div.style.backgroundPosition = '';
       const j = await rr.json().catch(() => ({}));
       stat(typeof j.detail === 'string' ? j.detail : E('Drehen fehlgeschlagen', 'Rotation failed'));
     }

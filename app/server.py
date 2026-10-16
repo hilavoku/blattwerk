@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.21"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.22"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -1011,17 +1011,61 @@ def _bild_bytes_vom_xref(d, xref: int) -> bytes:
         return pix.tobytes("png")
 
 
+def _masken_png(d, xref: int, farbe):
+    """ImageMask als RGBA-PNG in ihrer Paint-Farbe (unbemalt transparent).
+    Masken haben KEINE eigene Farbe - sie werden in der Fuellfarbe der
+    Platzierung gemalt. Das rohe Bitmap (1-bit, s/w) in die Vorschau zu
+    strecken zeigt einen schwarzen/weissen Kasten (Nutzer-Fund v0.21.22:
+    'Rahmen fuellt sich beim Drehen schwarz'). farbe = rgb 0-1 (aus
+    _farbe_zu_rgb) oder None -> Schwarz. Konvention wie _tinten_box:
+    Pixmap 255 = gemalt; Kanal zeilenweise (STRIDE padet, CCITT!)."""
+    from PIL import Image
+    pix = pymupdf.Pixmap(d, xref)
+    w, h, n, stride = pix.width, pix.height, pix.n, pix.stride
+    s = pix.samples
+    if n == 1 and stride == w:
+        kanal = s
+    else:
+        kanal = bytearray(w * h)
+        for y in range(h):
+            base = y * stride
+            if n == 1:
+                kanal[y * w:(y + 1) * w] = s[base:base + w]
+            else:
+                for x in range(w):
+                    kanal[y * w + x] = s[base + x * n]
+    grau = Image.frombytes("L", (w, h), bytes(kanal))
+    rgb = farbe if farbe else (0.0, 0.0, 0.0)
+    flaeche = Image.new("RGB", (w, h), tuple(int(round(c * 255)) for c in rgb))
+    aus = flaeche.convert("RGBA")
+    aus.putalpha(grau.point(lambda v: 255 if v > 127 else 0).convert("L"))
+    buf = io.BytesIO()
+    aus.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 @app.get("/api/image/file/{did}/{page}/{xref}")
 def image_file(did: str, page: int, xref: int):
     """Bildbytes eines eingebetteten Bildes (fuer die Live-Vorschau beim
-    Skalieren/Drehen im Client)."""
+    Skalieren/Drehen im Client). ImageMask-xrefs werden in ihrer PLACEMENT-
+    Paint-Farbe geliefert (v0.21.22) - sonst waere die Dreh-Vorschau s/w."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
     if xref <= 0:
         raise HTTPException(400, "Dieses Bild ist nicht abrufbar")
     try:
-        png = _bild_bytes_vom_xref(d, xref)
+        if "/ImageMask" in d.xref_object(xref, compressed=True).replace(" ", ""):
+            pg = d[page]
+            farbe = None
+            for inf in pg.get_image_info(xrefs=True):
+                if inf.get("xref") == xref:
+                    farbe = _farbe_zu_rgb(_platzierung_farben(d, pg, xref,
+                                                              pymupdf.Rect(inf["bbox"])))
+                    break
+            png = _masken_png(d, xref, farbe)
+        else:
+            png = _bild_bytes_vom_xref(d, xref)
     except Exception:
         raise HTTPException(404, "Bild konnte nicht extrahiert werden")
     return Response(content=png, media_type="image/png")

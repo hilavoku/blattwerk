@@ -909,6 +909,19 @@ try:
           u.get("undone") and ii["bilder"][0]["bbox"] == [200.0, 200.0, 360.0, 300.0]
           and ii["bilder"][0]["ink"] == [200.0, 200.0, 260.0, 300.0], str(ii["bilder"]))
 
+    # ---------- v0.21.22: Dreh-Vorschau schwarz (Nutzer-Fund) ----------
+    # /api/image/file liefert ImageMask-xrefs als RGBA-PNG in der PLACEMENT-
+    # Paintfarbe (hier: 1 0 0 rg = rot), unbemalt transparent - vorher kam das
+    # rohe 1-bit-Bitmap (s/w, opaque) und die Vorschau streckte es in den
+    # Tintenrahmen ("Rahmen fuellt sich schwarz beim Drehen").
+    r = requests.get(f"{BASE}/api/image/file/{qid}/0/{qx}", timeout=10)
+    mv = _PILImage.open(io.BytesIO(r.content)).convert("RGBA")
+    px_m = mv.getpixel((1, 1))    # linke 3 Spalten = gemalt
+    px_f = mv.getpixel((6, 1))    # rechte Spalten = frei
+    check("Masken-Vorschau-PNG: gemalt in Paintfarbe rot, frei transparent",
+          r.status_code == 200 and px_m[0] > 200 and px_m[1] < 60 and px_m[2] < 60
+          and px_f[3] < 20, f"HTTP {r.status_code}/{px_m}/{px_f}")
+
 
     # ---------- v0.21.11: Textfarbe (Nutzer-Fund: gruener Text wurde schwarz) ----------
     # Zwei Fallen: Das Farbfeld des PDFW-TXT-Markers wurde hinter spacing/leading
