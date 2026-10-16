@@ -843,6 +843,73 @@ try:
           f"{ii['bilder']}/{_dunkel(tid, 72, 80, 220, 100)}")
 
 
+    # ---------- v0.21.21: Drehen um die Tintenmitte verschiebt nicht (Nutzer-Fund) ----------
+    # 'mitte' (die UI schickt die Tintenrahmen-Mitte) muss ein FIXPUNKT der
+    # Drehung sein. Vorher wurde die neue Huelle um die Mitte ZENTRIERT - bei
+    # unmittiger Tinte (Briefkopf-Masken: ING-Zug/Loewe) sprang das Objekt um
+    # den Abstand Tintenmitte<->Platzierungsmitte, verkettete Drehungen
+    # summierten den Versatz (90° = 50pt, +30° = 73pt im schlimmsten Fall).
+    def _tinten_dreh_pdf():
+        def roh_xobj(daten):
+            return (b"<< /Type /XObject /Subtype /Image /Width 8 /Height 8 /ImageMask true "
+                    b"/BitsPerComponent 1 /Length " + str(len(daten)).encode() + b" >>\nstream\n"
+                    + daten + b"\nendstream")
+        # nur die LINKEN 3 Spalten malen (Bits 7..5 = 0): Tinte 60x100 pt
+        # innerhalb der 160x100-Vollflaeche -> Tintenmitte 50pt links der Mitte
+        inhalt = b"q 1 0 0 rg 160 0 0 100 200 542 cm /MA0 Do Q\n"
+        objekte = [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+            b"/Resources << /XObject << /MA0 5 0 R >> >> /Contents 4 0 R >>",
+            b"<< /Length " + str(len(inhalt)).encode() + b" >>\nstream\n" + inhalt + b"\nendstream",
+            roh_xobj(bytes([0x1F] * 8)),
+        ]
+        out = io.BytesIO()
+        out.write(b"%PDF-1.4\n%pw\n")
+        offs = []
+        for i, o in enumerate(objekte, start=1):
+            offs.append(out.tell())
+            out.write(f"{i} 0 obj\n".encode() + o + b"\nendobj\n")
+        xp = out.tell()
+        out.write(f"xref\n0 {len(objekte)+1}\n".encode() + b"0000000000 65535 f \n")
+        for off in offs:
+            out.write(f"{off:010d} 00000 n \n".encode())
+        out.write(f"trailer\n<< /Size {len(objekte)+1} /Root 1 0 R >>\nstartxref\n{xp}\n%%EOF".encode())
+        return out.getvalue()
+
+    r = requests.post(f"{BASE}/api/upload",
+                      files={"file": ("pw_tinten_dreh.pdf", _tinten_dreh_pdf(), "application/pdf")},
+                      timeout=15).json()
+    check("Tinten-Dreh-PDF hochgeladen (Tinte unmittig)", r.get("id"), str(r))
+    qid = r["id"]
+    ii = requests.get(f"{BASE}/api/imageinfo/{qid}/0", timeout=10).json()
+    qb = ii["bilder"][0]
+    check("Tinten-Dreh-Fixtur: Flaeche 160x100, Tinte 60x100 links",
+          qb["bbox"] == [200.0, 200.0, 360.0, 300.0] and qb["ink"] == [200.0, 200.0, 260.0, 300.0],
+          str(qb))
+    qx = qb["xref"]
+    for winkel, name in (("90", "90 Grad"), ("30", "verkettet +30 Grad")):
+        k = qb["ink"]
+        mitte = json.dumps([(k[0] + k[2]) / 2, (k[1] + k[3]) / 2])   # Tintenmitte wie bildDrehMitte()
+        r = requests.post(f"{BASE}/api/image/rotate/{qid}", data={
+            "page": "0", "xref": str(qx), "alt": json.dumps(qb["bbox"]),
+            "winkel": winkel, "mitte": mitte}, timeout=10).json()
+        ii = requests.get(f"{BASE}/api/imageinfo/{qid}/0", timeout=10).json()
+        qb = ii["bilder"][0]
+        k = qb["ink"]
+        abstand = max(abs((k[0] + k[2]) / 2 - json.loads(mitte)[0]),
+                      abs((k[1] + k[3]) / 2 - json.loads(mitte)[1]))
+        check(f"Tinten-Drehung {name}: Tintenmitte bleibt Fixpunkt",
+              r.get("ok") and abstand <= 1.0, f"{r}/{qb} Abstand={abstand:.2f}pt")
+    u = requests.post(f"{BASE}/api/undo/{qid}", timeout=10).json()
+    u = requests.post(f"{BASE}/api/undo/{qid}", timeout=10).json()
+    ii = requests.get(f"{BASE}/api/imageinfo/{qid}/0", timeout=10).json()
+    check("Tinten-Drehung: doppeltes Undo zurueck auf die Ausgangslage",
+          u.get("undone") and ii["bilder"][0]["bbox"] == [200.0, 200.0, 360.0, 300.0]
+          and ii["bilder"][0]["ink"] == [200.0, 200.0, 260.0, 300.0], str(ii["bilder"]))
+
+
     # ---------- v0.21.11: Textfarbe (Nutzer-Fund: gruener Text wurde schwarz) ----------
     # Zwei Fallen: Das Farbfeld des PDFW-TXT-Markers wurde hinter spacing/leading
     # nicht mehr geparst (seit v0.14.4), und der AP-Builder teilte die 0-1-Farbe

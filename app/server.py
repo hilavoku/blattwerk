@@ -34,7 +34,7 @@ os.makedirs(SIGN_DIR, exist_ok=True)
 
 app = FastAPI(title="FederPDF")
 
-APP_VERSION = "0.21.20"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
+APP_VERSION = "0.21.21"   # wird im Über-Dialog (Klick auf Logo/FederPDF) angezeigt
 
 
 @app.middleware("http")
@@ -1033,10 +1033,12 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
                        mitte: str = Form("")):
     """Eingebettetes Bild um DELTA-Grad weiterdrehen (Uhrzeigersinn positiv).
     Eingebettete Bilder tragen keine Rotations-Metadaten (anders als Signatur-
-    NM-Marker) - daher wird immer der JETZTige Bildzustand um den Delta-Winkel
-    vorgedreht (expand), die alte Stelle weiss ueberdeckt und die gedrehte
-    Huelle um die alte Kastenmitte gesetzt. xrefs (JSON-Liste) dreht gestapelte
-    Ebenen GEMEINSAM (gleiche Huelle um dieselbe Mitte -> sie bleiben ausgerichtet)."""
+    NM-Marker) - daher wird das Delta mit der JETZTigen Platzierung komponiert
+    (v0.21.17). 'mitte' (PDF-Punkt, die UI schickt die Tintenrahmen-Mitte) ist
+    der FIXPUNKT der Drehung - was dort liegt, bleibt liegen (v0.21.21; vorher
+    wurde die Huelle um die Mitte ZENTRIERT, was bei unmittiger Tinte das
+    Objekt verschob). Ohne 'mitte' dreht das Bild um seine Huellenmitte.
+    xrefs (JSON-Liste) dreht gestapelte Ebenen GEMEINSAM."""
     d = _doc(did)
     if page < 0 or page >= d.page_count:
         raise HTTPException(404, "Seite existiert nicht")
@@ -1050,6 +1052,9 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
         raise HTTPException(400, "Dieses Bild ist nicht drehbar")
     alt_r = pymupdf.Rect(*[float(v) for v in json.loads(alt)])
     rot = float(winkel) % 360.0
+    from math import sin, cos, radians
+    rad = radians(rot)
+    rc, rs_ = cos(rad), sin(rad)
     hw, hh = _bbox_gedreht(alt_r.width, alt_r.height, rot)
     cx, cy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
     try:                                    # optionale Drehmitte (v0.21.19: Tintenrahmen-Mitte,
@@ -1058,34 +1063,42 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
             cx, cy = float(m[0]), float(m[1])
     except Exception:
         pass
-    neu_r = pymupdf.Rect(cx - hw / 2, cy - hh / 2, cx + hw / 2, cy + hh / 2)
     pg = d[page]   # Seitenreferenz einmal ziehen und wiederverwenden
     # Chirurgie-Pfad (v0.21.15): Drehen als cm-Matrix auf dem ORIGINAL-Bitmap
     # (keine Rasterung, keine Qualitaetsverluste, kein Deckel, kein Geist).
     # v0.21.17: Das Delta wird mit der BESTEHENDEN Platzierung KOMPONIERT -
     # die Huellbox eines schon gedrehten Objekts ist kein Bildmass! (Nutzer-
-    # Fund: erneutes Drehen verzerrte.) Bildmasse/Winkel leben in der Matrix;
-    # die neue Huelle wird aus den Ecken der komponierten Matrix gelesen.
+    # Fund: erneutes Drehen verzerrte.) Bildmasse/Winkel leben in der Matrix.
+    # v0.21.21: Drehung um 'mitte' ist ein FIXPUNKT (t = C - R*C nachschalten),
+    # NICHT eine um C zentrierte Huelle - das ist nur bei mittiger Tinte
+    # dasselbe, sonst verschiebt das Drehen das Objekt um den Abstand
+    # Tintenmitte<->Platzierungsmitte (Nutzer-Fund: "Drehen verschiebt
+    # zusaetzlich"; die CSS-Vorschau dreht um die Rahmenmitte des div).
+    r_mat = (rc, -rs_, rs_, rc, 0.0, 0.0)
+
+    def _fixpunkt_dreh(m):
+        """R(delta) NACH der Platzierung komponieren, dann um (cx, cy) als
+        Fixpunkt verschieben. Achtung Koordinaten: mitte kommt top-down aus
+        der UI, die Matrix lebt im y-up Rohstrom-Raum (wie _cm_anker)."""
+        a2, b2, c2, d2, e2, f2 = _mat_mult(m, r_mat)
+        mx, my = cx, pg.rect.height - cy
+        return (a2, b2, c2, d2,
+                e2 + mx - (rc * mx + rs_ * my),
+                f2 + my - (-rs_ * mx + rc * my))
+
+    def _cm_huelle(m, hoehe):
+        """Achsenparallele Huelle der bemalten Einheitsquadr-Ecken als PDF-Rect."""
+        a2, b2, c2, d2, e2, f2 = m
+        xs = (e2, a2 + e2, c2 + e2, a2 + c2 + e2)
+        ys = (f2, b2 + f2, d2 + f2, b2 + d2 + f2)
+        return pymupdf.Rect(min(xs), hoehe - max(ys), max(xs), hoehe - min(ys))
+
     plaetze = [_bild_platzierung(d, pg, v, alt_r) for v in xr]
     if all(plaetze):
         hoehe = pg.rect.height
-        from math import sin, cos, radians
-        rad = radians(rot)
-        r_mat = (cos(rad), -sin(rad), sin(rad), cos(rad), 0.0, 0.0)
-
-        def _rot_fn(p, h, _r=r_mat):
-            m = _mat_mult(tuple(p["ctm"]), _r)     # R(delta) o alt: Skalierung bleibt
-            a2, b2, c2, d2 = m[:4]
-            w_neu = max(0.0, a2, c2, a2 + c2) - min(0.0, a2, c2, a2 + c2)
-            h_neu = max(0.0, b2, d2, b2 + d2) - min(0.0, b2, d2, b2 + d2)
-            ziel = pymupdf.Rect(cx - w_neu / 2, cy - h_neu / 2, cx + w_neu / 2, cy + h_neu / 2)
-            return _cm_anker(m, ziel, h)
+        _rot_fn = lambda p, h: _fixpunkt_dreh(tuple(p["ctm"]))
         # Ziel-Rect einmalig aus der ersten Ebene bestimmen (Stack teilt die Geometrie)
-        m0 = _mat_mult(tuple(plaetze[0]["ctm"]), r_mat)
-        a2, b2, c2, d2 = m0[:4]
-        w0 = max(0.0, a2, c2, a2 + c2) - min(0.0, a2, c2, a2 + c2)
-        h0 = max(0.0, b2, d2, b2 + d2) - min(0.0, b2, d2, b2 + d2)
-        neu_r = pymupdf.Rect(cx - w0 / 2, cy - h0 / 2, cx + w0 / 2, cy + h0 / 2)
+        neu_r = _cm_huelle(_fixpunkt_dreh(tuple(plaetze[0]["ctm"])), hoehe)
         if _bild_chirurgie(d, pg, plaetze, _rot_fn):
             push_undo(did, {"op": "image-rotate", "page": page, "xref": xr[0], "xrefs": xr,
                             "alt": list(alt_r), "neu": list(neu_r), "winkel": winkel,
@@ -1093,6 +1106,12 @@ async def image_rotate(did: str, page: int = Form(...), xref: int = Form(0),
             return {"ok": True, "rect": [round(v, 1) for v in neu_r]}
     # Fallback: Bitmap drehen + alte Stelle deckeln (nur bei unsauberen Bloecken)
     from PIL import Image
+    # Ziel-Huelle = alte Huelle um (cx, cy) GEDREHT (Fixpunkt, nicht um C
+    # zentriert - gleiche Geometrie wie der Chirurgie-Pfad darueber)
+    hx, hy = (alt_r.x0 + alt_r.x1) / 2, (alt_r.y0 + alt_r.y1) / 2
+    ncx = cx + rc * (hx - cx) - rs_ * (hy - cy)
+    ncy = cy + rs_ * (hx - cx) + rc * (hy - cy)
+    neu_r = pymupdf.Rect(ncx - hw / 2, ncy - hh / 2, ncx + hw / 2, ncy + hh / 2)
     gedrehte_pngs = []
     for v in xr:
         png = _bild_bytes_vom_xref(d, v)

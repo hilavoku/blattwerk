@@ -1,6 +1,21 @@
 # FederPDF — Changelog
 
-Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-14.
+Alle Versionen vom ersten Prototyp bis heute. Datum: 2026-10-16.
+
+## v0.21.21 — Drehen verschiebt das Objekt nicht mehr zusätzlich
+- Fehlerbehobung (Nutzer-Fund): Im Bearbeitungsmodus sprang ein Bild beim
+  **Drehen** zusätzlich an eine andere Stelle. Ursache: Der Server verankerte
+  die neue Hülle **zentriert um die Drehmitte** (die Mitte des sichtbaren
+  Tintenrahmens, um die auch die Vorschau dreht) — das ist nur bei mittig
+  liegender Tinte dasselbe wie eine echte Drehung um diesen Punkt. Bei
+  Briefkopf-Masken (Tinte belegt nur einen Rand der Fläche) wanderte das
+  Objekt um den Abstand Tintenmitte↔Platzierungsmitte, und verkettete
+  Drehungen summierten den Versatz auf. Jetzt ist die Drehmitte ein echter
+  **Fixpunkt** (Translation C − R·C nach der Rotationskomposition); ohne
+  Mitwirkung des Parameters dreht das Bild wie bisher um seine Hüllenmitte.
+- Der seltenere Ersatzpfad (Bitmap-Rasterung bei unsauberen Inhaltsblöcken)
+  dreht seine Ziel-Hülle jetzt um denselben Fixpunkt. Rückgängig macht wie
+  zuvor die Vorher-Matrix wortwörtlich wieder auf.
 
 ## v0.21.20 — Tintenrahmen bleibt auch beim Drehen erhalten
 - Fehlerbehobung (Nutzer-Fund): Nach dem Drehen eines Bildes sprang der
